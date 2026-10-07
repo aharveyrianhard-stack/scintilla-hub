@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 728965c) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from f11e950) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -4902,6 +4902,53 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 .sc-gcell:hover > .sc-gmini{ background:#1C1C22; }
 .sc-gcell:focus-visible{ outline:1.5px solid var(--crk); outline-offset:1px; }
 .sc-gcell[aria-expanded="true"] > .sc-gmini{ box-shadow:0 0 0 1px #6E6E76; }
+/* GL1 (7 Oct 2026) — TREND AND MOMENTUM SHOWN APART. Alan: "I would like to see [trend and momentum] separately."
+   Only drawn when the switch is on (scGl1On): nothing here changes the board until Alan has seen the pictures.
+   The Geiger keeps its own bar; under it two thin bars on the same centre line and the same −1 … +1 scale —
+   TREND on top, MOMENTUM below — and beside them the three numbers in one line: +0.39 T +0.48 M +0.30.
+   Green up, red down, as everywhere. */
+/* FORM A (the one proposed): the row keeps its height and the Geiger keeps its full width. Under the Geiger's bar, two
+   thin bars on the same centre line and scale; the Geiger's own number sits in the empty half of its bar. Where the
+   cell is wide enough the trend and momentum numbers follow it; otherwise they are in the hover and the breakdown. */
+.sc-gcell[data-gl1]{ container-type:inline-size; }
+.ch > .sc-gcell[data-gl1]{ overflow:visible; }   /* the board clips every cell to its 13 px line; this one cell may use the row's own 6 px of padding above and below */
+.sc-gcell[data-gl1] > .sc-gtm{ position:relative; display:flex; flex-direction:column; justify-content:center; gap:1px; flex:1 1 auto; min-width:0;
+  margin:-3px 0; }   /* the three bars are 6 px taller than the one bar they replace: they borrow 3 px of the row's own padding above and below, so NO ROW GROWS */
+.sc-gtm > .sc-gmini{ display:block; height:11px; }
+.sc-gtm__bar{ position:relative; display:block; height:3px; background:var(--panel); overflow:hidden; }
+.sc-gtm__bar::before{ content:""; position:absolute; left:50%; top:0; bottom:0; width:1.3px; background:var(--dim); z-index:1; }
+.sc-gtm__bar > i{ position:absolute; top:0; bottom:0; max-width:50%; }
+.sc-gtm__num{ position:absolute; top:0; height:11px; line-height:11px; z-index:3; pointer-events:none; white-space:nowrap;
+  font-family:var(--mono); font-size:10px; font-variant-numeric:tabular-nums; letter-spacing:0; }   /* the board's own text size (10 px × the page's zoom = 12.8 px on a 1680 screen) */
+.sc-gtm__num.is-l{ left:4px; } .sc-gtm__num.is-r{ right:4px; }
+.sc-gtm__num > b{ font-weight:700; }
+.sc-gtm__tm{ display:none; margin-left:7px; }
+.sc-gtm__tm > em, .sc-gtm__txt2 em{ font-style:normal; color:var(--ink3); margin:0 1px 0 5px; }
+.sc-gtm__tm > em:first-child, .sc-gtm__txt2 em:first-child{ margin-left:0; }
+@container (min-width:250px){ .sc-gtm__tm{ display:inline; } }
+/* a phone's Geiger cell is about 33 px wide: there the three bars stand alone, and the numbers are in the breakdown */
+@container (max-width:119px){ .sc-gtm__num{ display:none; } }
+/* FORM B (the alternative, ?gl1=2): the three numbers always in view, two lines beside a shorter set of bars */
+.sc-gcell[data-gl1="2"]{ gap:6px; }
+.sc-gcell[data-gl1="2"] > .sc-gtm{ flex:0 0 38%; }
+.sc-gcell[data-gl1="2"] .sc-gtm__num{ display:none; }
+.sc-gcell[data-gl1="2"] > .sc-gtm__txt2{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:0; margin:-4px 0;
+  font-family:var(--mono); font-size:10px; line-height:10.5px; font-variant-numeric:tabular-nums; white-space:nowrap; letter-spacing:0; }
+.sc-gtm__txt2 > b{ font-weight:700; }
+.sc-gcell[data-gl1="1"] > .sc-gtm__txt2{ display:none; }
+/* the board says which reading it is showing and how old its newest price is */
+.sc-gl1tag{ font-family:var(--mono); font-size:9px; letter-spacing:.1em; white-space:nowrap; margin-left:8px; color:var(--ink3); }
+.sc-gl1tag > b{ font-weight:700; }
+.sc-gl1tag.is-live > b{ color:var(--bull); }
+.sc-cohgeiger__tm{ font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap; margin-left:8px; }
+.sc-cohgeiger__tm > em{ font-style:normal; font-size:9px; color:var(--ink3); margin:0 2px 0 6px; }
+/* compare cards: the same two thin bars, upright, either side of the column's own bar (TREND left, MOMENTUM right) */
+.sc-vtm{ display:flex; flex-direction:row; align-items:stretch; justify-content:center; gap:2px; width:100%; flex:1 1 auto; min-height:114px; }
+.sc-cohtabwrap.sc-cmpx .sc-vtm{ min-height:var(--cmpx-track); }
+.sc-vtm > .sc-vmini, .sc-cohtabwrap .sc-vtm > .sc-vmini, .sc-cohtabwrap.sc-cmpx .sc-vtm > .sc-vmini{ flex:0 0 auto; height:auto; min-height:0; }
+.sc-vtm__bar{ position:relative; display:block; flex:0 0 3px; width:3px; background:var(--panel); overflow:hidden; }
+.sc-vtm__bar::before{ content:""; position:absolute; top:50%; left:0; right:0; height:1.3px; background:var(--dim); z-index:1; }
+.sc-vtm__bar > i{ position:absolute; left:0; right:0; max-height:50%; }
 /* BESIDE THE LEFT PANEL: TREND, MOM and READ are not drawn; the Geiger takes their width (11 tracks for 11 drawn cells:
    ♥ · TICKER · LAST · CHG · F P/E · MKT CAP · REVENUE · RSI · GEIGER · RVOL · MKT). The phone keeps its own seven. */
 @media (min-width:561px){
@@ -7920,6 +7967,75 @@ function boardHeaderHTML() {
         label + (S.sort.key === key ? (S.sort.dir < 0 ? " ▼" : " ▲") : "") + "</button>"
       : '<span' + (label ? "" : ' aria-hidden="true"') + ">" + label + "</span>").join("") + "</div>";
 }
+/* GL1 (7 Oct 2026) — TREND AND MOMENTUM SHOWN APART, AND WHICH READING IT IS.
+   Since GL1 the chart API's /geiger says, for every name: `reading` ("live" = every rung counts the bar it is still
+   building; "settled" = finished bars only) and `price_utc` (the newest price in the numbers). The three numbers
+   themselves were always there. This only DRAWS them, and only when switched on — nothing on the board changes until
+   Alan has seen the pictures: add ?gl1=1 to the address, or set localStorage sc_gl1_tm = "1". */
+function scGl1On() {
+  try { return window.SC_GL1_TM === true || /[?&#]gl1=[12](?![0-9])/.test(String(location.href)) || /^[12]$/.test(localStorage.getItem("sc_gl1_tm") || ""); }
+  catch (_) { return false; }
+}
+function scGl1Fmt(v) { return v == null || !isFinite(v) ? "—" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2); }
+function scGl1Tone(v) { return v == null || !isFinite(v) ? "var(--mute)" : v >= 0 ? "var(--bull)" : "var(--bear)"; }
+/* the provider's own row for a name (the same /geiger answer the board's composite came from) */
+function scGl1Row(t) { const m = (typeof SC_CG !== "undefined" && SC_CG && SC_CG.map) || null; return (m && m[t]) || null; }
+function scGl1AgeText(ms) {
+  if (ms == null || !isFinite(ms)) return null;
+  const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  return sec < 90 ? "1m" : sec < 3600 ? Math.round(sec / 60) + "m" : sec < 172800 ? Math.round(sec / 3600) + "h" : Math.round(sec / 86400) + "d";
+}
+function scGl1ThinHTML(v) {
+  if (v == null || !isFinite(v)) return '<span class="sc-gtm__bar"></span>';
+  const bull = v >= 0, color = bull ? "var(--bull)" : "var(--bear)";
+  return '<span class="sc-gtm__bar"><i style="' + (bull ? "left" : "right") + ':50%;width:' + (Math.min(Math.abs(v), 1) * 50) + '%;background:' + color + '"></i></span>';
+}
+/* one board cell. FORM A: the Geiger's bar at full width with its number in the bar's empty half, TREND and MOMENTUM
+   as two thin bars under it. FORM B (scGl1Form() === 2): the same bars, shorter, with +0.39 / T+0.48 M+0.30 beside them. */
+function scGl1Form() { try { return (/[?&#]gl1=2(?![0-9])/.test(String(location.href)) || localStorage.getItem("sc_gl1_tm") === "2") ? 2 : 1; } catch (_) { return 1; } }
+function geigerTMHTML(t, g) {
+  if (g == null) return geigerMiniHTML(g, 1, true);
+  const row = scGl1Row(t);
+  const tr = row && row.trend != null ? +row.trend : null, mo = row && row.momentum != null ? +row.momentum : null;
+  const age = row ? scGl1AgeText(Date.parse(row.price_utc || "")) : null;
+  const rd = row && (row.reading === "live" || row.reading === "settled") ? row.reading.toUpperCase() : null;
+  const title = "Geiger " + scGl1Fmt(g) + " · trend " + scGl1Fmt(tr) + " · momentum " + scGl1Fmt(mo) +
+    (rd ? " · " + rd + (age ? ", newest price " + age + " ago" : "") : "") +
+    (row && row.settled && row.reading === "live" ? " · finished bars only: " + scGl1Fmt(+row.settled.composite) : "");
+  const tm = "<em>T</em><span style=\"color:" + scGl1Tone(tr) + '">' + scGl1Fmt(tr) + "</span>" +
+             "<em>M</em><span style=\"color:" + scGl1Tone(mo) + '">' + scGl1Fmt(mo) + "</span>";
+  const num = '<b style="color:' + scGl1Tone(g) + '">' + scGl1Fmt(g) + "</b>";
+  return '<span class="sc-gtm" title="' + esc(title) + '">' + geigerMiniHTML(g, 1, false) + scGl1ThinHTML(tr) + scGl1ThinHTML(mo) +
+      '<span class="sc-gtm__num ' + (g >= 0 ? "is-l" : "is-r") + '">' + num + '<span class="sc-gtm__tm">' + tm + "</span></span>" +
+    "</span>" +
+    '<span class="sc-gtm__txt2">' + num + "<span>" + tm + "</span></span>";
+}
+/* the board's own line: LIVE · 1m, SETTLED · 14h, or how many of each when they are mixed */
+function scGl1BoardTagHTML(rows) {
+  let live = 0, settled = 0, oldest = null;
+  for (const r of rows || []) {
+    const row = scGl1Row(r.t);
+    if (!row || (row.reading !== "live" && row.reading !== "settled")) continue;
+    if (row.reading === "live") live++; else settled++;
+    const p = Date.parse(row.price_utc || "");
+    if (isFinite(p) && row.reading === "live" && (oldest === null || p < oldest)) oldest = p;
+  }
+  if (!live && !settled) return "";
+  if (live && !settled) return '<span class="sc-gl1tag is-live" title="every rung counts the bar it is still building; the oldest price among these names is this old"><b>LIVE</b> · ' + (scGl1AgeText(oldest) || "…") + "</span>";
+  if (!live) return '<span class="sc-gl1tag" title="finished bars only: nothing is being built right now"><b>SETTLED</b></span>';
+  return '<span class="sc-gl1tag is-live" title="live: counting the bar being built · settled: finished bars only"><b>' + live + " LIVE</b> · " + settled + " SETTLED</span>";
+}
+/* one compare column: the column's own bar with TREND (left) and MOMENTUM (right) as two thin bars on the same scale */
+function vminiTMHTML(v, tr, mo, max) {
+  const main = vminiHTML(v, max);
+  if ((tr == null || !isFinite(tr)) && (mo == null || !isFinite(mo))) return main;
+  const thin = (x) => {
+    if (x == null || !isFinite(x)) return '<span class="sc-vtm__bar"></span>';
+    const bull = x >= 0, color = bull ? "var(--bull)" : "var(--bear)";
+    return '<span class="sc-vtm__bar"><i style="' + (bull ? "bottom" : "top") + ':50%;height:' + (Math.min(Math.abs(x) / max, 1) * 50) + '%;background:' + color + '"></i></span>';
+  };
+  return '<span class="sc-vtm">' + thin(tr) + main + thin(mo) + "</span>";
+}
 function geigerMiniHTML(g, max, withNum) {
   if (g == null) return '<span style="text-align:center;color:var(--mute)">—</span>';   // FIX 1 — honest dash, not an empty box
   const bull = g >= 0;
@@ -8182,8 +8298,9 @@ function boardRowsHTML() {
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
       '<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
+        ((typeof scGl1On === "function" && scGl1On()) ? ' data-gl1="' + scGl1Form() + '"' : "") +   /* GL1 — the switch rides on its own attribute; the cell's tag is otherwise untouched */
         ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="Geiger — click for trend, momentum and the read">' +
-        (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, 1, true)) + "</span>" +
+        (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : ((typeof scGl1On === "function" && scGl1On()) ? geigerTMHTML(d.t, d.g) : geigerMiniHTML(d.g, 1, true))) + "</span>" +
       (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
@@ -8250,16 +8367,27 @@ function cohortGeigerHTML() {
   const minRow = rows.reduce((a, b) => (b.g < a.g ? b : a));
   const maxRow = rows.reduce((a, b) => (b.g > a.g ? b : a));
   const tone = (v) => v >= 0 ? "var(--bull)" : "var(--bear)";
+  /* GL1 — the mean TREND and the mean MOMENTUM of the same rows, beside the mean Geiger (drawn only when switched on) */
+  const gl1Mean = (() => {
+    if (!(typeof scGl1On === "function" && scGl1On())) return "";
+    let st = 0, sm = 0, nt = 0, nm = 0;
+    for (const r of rows) { const x = scGl1Row(r.t); if (!x) continue; if (x.trend != null) { st += +x.trend; nt++; } if (x.momentum != null) { sm += +x.momentum; nm++; } }
+    if (!nt && !nm) return "";
+    const t = nt ? st / nt : null, m = nm ? sm / nm : null;
+    return '<span class="sc-cohgeiger__tm"><em>T</em><span style="color:' + scGl1Tone(t) + '">' + scGl1Fmt(t) + '</span><em>M</em><span style="color:' + scGl1Tone(m) + '">' + scGl1Fmt(m) + "</span></span>";
+  })();
   const line = (label, v, tick, mean) =>
     '<div class="sc-cohgeiger__line' + (mean ? " is-mean" : "") + '">' +
       '<span class="sc-cohgeiger__k">' + label + "</span>" +
       geigerMiniHTML(v, 1) +
       '<span class="sc-cohgeiger__v" style="color:' + tone(v) + '">' + (v >= 0 ? "+" : "") + v.toFixed(2) + "</span>" +
       '<span class="sc-cohgeiger__t">' + (tick ? esc(tick) : "") + "</span>" +
+      (mean && gl1Mean ? gl1Mean : "") +
     "</div>";
   return '<div class="sc-cohgeiger' + (open ? " is-open" : "") + '">' +
     '<button class="sc-cohgeiger__hd" data-act="cohgeigertoggle" aria-expanded="' + (open ? "true" : "false") + '">' +
       '<span class="sc-cohgeiger__lbl">COHORT GEIGER · ' + esc(S.coh === "FAV" ? "LIKED" : S.coh) + '</span>' +
+      ((typeof scGl1On === "function" && scGl1On()) ? scGl1BoardTagHTML(rows) : "") +   /* GL1 — LIVE · 1m / SETTLED, drawn only when switched on */
       /* M52 — the cohort's own heartbeat, beside the count it is taken over: the middle name's
          usual day. A cohort whose middle name moves 1.2% a day and one whose middle name moves
          6% a day are different places to be, and nothing on this board said so before. */
@@ -8599,7 +8727,9 @@ function cohStripColsHTML(list, span, lean) {
 
     return '<button class="sc-cohstrip__col' + (bull ? "" : " is-bear") + (r.key === S.coh ? " is-active" : "") + '" data-act="coh" data-key="' + esc(r.key) + '" title="' + esc(ttl) + (r.pair || r.blend ? "" : " · " + r.n + " tickers") + " · scale ±" + span.toFixed(2) + '">' +
       '<span class="sc-cohstrip__slot">' + (bull ? name + val : "") + "</span>" +
-      vminiHTML(r.mean, span) +
+      /* GL1 — trend and momentum as two thin bars beside the column's own, only when switched on. Not on a BREADTH pair
+         (its bar is the GAP between two funds' Geigers, which has no trend or momentum of its own) nor on a blended bar. */
+      ((typeof scGl1On === "function" && scGl1On()) && !r.pair && !r.blend ? vminiTMHTML(r.mean, g.tr, g.mo, span) : vminiHTML(r.mean, span)) +
       '<span class="sc-cohstrip__slot">' + (bull ? "" : val + name) + "</span>" +
       readTag + tmTag + nTag +
     "</button>";
@@ -8821,8 +8951,11 @@ const CMPX_SPECS = '<details class="sc-pagespecs sc-cmpx__specs"><summary>PAGE S
   "<p><b>REPLAY</b> is the REWIND bar's own clock: the same stored days, the same controls, and the board moves with it. What the stored days hold decides what a replayed day can show, and the cards say it: the tree's close tier has no stored past and the ranking table counts only from 5 Oct 2026 (the consolidated card reads 3/5); the iShares, Vanguard and equal-weight funds have stored trend from 18 Aug 2026 and no stored momentum, so their replayed bars are the trend alone (&ldquo;trend only&rdquo;), and replayed BREADTH is read trend against trend so the gap is like for like; before a fund's first stored day its card is empty and says why.</p>" +
   "</div></details>";
 function cohCompareScreenHTML() {
-  return cmpxBarHTML() + '<div class="sc-cmpx__scroll" id="cmpxScroll">' + cmpxCardsHTML() + "</div>" + CMPX_SPECS;
+  return cmpxBarHTML() + '<div class="sc-cmpx__scroll" id="cmpxScroll">' + cmpxCardsHTML() + "</div>" + ((typeof scGl1On === "function" && scGl1On()) ? CMPX_SPECS.replace("</div></details>", CMPX_SPECS_GL1 + "</div></details>") : CMPX_SPECS);
 }
+/* GL1 — said in PAGE SPECS, never inside a card, and only when the thin bars are drawn */
+const CMPX_SPECS_GL1 = "<p><b>TREND and MOMENTUM</b>: the thin bar to the left of a bar is that fund's or group's TREND and the thin bar to its right is its MOMENTUM, " +
+  "on the card's own scale; one that reaches the end of its track is at or beyond that scale. BREADTH and SECTORS · BLENDED have none: their bars are not one fund's reading.</p>";
 /* THE ONE PAINTER of #cohCompare. Only the cards are redrawn, and the list keeps where it was scrolled to: a feed tick
    must not throw the reader back to the first card. The replay handle and PAGE SPECS are left standing (a scrub in
    progress and an open note survive the tick). */
