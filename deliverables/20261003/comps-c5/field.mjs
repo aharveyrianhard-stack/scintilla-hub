@@ -92,7 +92,18 @@ export const ADJACENT_WEIGHT = 0.35, ADJACENT_SHARE = 0.5, CLOSE_SIZE = 0.7, CLO
    credit, up to GROWTH_CREDIT_MAX on the prior), not through the line. Peers' PEGs are read on the same capped growth, so the median
    and the company are on one footing. Off (null) = the straight line, as C5 built it. */
 export const PEG_GROWTH_CAP = 40;
+/* CP5 (7 Oct, 15:40) · THE CAP IS A VALUE, AND IT HOLDS WHEN A PEER LEAVES THE ROW. `pegCap` may be true (PEG_GROWTH_CAP), a number
+   (30, 40 …) or false / null (no cap: the straight line). As CP4 built it the cap lived only in pegRow's own price function: the
+   row's `figure` (growth × EPS, what ladder.mjs priceAt multiplies a PEG by) carried the UNCAPPED growth, so the moment the outlier
+   rule or the operator took one peer out of the row, repriceRow re-priced it on the full growth and the cap was gone — measured
+   7 Oct on Broadcom (Arm and Qualcomm out: 1,397 implied instead of 1,015) and Nvidia (Arm out: 939 instead of 629), the two
+   names the cap was written for. The figure now carries the growth the yardstick counts; the company's own growth stays beside it. */
+export const pegCapOf = (v) => (v === true ? PEG_GROWTH_CAP : typeof v === "number" && v > 0 ? v : null);
+/* CP5 · EXPENSIVE-ONLY OUTLIERS (Alan, 7 Oct ~15:30: "I would manage outliers for now removing expensive ones as a conservative
+   method"). With `expensiveOnly` a multiple leaves a yardstick only when it sits beyond the cut ABOVE the set's middle; a peer far
+   BELOW stays, is counted, and is named as spared (outliers.mjs carries the peer-level half of the same switch). */
 export const CP4_FIELD_ON = Object.freeze({ ...CP1_FIELD_ON, growthForward: true, cp4Prior: true, closeness: true, pegCap: true });
+export const CP5_FIELD_ON = Object.freeze({ ...CP4_FIELD_ON, expensiveOnly: true });
 /** CP4 · the closeness weights. set: buildSet()'s answer (kept rows carry ratio = peer market value ÷ own, same_business). */
 export function peerWeightsCP4(snap, peers, set, { adjacent = ADJACENT_WEIGHT } = {}) {
   const T = snap.ticker, own = (snap.table && snap.table.company) || {}, tp = (snap.table && snap.table.peers) || {}, rows = Object.fromEntries(((set && set.kept) || []).map((r) => [r.ticker, r]));
@@ -117,14 +128,15 @@ export const FUND_KEYS = TABLE.filter((c) => !ROWS.includes(c.key)).map((c) => c
 
 /* ---- outliers ------------------------------------------------------------------------------------- */
 /** The outliers of one row. Returns { key, n, median, mad, fence: {lo, hi} (multiples), out: [{ticker, multiple, side, z}] }. */
-export function outlierFlags(row, { k = OUTLIER_K, minN = OUTLIER_MIN_N } = {}) {
+export function outlierFlags(row, { k = OUTLIER_K, minN = OUTLIER_MIN_N, highOnly = false } = {}) {
   const peers = (row.peers || []).filter((p) => p.multiple != null && p.multiple > 0);
   if (peers.length < minN) return { key: row.key, n: peers.length, median: null, mad: null, fence: null, out: [], why: `fewer than ${minN} peers` };
   const logs = peers.map((p) => Math.log(p.multiple)), m = median(logs), mad = median(logs.map((v) => Math.abs(v - m))) * MAD_SCALE;
   if (!(mad > 0)) return { key: row.key, n: peers.length, median: Math.exp(m), mad: 0, fence: null, out: [] };
   const lo = Math.exp(m - k * mad), hi = Math.exp(m + k * mad);
-  const out = peers.filter((p) => p.multiple < lo || p.multiple > hi).map((p) => ({ ticker: p.ticker, multiple: p.multiple, side: p.multiple > hi ? "high" : "low", z: (Math.log(p.multiple) - m) / mad }));
-  return { key: row.key, n: peers.length, median: Math.exp(m), mad, fence: { lo, hi }, out };
+  const far = peers.filter((p) => p.multiple < lo || p.multiple > hi).map((p) => ({ ticker: p.ticker, multiple: p.multiple, side: p.multiple > hi ? "high" : "low", z: (Math.log(p.multiple) - m) / mad }));
+  const out = highOnly ? far.filter((o) => o.side === "high") : far, spared = highOnly ? far.filter((o) => o.side === "low") : [];   /* CP5 expensiveOnly: a cheap multiple is never taken out */
+  return { key: row.key, n: peers.length, median: Math.exp(m), mad, fence: { lo, hi }, out, spared };
 }
 export const outliersOf = (rows, opts) => Object.fromEntries(rows.map((r) => [r.key, outlierFlags(r, opts)]));
 
@@ -138,11 +150,11 @@ export const isKept = (kept, peer, measure) => kept.has(peer + "|" + measure);
 
 /** The rows with the operator's selection AND the outliers applied (outliers excluded unless kept). Each row carries
     `outliers` ({ flagged: [...], excluded: [...], kept: [...] }) and `dropped`. */
-export function applyField(snap, decisions, { k = OUTLIER_K, minN = OUTLIER_MIN_N } = {}) {
+export function applyField(snap, decisions, { k = OUTLIER_K, minN = OUTLIER_MIN_N, highOnly = false } = {}) {
   const sel = selectionOf(decisions || [], snap.ticker), kept = keptCells(decisions || [], snap.ticker);
   const rows = snap.rows.map((r) => {
     const afterSel = (r.peers || []).filter((p) => !isOff(sel, p.ticker, r.key)), offPeers = (r.peers || []).filter((p) => isOff(sel, p.ticker, r.key)).map((p) => p.ticker);
-    const fl = outlierFlags({ ...r, peers: afterSel }, { k, minN });
+    const fl = outlierFlags({ ...r, peers: afterSel }, { k, minN, highOnly });
     const excluded = fl.out.filter((o) => !isKept(kept, o.ticker, r.key)).map((o) => o.ticker), keptHere = fl.out.filter((o) => isKept(kept, o.ticker, r.key)).map((o) => o.ticker);
     const keep = afterSel.filter((p) => !excluded.includes(p.ticker));
     const base = offPeers.length || excluded.length ? (r.key === "p_ffo" ? ffoRow(snap, keep.map((p) => p.ticker)) : repriceRow(r, keep, snap)) : { ...r };
@@ -202,7 +214,7 @@ export function pegRow(snap, estimates, today, { forward = false, fromLast = fal
   const ends = { min: at(band.min, sorted.length ? [sorted[0].ticker] : []), q1: at(band.q1), median: at(band.median), q3: at(band.q3), max: at(band.max, sorted.length ? [sorted[sorted.length - 1].ticker] : []) };
   const ok = band.n >= 2 && ends.median.price != null;
   return { ...(old || { key: "peg", label: "PEG", fmt: "x2" }), key: "peg", growth_cap: cap, basis: one ? "forward P/E ÷ EPS growth into the following year (the four quarters after the next four over the next four, in %) — the dashboard's forward basis" + (cap != null ? `; growth counted up to ${cap}% a year for this yardstick` : "") : forward ? (fromLast ? "forward P/E ÷ forward EPS growth (% a year, from the year just reported on the analysts' basis to the furthest forecast year within three and a half years)" : "forward P/E ÷ forward EPS growth (% a year, from the first forecast year to the furthest within three and a half years)") : "forward P/E ÷ forward EPS growth (% a year, three years out)", growth_from: one ? "following year" : forward ? (fromLast ? "last year" : "forecast") : "trailing", own: { multiple: mOwn, price: snap.price }, own_why: mOwn != null ? null : null,
-    figure: { word: "EPS growth × EPS estimate", value: gOwn && epsFy1 != null ? gOwn.pct * epsFy1 : null, fmt: "usd2", formula: "PEG × growth % × EPS", growth: gOwn ? gOwn.pct : null, growth_basis: gOwn ? gOwn.basis : null },
+    figure: { word: "EPS growth × EPS estimate", value: gOwn && epsFy1 != null ? capG(gOwn.pct) * epsFy1 : null, fmt: "usd2", formula: "PEG × growth % × EPS", growth: gOwn ? gOwn.pct : null, growth_counted: gOwn ? capG(gOwn.pct) : null, growth_basis: gOwn ? gOwn.basis : null },   /* CP5: value on the counted (capped) growth, so a re-priced row keeps the cap */
     n: band.n, band, ends, peers: sorted, nm: [], missing: Object.keys(values).filter((t) => values[t].multiple == null), values, growth, upside: ok && snap.price > 0 ? (ends.median.price / snap.price - 1) * 100 : null,
     ok, reason: ok ? null : band.n < 2 ? `only ${band.n} peer${band.n === 1 ? "" : "s"} carr${band.n === 1 ? "ies" : "y"} this multiple` : null, computable: mOwn != null };
 }
@@ -278,10 +290,10 @@ export const WAY_WORDS = {
 /** Everything the page draws for one company and one way. estimates: { T: { eps_ttm, est } } (may be empty). */
 export function conclusion(snap, decisions, estimates, today, way = "C", opts = {}) {
   const fx = opts.fx || CP1_FIELD_OFF, reit = !!(fx.reitYardstick && isReit(snap));
-  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today, { forward: !!fx.growthForward, fromLast: !!fx.growthFromLastYear, cap: fx.pegCap ? PEG_GROWTH_CAP : null }) : r)) : snap.rows;
+  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today, { forward: !!fx.growthForward, fromLast: !!fx.growthFromLastYear, cap: pegCapOf(fx.pegCap) }) : r)) : snap.rows;
   if (reit) rows0 = [...rows0.filter((r) => r.key !== "p_ffo"), ffoRow(snap)];   /* CP1 reitYardstick: the seventh row */
   const snap2 = rows0 === snap.rows ? snap : { ...snap, rows: rows0 };
-  const F = applyField(snap2, decisions, opts);   /* C6 passes k = Infinity: no cell leaves a centre on one flag */
+  const F = applyField(snap2, decisions, { ...opts, highOnly: !!fx.expensiveOnly });   /* C6 passes k = Infinity: no cell leaves a centre on one flag · CP5: only a dear cell under expensiveOnly */
   const peersOn = snap.members.filter((t) => t !== snap.ticker && !(snap.excluded || []).some((e) => e.ticker === t) && !F.sel.peers.has(t));
   const cls = reit ? "reit" : sectorClass(snap.sector, snap.industry, snap.cohort), cp1 = fieldAdjust(snap2, F.rows, peersOn, fx, reit);
   const mw = measureWeights(F.rows, peersOn.length, cls, cp1.adj), pw = fx.closeness ? peerWeightsCP4(snap2, peersOn, opts.set || null) : peerWeights(snap, peersOn);   /* CP4 closeness: size, growth, margin, and the business blend */

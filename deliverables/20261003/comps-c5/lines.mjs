@@ -86,6 +86,29 @@ export const CP3_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, c
                  the "semiconductor equipment" line — the same line FMP's own "Semiconductor Equipment & Materials" industry
                  maps to. Lam, KLA, Teradyne, Onto, Applied and ASML move by this rule; Nvidia, AMD, Broadcom, Marvell stay. */
 export const CP4_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true, stated: false, equipment: true, seatMin: 0.10 });   /* seatMin: a line at a tenth of revenue seats its two best peers (Alphabet's cloud, 15%, sat on the edge of LINE_MIN) */
+/* CP5 (7 Oct, 15:40) · A BUSINESS LINE WITH NO PEER OF ITS OWN SEATS ITS TWO BEST — `lineSeats`, one more switch (off = CP4 exactly).
+   The method's own rule (header, SEATS: "every line the company has … seats its two best peers first, so Amazon's cloud line seats
+   cloud peers even when the retail peers outscore them") never reached the set that is priced: complementSet keeps the BASE
+   method's twelve (lines at 15% or more) and only tops up the MAIN line. Alphabet's cloud is 14.8% of revenue, so its set held
+   seven advertising names and no cloud company, and Meta — the only advertising peer near its size — carried the centre
+   ("the centre moves 30% when Meta alone is taken out", CP4). ON:
+     seats          a line the company has at ≥ seatMin (a tenth) of revenue, and for which the set holds NO peer carrying it
+                    (at least LINE_MIN / 2 of the peer's revenue, the method's own bar), seats its SEATS_PER_LINE (2) best peers
+                    by the method's own score. A candidate is a member, or carries the line as a business of its own (≥ LINE_MIN):
+                    a line worth 10–15% of the company can never reach 15¢ of the dollar by itself — Alphabet and Microsoft
+                    overlap at 14.8¢. Never beyond N_MAX, never a peer removed.
+     weight         the seat puts the peer IN the set; how much it counts is the method's own rule, unchanged: a seated peer
+                    is a same-business peer when at least SIM_MIN (15¢) of the revenue dollar is in lines it shares with the
+                    company (Amazon for Alphabet: cloud and advertising, 25¢), and otherwise blends in at the adjacent weight
+                    (Microsoft for Alphabet: cloud alone, 14.6¢) — Alan: "Peers must be in the same business, but a blend also
+                    works." Nobody already in the set is re-labelled.
+   Deliberately the smallest rule that puts a missing business into the set. Tried wider on 7 Oct, measured, rejected:
+     - top every line up to two and count every in-set carrier of a 10% line as same business: Oracle's ten software neighbours
+       became full peers (+182%) and Palo Alto was seated on Broadcom;
+     - count a seated peer as same business whatever the overlap: UPS and FedEx (Uber's 10% freight line) carried Uber's price
+       (+177% → +63%) and Apple was a full peer of Ciena. A tenth of the revenue must not carry the price.
+   Every seated row says its line (`seat`). */
+export const CP5_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true, stated: false, equipment: true, seatMin: 0.10, lineSeats: true });
 export const SIC_EQUIPMENT = new Set(["3559", "3825", "3827", "3829"]);
 export const EQUIPMENT_SEGMENT = /\b(semiconductor systems?|systems?|customer support|lithography|equipment|process control|metrology|inspection|installed base)\b/i;
 export const CP1_DEFAULT = CP1_LINES_OFF;   // ← change to CP1_LINES_ON to take the four line fixes live (Hub comps + the allocation knockout read this file)
@@ -282,18 +305,35 @@ export function complementSet(ticker, inp, { n = N_DEFAULT, fx = CP1_LINES_ON } 
       why: sm.shared.slice(0, 2).map((s) => `${s.line} (${T} ${Math.round(s.own * 100)}% · ${ref.name} ${Math.round(s.peer * 100)}%)`).join(", ") + " · comps-only reference peer, not served on the Hub" });
     have++;
   }
+  /* CP5 lineSeats: a line of the company at ≥ seatMin with no peer of its own in the set seats its two best */
+  const seatAdded = [], seatLine = {};
+  if (fx.lineSeats) {
+    const lineMin = fx.seatMin || LINE_MIN, share = (r, ln) => (r.reference ? (r.lines && r.lines[ln]) || 0 : (rowOf[r.ticker] && rowOf[r.ticker].lines && rowOf[r.ticker].lines[ln]) || 0);
+    for (const [ln, w] of Object.entries(fixed.own_lines.lines).sort((a, b) => b[1] - a[1])) {
+      if (w < lineMin) continue;
+      const cur = [...kept, ...added, ...reference, ...seatAdded], carriers = cur.filter((r) => share(r, ln) >= LINE_MIN / 2);
+      for (const r of carriers) if (!seatLine[r.ticker]) seatLine[r.ticker] = ln;
+      if (carriers.length) continue;   /* the line is represented: nothing is added, nobody is re-labelled */
+      const cands = all.filter((r) => (r.lines[ln] || 0) >= LINE_MIN / 2 && (r.member || (r.lines[ln] || 0) >= LINE_MIN) && !cur.some((k) => k.ticker === r.ticker)).sort((a, b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
+      let nIn = 0;
+      for (const r of cands) { if (nIn >= SEATS_PER_LINE || kept.length + added.length + reference.length + seatAdded.length >= N_MAX) break;
+        seatAdded.push({ ...r, rank: kept.length + added.length + reference.length + seatAdded.length + 1, seat: ln, same_business: r.exact >= SIM_MIN, added: true, seated: true, reference: false, why: `${ln} (${T} ${Math.round(w * 100)}% · ${r.ticker} ${Math.round(r.lines[ln] * 100)}%) — seated on ${T}'s ${ln} line, which had no peer in the set` }); seatLine[r.ticker] = ln; nIn++; }
+    }
+    have = [...kept, ...added, ...reference, ...seatAdded].filter((r) => r.same_business).length;
+  }
   /* CP3 stated: the stated peers that the set lacks are added; every row then says whether it is stated (and so priced) */
   const st = fx.stated && CP3_STATED[T] ? CP3_STATED[T] : null, statedAdded = [];
   if (st) {
-    const inSet = new Set([...kept, ...added, ...reference].map((r) => r.ticker));
-    for (const S of st.peers) { const r = rowOf[S]; if (inSet.has(S) || !r) continue; statedAdded.push({ ...r, rank: kept.length + added.length + reference.length + statedAdded.length + 1, seat: st.line, same_business: true, added: true, reference: false, why: `${st.line} — a stated peer${r.shared && r.shared.length ? " · " + r.shared.slice(0, 1).map((x) => `${x.line} (${T} ${Math.round(x.own * 100)}% · ${S} ${Math.round(x.peer * 100)}%)`).join("") : ""}` }); }
+    const inSet = new Set([...kept, ...added, ...reference, ...seatAdded].map((r) => r.ticker));
+    for (const S of st.peers) { const r = rowOf[S]; if (inSet.has(S) || !r) continue; statedAdded.push({ ...r, rank: kept.length + added.length + reference.length + seatAdded.length + statedAdded.length + 1, seat: st.line, same_business: true, added: true, reference: false, why: `${st.line} — a stated peer${r.shared && r.shared.length ? " · " + r.shared.slice(0, 1).map((x) => `${x.line} (${T} ${Math.round(x.own * 100)}% · ${S} ${Math.round(x.peer * 100)}%)`).join("") : ""}` }); }
   }
   const stMark = (r) => (st ? { ...r, stated: st.peers.includes(r.ticker), same_business_by_lines: !!r.same_business, same_business: st.peers.includes(r.ticker) } : r);
   const served = pool.length, short = have < SAME_MIN ? `the Hub serves ${served} other compan${served === 1 ? "y" : "ies"} on the ${line} line${reference.length ? ` and the reference list adds ${reference.length}` : ""}: ${have} same-business peers, not ${SAME_MIN}` : null;
-  return { ...fixed, n: kept.length + added.length + reference.length + statedAdded.length, kept: [...kept, ...added, ...reference, ...statedAdded].map(stMark), dropped: fixed.dropped.filter((r) => !kept.some((k) => k.ticker === r.ticker) && !added.some((k) => k.ticker === r.ticker) && !statedAdded.some((k) => k.ticker === r.ticker)),
+  return { ...fixed, n: kept.length + added.length + reference.length + seatAdded.length + statedAdded.length, kept: [...kept, ...added, ...reference, ...seatAdded, ...statedAdded].map(stMark), dropped: fixed.dropped.filter((r) => !kept.some((k) => k.ticker === r.ticker) && !added.some((k) => k.ticker === r.ticker) && !seatAdded.some((k) => k.ticker === r.ticker) && !statedAdded.some((k) => k.ticker === r.ticker)),
+    seated: seatAdded.map((r) => ({ ticker: r.ticker, line: r.seat })), seat_lines: fx.lineSeats ? Object.fromEntries(Object.entries(fixed.own_lines.lines).filter(([, w]) => w >= (fx.seatMin || LINE_MIN)).map(([ln, w]) => [ln, { share: w, peers: [...kept, ...added, ...reference, ...seatAdded].filter((r) => seatLine[r.ticker] === ln).map((r) => r.ticker) }])) : null,
     stated: st ? { line: st.line, peers: st.peers, legs: st.legs || null, why: st.why, from: st.from, not_served: st.not_served || [], added: statedAdded.map((r) => r.ticker), missing: st.peers.filter((S) => !rowOf[S] && !reference.some((r) => r.ticker === S)) } : null,
-    counts: { ...fixed.counts, kept: kept.length + added.length + reference.length + statedAdded.length, base: kept.length, added: added.length + statedAdded.length, reference: reference.length },
-    base_kept: base.kept.map((r) => r.ticker), base_lines: base.own_lines, added: added.map((r) => r.ticker), reference: reference.map((r) => r.ticker), same: { n: have, need: SAME_MIN, line, pool: pool.map((r) => r.ticker), short },
+    counts: { ...fixed.counts, kept: kept.length + added.length + reference.length + seatAdded.length + statedAdded.length, base: kept.length, added: added.length + seatAdded.length + statedAdded.length, reference: reference.length },
+    base_kept: base.kept.map((r) => r.ticker), base_lines: base.own_lines, added: [...added, ...seatAdded].map((r) => r.ticker), reference: reference.map((r) => r.ticker), same: { n: have, need: SAME_MIN, line, pool: pool.map((r) => r.ticker), short },
     rule: base.rule + ` · CP1: the kept set stays; same-business companies it lacks are added until it carries ${SAME_MIN} (or the line runs out), reference peers last, never beyond ${N_MAX}` };
 }
 

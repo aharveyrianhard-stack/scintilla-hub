@@ -22,7 +22,7 @@ test("the Hub's COMPS tab reads the artifact first and only falls back for a nam
   assert.ok(tab.indexOf("mountFromArtifact") < tab.indexOf("await loadSet(S)"), "the artifact is tried before loadSet");
   for (const word of ["buildSet", "conclusion6", "readSet", "snapshotFromCohort", "measureWeights"]) assert.ok(!ce.includes(word), "the engine tab never calls " + word); });
 test("the allocation tool reads the same files and carries a byte-identical copy of the reader", () => {
-  const tool = ROOT.replace(/_worktrees\/.*$/, "_worktrees/alloc-cp4-clickthrough-20261007/index.html"); if (!existsSync(tool)) return;   // the tool's worktree is beside this one on the build machine
+  const tool = ["alloc-cp5-comps-default-20261007", "alloc-cp4-clickthrough-20261007"].map((d) => ROOT.replace(/_worktrees\/.*$/, "_worktrees/" + d + "/index.html")).find((f) => existsSync(f)); if (!tool) return;   // the tool's worktree is beside this one on the build machine (CP5: this round's first)
   const s = readFileSync(tool, "utf8"), lib = readFileSync(ROOT + "/lib/comps-artifact.mjs", "utf8").replace(/export const /g, "const ").replace(/export function /g, "function ");
   const a = s.indexOf("/*C4-READER-BEGIN*/\n") + "/*C4-READER-BEGIN*/\n".length, b = s.indexOf("\n/*C4-READER-END*/"); assert.ok(a > 20 && b > a, "the reader block is in the tool");
   assert.equal(s.slice(a, b).trim(), lib.trim(), "the tool's reader equals lib/comps-artifact.mjs");
@@ -43,7 +43,7 @@ test("the debt discount follows the knockout's own steps (3 / 6 / 10) plus the y
   const n = J(`${DATA}/names/NVDA.json`); assert.equal(n.debt.discount.pct, 0, "Nvidia, light debt, no discount"); });
 test("the PEG yardstick counts growth up to the cap, and the growth credit never exceeds its ceiling", () => {
   assert.equal(F.PEG_GROWTH_CAP, 40); const a = J(`${DATA}/names/AVGO.json`); assert.ok(a.growth.next_to_following_pct > 40, "Broadcom grows faster than the cap"); assert.ok(a.yardsticks.peg.credit == null || a.yardsticks.peg.credit <= F.GROWTH_CREDIT_MAX);
-  assert.ok(/growth counted up to 40%/.test(a.yardsticks.peg.basis || ""), "the PEG row's basis says so"); });
+  const cap = IDX.rule.growth_cap_pct; assert.ok(new RegExp("growth counted up to " + cap + "%").test(a.yardsticks.peg.basis || ""), "the PEG row's basis says so (CP5: the cap is a value — " + cap + " in this artifact; tests/cp5-expensive-only.test.mjs pins that it holds)"); });
 test("closeness weights: a same-business peer of the company's size weighs more than a small adjacent one; the adjacent group never outweighs half the same-business group", () => {
   const snap = { ticker: "X", table: { company: { eps_g_fy: 30, om: 40 }, peers: { A: { eps_g_fy: 30, om: 40 }, B: { eps_g_fy: 30, om: 40 }, C: { eps_g_fy: 30, om: 40 }, D: { eps_g_fy: 30, om: 40 } } } };
   const set = { kept: [{ ticker: "A", ratio: 1, same_business: true }, { ticker: "B", ratio: 0.01, same_business: false }, { ticker: "C", ratio: 1, same_business: false }, { ticker: "D", ratio: 1, same_business: false }] };
