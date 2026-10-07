@@ -143,6 +143,11 @@ test("the page names every line by its exact label, is self-contained, and says 
   assert.ok(PAGE.includes(`SPY has ${s.upper_rail.room_pct.toFixed(1)}% of room left`)); assert.ok(PAGE.includes(`it closed ${Math.abs(q.upper_rail.room_pct).toFixed(1)}% above its top rail`));
   assert.ok(PAGE.includes(`<b>${s.upper_rail.room_pct.toFixed(2)}% ($${s.upper_rail.room_usd.toFixed(2)}) of room</b>`));
   assert.ok(PAGE.includes(`<b>No room: ${Math.abs(q.upper_rail.room_pct).toFixed(2)}% ($${Math.abs(q.upper_rail.room_usd).toFixed(2)}) above</b>`));
+  for (const sym of ["SPY", "QQQ"]) R.symbols[sym].episodes.forEach((e, i) => {   // the side-by-side picture has one panel per low, carrying that low's own multiples
+    const f20 = e.rebound.first_20_sessions.multiple_of_channel_slope, f60 = e.rebound.first_60_sessions.multiple_of_channel_slope, x = (v) => (v >= 20 ? v.toFixed(0) : v.toFixed(1)) + "×";
+    assert.ok(PAGE.includes(`<tspan font-weight="700">${sym} ${i + 1}</tspan>`), `${sym} ${i + 1} has its panel`);
+    assert.ok(PAGE.includes(`20 sessions ${x(f20)} · 60 sessions ${x(f60)}`), `${sym} ${i + 1}: 20 and 60 session multiples`);
+  });
 });
 
 test("the page keeps the house look: greys stay grey, nothing above 210, colour only where it means something", () => {
@@ -161,7 +166,7 @@ test("a headless browser opened the page at 1680 and 390: nothing fetched, nothi
     const rec = REC.widths[w];
     assert.deepEqual(rec.outside_requests, []); assert.deepEqual(rec.non_get, []); assert.deepEqual(rec.errors, []);
     assert.ok(rec.measured.smallest_text_px >= 11, `${w}: smallest text ${rec.measured.smallest_text_px}px`);
-    assert.equal(rec.measured.page_scrolls_sideways, false); assert.equal(rec.measured.charts.length, 4);
+    assert.equal(rec.measured.page_scrolls_sideways, false); assert.equal(rec.measured.charts.length, 6);   // two price pictures per index, and the rebounds side by side for each
   }
   assert.ok(REC.widths["1680"].measured.charts.every((c) => !c.scrolls), "at 1680 every picture fits its panel");
   assert.ok(REC.widths["1680"].measured.tables.every((t) => t.table <= t.wrap + 1), "at 1680 every table fits its panel");

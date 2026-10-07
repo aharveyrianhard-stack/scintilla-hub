@@ -50,10 +50,10 @@ try {
     });
     await page.screenshot({ path: path.join(shots, `page-${width}.png`), fullPage: true });
     // each picture on its own, and each section
-    const cws = await page.$$(".cw"); const names = ["spy-whole", "spy-year", "qqq-whole", "qqq-year"];
+    const cws = await page.$$(".cw"); const names = ["spy-whole", "spy-year", "qqq-whole", "qqq-year", "rebounds-side-by-side-spy", "rebounds-side-by-side-qqq"];
     for (let i = 0; i < cws.length; i++) { await cws[i].scrollIntoViewIfNeeded(); await cws[i].screenshot({ path: path.join(shots, `${names[i]}-${width}.png`) }); }
-    const secs = await page.$$("section"); const sn = ["plain-words", "todays-read", "sec-spy", "sec-qqq", "channels-table", "lows-table", "rebounds-table", "pierces-table"];
-    for (let i = 0; i < secs.length; i++) { if ([0, 1, 4, 5, 6, 7].includes(i)) { await secs[i].scrollIntoViewIfNeeded(); await secs[i].screenshot({ path: path.join(shots, `${sn[i]}-${width}.png`) }); } }
+    const secs = await page.$$("section"); const sn = ["plain-words", "todays-read", "sec-spy", "sec-qqq", "channels-table", "lows-table", "rebounds-side-by-side", "rebounds-table", "pierces-table"];
+    for (let i = 0; i < secs.length; i++) { if ([0, 1, 4, 5, 6, 7, 8].includes(i)) { await secs[i].scrollIntoViewIfNeeded(); await secs[i].screenshot({ path: path.join(shots, `${sn[i]}-${width}.png`) }); } }
     if (phone) {   // what the phone actually shows first, and a picture as it opens (scrolled to today)
       await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: path.join(shots, `phone-top-${width}.png`) });
       await cws[1].scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(shots, `phone-spy-year-${width}.png`) });

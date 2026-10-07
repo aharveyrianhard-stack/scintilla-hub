@@ -167,6 +167,49 @@ def chart(sym, x_from, fut_sessions, title, sub, zoom, W=1490, H=620):
     a('</svg>')
     return "".join(o)
 
+STRIP_N = 120          # sessions drawn after each low
+def strip_paths(sym):
+    """For each episode: the gain since its low, session by session, and the dollars the rail climbed over the same sessions as a
+    percentage of the same starting price - so the gap between the two lines IS the multiple of the channel's slope."""
+    S = R["symbols"][sym]; ser = SER[sym]; col = {c: i for i, c in enumerate(ser["columns"])}; idx = {r[0]: k for k, r in enumerate(ser["rows"])}; out = []
+    for n, e in enumerate(S["episodes"], 1):
+        k = idx[e["low"]["date"]]; rows = ser["rows"][k:k + STRIP_N + 1]; c0 = rows[0][col["close"]]; u0 = rows[0][col["u"]]
+        out.append({"n": n, "e": e, "gain": [(r[col["close"]] / c0 - 1) * 100 for r in rows], "rail": [(r[col["u"]] - u0) / c0 * 100 for r in rows], "dates": [r[0] for r in rows]})
+    return out
+STRIPS = {s_: strip_paths(s_) for s_ in ("SPY", "QQQ")}
+STRIP_MAX = math.ceil(max(max(p["gain"]) for v in STRIPS.values() for p in v) / 10) * 10
+
+def rebound_strip(sym, W=1490, H=262):
+    """Small multiples: one panel per low, all on one scale, so the rebounds can be compared at a glance."""
+    paths = STRIPS[sym]; gap = 22; pw = (W - 4 * gap) / 5; L, T, B, Rm = 34, 46, 24, 46; PW, PH = pw - L - Rm, H - T - B
+    o = [f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="{sym}: the first {STRIP_N} sessions after each low, as gain since the low, beside the channel\'s own climb">']
+    for j, p in enumerate(paths):
+        x0 = j * (pw + gap); e = p["e"]; rb = e["rebound"]; g = p["gain"]; rl = p["rail"]
+        def X(i): return x0 + L + i / STRIP_N * PW
+        def Y(v): return T + (STRIP_MAX - v) / STRIP_MAX * PH
+        f20, f60 = rb["first_20_sessions"], rb["first_60_sessions"]
+        tip = (f"{sym} {p['n']}, low {dstr(e['low']['date'])} at {usd(e['low']['close'])}. After 20 sessions {pct(f20['gain_pct'], 1)} ({mult(f20['multiple_of_channel_slope'])} the channel's slope), after 60 sessions {pct(f60['gain_pct'], 1)} ({mult(f60['multiple_of_channel_slope'])}), "
+               f"after {len(g) - 1} sessions {pct(g[-1], 1)}; the rail climbed {pct(rl[-1], 1)} of the same starting price.")
+        o.append(f'<g><title>{esc(tip)}</title><rect x="{x0:.1f}" y="0" width="{pw:.1f}" height="{H}" fill="transparent"/>')
+        o.append(f'<text x="{x0:.1f}" y="14" fill="{INK}" font-size="12" letter-spacing="1"><tspan font-weight="700">{sym} {p["n"]}</tspan> · low {esc(dstr(e["low"]["date"]))}</text>')
+        o.append(f'<text x="{x0:.1f}" y="32" fill="{INK3}" font-size="11">20 sessions {mult(f20["multiple_of_channel_slope"])} · 60 sessions {mult(f60["multiple_of_channel_slope"])}</text>')
+        for v in range(0, STRIP_MAX + 1, 10):
+            o.append(f'<line x1="{X(0):.1f}" x2="{X(STRIP_N):.1f}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="{LINE if v == 0 else GRID}" stroke-width="1"/><text x="{X(0) - 6:.1f}" y="{Y(v) + 4:.1f}" fill="{INK3}" font-size="11" text-anchor="end">{v}%</text>')
+        for i in (20, 60, 120):
+            o.append(f'<line x1="{X(i):.1f}" x2="{X(i):.1f}" y1="{T}" y2="{T + PH}" stroke="{GRID}" stroke-width="1"/><text x="{X(i):.1f}" y="{T + PH + 16}" fill="{INK3}" font-size="11" text-anchor="middle">{i}</text>')
+        o.append(f'<polyline points="{" ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in enumerate(rl))}" fill="none" stroke="{RAIL}" stroke-width="2" stroke-linejoin="round"/>')
+        up, dn = [], []
+        for i in range(1, len(g)): (up if g[i] >= g[i - 1] else dn).append(f"M{X(i - 1):.1f} {Y(g[i - 1]):.1f}L{X(i):.1f} {Y(g[i]):.1f}")
+        o.append(f'<path d="{"".join(dn)}" fill="none" stroke="{DOWN}" stroke-width="1.8" stroke-linecap="round"/><path d="{"".join(up)}" fill="none" stroke="{UP}" stroke-width="1.8" stroke-linecap="round"/>')
+        for key in ("to_2W_B4_mid", "to_1W_B4_mid", "to_upper_touch"):      # where it reached each line, when that came inside the window
+            v = rb[key]
+            if v and v["sessions"] < len(g): o.append(f'<circle cx="{X(v["sessions"]):.1f}" cy="{Y(g[v["sessions"]]):.1f}" r="4" fill="{PANEL}" stroke="{INK}" stroke-width="1.6"/>')
+        o.append(f'<circle cx="{X(len(g) - 1):.1f}" cy="{Y(g[-1]):.1f}" r="4" fill="{INK}" stroke="{PANEL}" stroke-width="2"/>')
+        ye, yr = Y(g[-1]), Y(rl[-1])
+        if yr - ye < 15: yr = ye + 15
+        o.append(f'<text x="{X(len(g) - 1) + 8:.1f}" y="{ye + 4:.1f}" fill="{INK}" font-size="11">{pct(g[-1], 0)}</text><text x="{X(len(g) - 1) + 8:.1f}" y="{yr + 4:.1f}" fill="{INK3}" font-size="11">{pct(rl[-1], 0)}</text></g>')
+    o.append('</svg>'); return "".join(o)
+
 def meter(sym, ci):
     """Position inside one channel: lower rail = 0, upper rail = 100, on a 0-110 track. Plain boxes and text, so it reads at full size anywhere."""
     S = R["symbols"][sym]; c = S["channels"][ci]; t = c["today"]; pos = t["position_pct_of_height"]; mapos = t["sma200_position_pct_of_height"]
@@ -506,6 +549,13 @@ page = f"""<!doctype html>
 <h2>The lows — one row per episode</h2>
 {low_table()}
 <p class="legend"><span>rank = where that reading stands among the index's own daily readings since 2003 (bottom 0.2% = lower than 99.8% of its days)</span><span>position = 0% on the lower rail, 100% on the upper rail; negative = under the lower rail</span></p>
+</section>
+
+<section>
+<h2>The rebounds — side by side</h2>
+<div class="cw strip">{rebound_strip("SPY")}</div>
+<div class="cw strip" style="margin-top:14px">{rebound_strip("QQQ")}</div>
+<p class="legend"><span><i style="border-color:{UP}"></i><i style="border-color:{DOWN};margin-left:-4px"></i>gain since the low, the first {STRIP_N} sessions (green on an up day, red on a down day)</span><span><i style="border-color:{RAIL}"></i>what the rail climbed over the same sessions, as a share of the same starting price</span><span>the gap between the two is the multiple of the channel's slope</span><span><i class="dot" style="background:{PANEL};border:2px solid {INK};width:6px;height:6px"></i>the session it reached 2W B4, then 1W B4, then the top rail, where that came inside the {STRIP_N}</span><span>all nine panels share one scale</span></p>
 </section>
 
 <section>
