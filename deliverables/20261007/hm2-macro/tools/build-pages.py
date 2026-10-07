@@ -45,6 +45,10 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 <li><b>DAYS</b> shows five weeks back and four ahead. <b>WEEKS</b> shows six months back and two ahead. There is no MONTHS: a month of releases is nearly the same number every month, so the bars would all be the same height.</li>
 <li>Drag it sideways, or tap TODAY to bring it back. Click a bar and that day (or week) opens in the table below.</li>
 </ul>
+<div class="pair" style="margin-top:12px">
+{fig("after-economic-1680-slider-weeks.jpg", "WEEKS: one bar a week, six months back and two ahead. Here red is the busiest third of weeks on the slider.")}
+<div><p class="small"><b>Checked in the page itself, not only by eye.</b> With the room on the month, clicking the 8 Oct bar opened Thursday 8 Oct in the day view, lit the DAY chip and marked the bar. WEEKS drew 36 bars with today’s week marked. Changing a tab re-counts the bars without moving the slider.</p></div>
+</div>
 
 <h2>2 · TREASURY AUCTIONS</h2>
 <p>“There’s a … 10-year note auction … should we be tracking that? … how much they fill or what? What information do we get … or do we just get that the event exists?”</p>
@@ -61,7 +65,8 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 <tr><td>Dealers</td><td>the banks, who must take whatever nobody else wanted. <b>Lower is the stronger auction.</b></td><td class="r up">2.5%</td><td class="r">8.8%</td></tr>
 </table>
 <p class="small">All seven terms are on the card: 2-, 3-, 5-, 7-, 10-, 20- and 30-year. The newest result of each is one line. Recent ones were softer than today’s: the 5-year on 23 Sep was covered 2.21 times against 2.33 and dealers took 15.8% against 12.9%.</p>
-<p><b>Upcoming, with size.</b> COMING lists what the Treasury has announced: tomorrow’s $22B 30-year reopening. The Treasury names a size about a week ahead, so further out the date is known (it is on the calendar) and the size is not yet.</p>
+<p><b>Upcoming, with size.</b> COMING lists what the Treasury has announced: tomorrow’s $22B 30-year reopening. The Treasury names a size about a week ahead. Further out, the calendar already has the date and nobody has a size yet, so those are listed under LATER with the size of that term’s last auction, said as “last time”: 20-year on 21 Oct (last time $13B), 2-year on 26 Oct ($69B), 5-year on 27 Oct ($70B), 7-year on 29 Oct ($44B).</p>
+<p class="small">One thing found on the way: the calendar did carry one number for an auction, the stop, with no label and nothing to compare it with (5.3 for today’s). It never had the size, the cover or who took it.</p>
 <p><b>The tail is not shown, and here is why.</b> The tail is the stop against the yield the new issue was trading at one minute before the deadline. That pre-auction yield lives on dealer screens (Bloomberg, Tradeweb). <b>No free source carries it.</b> The Treasury’s daily curve is end-of-day only, so comparing with it would mix in the whole morning’s move and call it a tail. What the card gives instead is free and exact: the stop, and the median accepted bid on hover (5.255% today, so the stop was 4.5 hundredths above the middle bid).</p>
 </div>
 </div>
@@ -130,7 +135,7 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 </div>
 <ul>
 <li><b>Names:</b> SPY and QQQ first, then your FAVORITES and RADAR names, the one furthest above its own usual first.</li>
-<li><b>The flash.</b> A name flashes while its ratio is at 1.5× its own usual or more, through the Hub’s one flash and the Station tape’s own. Measured on the stored days: at 1.5×, between 3 and 15 of about 65 names would be flashing at any moment; today at 1:30 PM it was 14. At 2× it would have been 7.</li>
+<li><b>The flash.</b> A name flashes while its ratio is at 1.5× its own usual or more, through the Hub’s one flash and the Station tape’s own (checked in the page: the 14 names were flashing on the running tape). Measured on the stored days: at 1.5×, between 3 and 15 of about 65 names would be flashing at any moment; today at 1:30 PM it was 14. At 2× it would have been 7.</li>
 <li><b>Thin names never flash.</b> A name that usually trades under 2,000 contracts by that time of day is shown dimmed and cannot flash. Without that rule a fund trading 10 puts against a usual 0 would light up every day.</li>
 <li><b>“Usual”</b> is the average of the name’s own last sessions at the same time of day. Only 8 full sessions are stored so far (the counter started on 24 Sep and one day was lost to a logout), so “usual” is a short memory today. It deepens by itself, up to 20 sessions.</li>
 <li><b>Where the numbers come from.</b> The IBKR counter on this MacBook already lands every name’s call and put volume. What was missing was keeping each name every 15 minutes. That is now written into the function that already makes the minute lines; it stores 26 marks a day per name.</li>

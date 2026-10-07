@@ -39,6 +39,11 @@ function load(S = {}) {
   return Object.assign(ctx.out, { ctx });
 }
 const ts = (iso) => Math.floor(Date.parse(iso) / 1000);
+function vmWith(names, S = {}) {
+  const ctx = { S: Object.assign({ econCty: "US", econCat: "ALL", econImp: "ALL", econDay: null }, S), el: () => null, pg: async () => [], console };
+  vm.runInNewContext(helpers + "const ecNormalize = (r) => r; const ecCountryFilter = () => ''; const ecKeysetAfter = () => ''; const ecFetchWindow = async () => [];\n" + block + "\nglobalThis.out = { " + names + " };", ctx);
+  return ctx.out;
+}
 
 /* ---- the page carries the block, and can be put back ------------------------------------------------ */
 test("the page carries the HM2 block and its stylesheet byte for byte, once", () => {
@@ -224,6 +229,20 @@ test("the card: the stop, cover and takedown each against the six; green is more
   assert.match(html, /DEALERS<\/span><b>2\.5%<\/b><span class="hm2-avs up"[^>]*>−4\.8 vs 6<\/span>/, "dealers left with less than usual: also green");
   assert.match(html, /<span class="hm2-aup__i"><b>30Y reopening<\/b> \$22B · tomorrow 1:00 PM ET<\/span>/, "what is coming, with its size");
   assert.match(h.hm2AuctionsHTML([]), /no auctions stored yet/);
+});
+test("further out: an auction the calendar dates but Treasury has not sized is listed with its term's LAST size, said as such", () => {
+  const h = vmWith("hm2AucLater, hm2AuctionsHTML, ecToday, ecShift"), today = h.ecToday(), d = (n) => h.ecShift(today, n);
+  const rows = [auc("30-Year", d(1), null, null, null, { status: "announced", offering_amount: 22e9, high_yield: null, bid_to_cover: null, indirect_pct: null, direct_pct: null, dealer_pct: null }),
+    auc("10-Year", today, 2.77, 80.3, 2.5), auc("20-Year", d(-22), 2.57, 52.5, 16.9, { offering_amount: 13e9 }), auc("2-Year", d(-15), 2.63, 57.8, 13.2, { offering_amount: 69e9 })];
+  const cal = (n, event, country = "US") => ({ event_ts: ts(d(n) + "T17:00:00Z"), country, event, impact: "Low" });
+  const later = h.hm2AucLater(rows, [cal(1, "30-Year Bond Auction"), cal(14, "20-Year Bond Auction"), cal(19, "2-Year Note Auction"), cal(19, "2-Year Note Auction"),
+    cal(6, "3-Month Bill Auction"), cal(9, "10-Year TIPS Auction"), cal(12, "10-Year Bund Auction", "DE"), cal(-1, "3-Year Note Auction"), cal(20, "5-Year Note Auction")], today);
+  assert.deepEqual(Array.from(later, (l) => l.term + " " + l.day + " " + l.last), ["20-Year " + d(14) + " 13000000000", "2-Year " + d(19) + " 69000000000", "5-Year " + d(20) + " null"],
+    "tomorrow's 30-year is announced (it is under COMING); bills, TIPS, other countries and past days are not listed; a term never auctioned in the rows has no size to quote");
+  const html = h.hm2AuctionsHTML(rows, later);
+  assert.match(html, /<div class="hm2-aup hm2-aup--later"[^>]*><span class="hm2-as__l">LATER<\/span><span class="hm2-aup__i"><b>20Y<\/b> [A-Z]{3} \d+ · last time \$13B<\/span>/);
+  assert.match(html, /<b>5Y<\/b> [A-Z]{3} \d+<\/span>/, "no last auction in hand: the date alone, never an invented size");
+  assert.doesNotMatch(h.hm2AuctionsHTML(rows, []), /LATER/); assert.deepEqual(Array.from(h.hm2AucLater(rows, null, today)), []);
 });
 test("the table and its way back: additive, anon read, and the rollback drops exactly what was added", () => {
   assert.match(mig, /create table if not exists public\.treasury_auctions \(/); assert.match(mig, /primary key \(cusip, auction_date\)/);

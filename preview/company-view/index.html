@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from e38fbae) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 73e4d81) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5385,6 +5385,7 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .hm2-ab i.is-now{ opacity:1; width:7px; margin-left:3px; }
 .hm2-aup{ display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 12px; padding-top:7px; font-family:var(--mono); font-size:11px; color:var(--ink3); }
 .hm2-aup__i b{ color:var(--ink); }
+.hm2-aup--later{ padding-top:3px; color:var(--dim); } .hm2-aup--later .hm2-aup__i b{ color:var(--ink2); }
 /* the surprise strips */
 .hm2-st{ display:grid; grid-template-columns:minmax(96px, 30%) minmax(0, 1fr) auto; align-items:center; gap:8px; padding:3px 0;
   border-top:.5px solid var(--line); cursor:pointer; font-family:var(--mono); font-size:11px; }
@@ -17094,6 +17095,7 @@ async function hm2TlLoad(z) {
   } catch (_) { HM2_TL.failAt = Date.now(); }
   finally { if (HM2_TL.busy === key) HM2_TL.busy = ""; }
   hm2EcTapePaint();
+  try { hm2AuctionsPaint(); } catch (_) {}        /* the calendar just arrived: the auctions card can now name what is dated further out */
 }
 function hm2TlIndex(rows, z) {
   const idx = {}, reg = S.econCty || "US", cat = S.econCat || "ALL";
@@ -17334,7 +17336,29 @@ function hm2AucVs(val, avg, better, d, unit) {
   const diff = val - avg, tone = Math.abs(diff) < 1e-9 ? "" : ((diff > 0) === (better > 0) ? "up" : "dn");
   return '<span class="hm2-avs ' + tone + '" title="' + esc("the six auctions of this term before it averaged " + avg.toFixed(d) + unit) + '">' + hm2Sign(diff, d) + " vs 6</span>";
 }
-function hm2AuctionsHTML(rows) {
+/* FURTHER OUT. Treasury names a size about a week ahead, so beyond that an auction has a date and no size yet. The
+   date is already in the room: the calendar the slider reads carries "20-Year Bond Auction" on its day. Those are
+   listed after COMING with the size of that term's last auction, said as such — never as this one's size. */
+let HM2_AUC = { rows: null };
+function hm2AucLater(rows, calendar, today) {
+  const out = [], seen = {};
+  for (const r of calendar || []) {
+    if (r.country !== "US") continue;
+    const m = /^(\d+)-Year (Note|Bond) Auction$/i.exec(ecBase(r.event)); if (!m) continue;
+    const term = m[1] + "-Year", day = ecDateKey(+r.event_ts);
+    if (day <= today || HM2_TERMS.indexOf(term) < 0 || seen[term + day]) continue;
+    if (rows.some((x) => x.term === term && x.auction_date === day)) continue;          /* announced: it is under COMING, with its own size */
+    seen[term + day] = 1;
+    const last = rows.find((x) => x.term === term && x.status === "auctioned");
+    out.push({ term, day, last: last ? num(last.offering_amount) : null });
+  }
+  return out.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)).slice(0, 6);
+}
+function hm2AuctionsPaint() {
+  const host = hm2Host("hm2Auctions"); if (!host || !HM2_ON || !HM2_AUC.rows) return;
+  host.innerHTML = hm2AuctionsHTML(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));
+}
+function hm2AuctionsHTML(rows, later) {
   const today = ecToday();
   const done = rows.filter((r) => r.status === "auctioned"), coming = rows.filter((r) => r.status === "announced" && r.auction_date >= today)
     .sort((a, b) => (a.auction_date < b.auction_date ? -1 : 1));
@@ -17366,6 +17390,8 @@ function hm2AuctionsHTML(rows) {
     return '<span class="hm2-aup__i"><b>' + esc(r.term.replace("-Year", "Y")) + (r.reopening ? " reopening" : "") + "</b> " + esc(hm2Bn(num(r.offering_amount))) + " · " +
       (days === 0 ? "today" : days === 1 ? "tomorrow" : hm2Md(r.auction_date)) + " " + esc(String(r.closing_time_et || "").replace(/^0/, "")) + " ET</span>";
   }).join("") : '<span class="hm2-aup__i">nothing announced yet — Treasury names the size about a week ahead</span>') + "</div>";
+  if (later && later.length) html += '<div class="hm2-aup hm2-aup--later" title="' + esc("dated on the calendar; Treasury names the size about a week ahead, so the size shown is that term's last auction") + '"><span class="hm2-as__l">LATER</span>' +
+    later.map((l) => '<span class="hm2-aup__i"><b>' + esc(l.term.replace("-Year", "Y")) + "</b> " + hm2Md(l.day) + (l.last != null ? " · last time " + esc(hm2Bn(l.last)) : "") + "</span>").join("") + "</div>";
   return html;
 }
 async function hm2AuctionsFill() {
@@ -17373,7 +17399,8 @@ async function hm2AuctionsFill() {
   try {
     const rows = await pg("treasury_auctions?select=cusip,auction_date,term,reopening,closing_time_et,offering_amount,high_yield,median_yield,bid_to_cover,indirect_pct,direct_pct,dealer_pct,status&order=auction_date.desc&limit=160", 1);
     if (hm2Host("hm2Auctions") !== host) return;
-    host.innerHTML = hm2AuctionsHTML(rows || []);
+    HM2_AUC.rows = rows || [];
+    host.innerHTML = hm2AuctionsHTML(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">auction results are not stored yet</div>'; }
 }
 
@@ -17549,7 +17576,7 @@ function hm2RailCardsHTML() {
 const HM2_SPECS = '<details class="sc-pagespecs hm2-specs"><summary>PAGE SPECS</summary><div>' +
   "<p><b>The slider.</b> One bar is a day, a week or a month of releases that pass the region tab, the category chip and HIGH ONLY. Height is how many; colour is the load (cyan: no high-importance release, orange: one to four, red: five or more, which is about one day in eight — a week is ranked against the busiest week on the slider). A star marks the Fed’s decision, payrolls, CPI, core PCE or GDP. Click a bar to open it below.</p>" +
   "<p><b>Treasury curve.</b> treasury_rates (Treasury’s daily par yields). Today’s line is green when the 10-year closed above the day before and red when below; the week-, month- and year-ago curves are the stored curve nearest to that date. 2s10s = 10-year minus 2-year; 3m10y = 10-year minus 3-month; each with its last 252 sessions.</p>" +
-  "<p><b>Treasury auctions.</b> An r beside a term is a reopening: more of a bond that already trades. TreasuryDirect’s own results, a few minutes after the 1:00 PM New York deadline. STOPPED AT is the highest yield accepted. COVER is dollars bid per dollar sold. INDIRECT, DIRECT and DEALERS are each bidder class’s share of what competitive bidders were awarded. Each is compared with the average of the six auctions of the same term before it: green is more demand than usual, red less (for DEALERS a smaller share is the stronger auction). The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it.</p>" +
+  "<p><b>Treasury auctions.</b> An r beside a term is a reopening: more of a bond that already trades. COMING is what Treasury has announced, with its size; LATER is dated on the calendar and not yet sized, shown with the size of that term’s last auction. TreasuryDirect’s own results, a few minutes after the 1:00 PM New York deadline. STOPPED AT is the highest yield accepted. COVER is dollars bid per dollar sold. INDIRECT, DIRECT and DEALERS are each bidder class’s share of what competitive bidders were awarded. Each is compared with the average of the six auctions of the same term before it: green is more demand than usual, red less (for DEALERS a smaller share is the stronger auction). The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it.</p>" +
   "<p><b>Macro prints.</b> econ_calendar (FMP’s economic calendar), every US print stored with a consensus, oldest on the left. Up and green is better than expected, down and red is worse; for inflation, unemployment and jobless claims a lower number is the better one. A yellow dot is a print exactly on consensus. Indicators nobody forecasts (money supply, the Fed’s balance sheet, mortgage rates) have no strip.</p>" +
   "</div></details>";
 /* called beside the room's mount and NOT awaited by it: the calendar and the rail are ready exactly when they were */

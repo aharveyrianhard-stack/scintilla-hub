@@ -1,5 +1,5 @@
 // HM2 — one headless picture of one page. Never a visible window; every non-GET request is blocked and counted.
-// usage: node shoot.mjs <url> <out.jpg> [width=1680] [height=1050] [waitMs=20000] [--full] [--map=overrides.json] [--data=reads.json] [--init=file.js] [--eval=file.js] [--evalwait=ms] [--clip=selector] [--clips=name=selector;;name=selector]
+// usage: node shoot.mjs <url> <out.jpg> [width=1680] [height=1050] [waitMs=20000] [--full] [--map=overrides.json] [--data=reads.json] [--init=file.js] [--eval=file.js] [--evalwait=ms] [--clip=selector] [--clips=name=selector;;name=selector] [--eval2=file.js] [--clips2=…]
 //   --map   JSON { "<host+path>": "<local file>" }  → that address is answered from the local file (the branch's page on the live address)
 //   --data  JSON { "<substring of a GET url>": "<local json file>" } → that read is answered from the local file (a table not created yet)
 import fs from "node:fs";
@@ -43,6 +43,16 @@ try {
     await el.screenshot({ path: out.replace(/\.jpg$/, "") + "-" + name + ".jpg", type: "jpeg", quality: 84 }); pieces.push(name);
   }
   if (pieces.length) console.log("pieces: " + pieces.join(", "));
+  /* --eval2 / --clips2: something done AFTER the pictures (a click, a zoom) and the pieces that show its result */
+  let facts2 = null;
+  if (flag("eval2")) { facts2 = await page.evaluate(fs.readFileSync(flag("eval2"), "utf8")); await page.waitForTimeout(400); }
+  for (const part of (flag("clips2") || "").split(";;").filter(Boolean)) {
+    const i = part.indexOf("="), name = part.slice(0, i), el = await page.$(part.slice(i + 1));
+    if (!el) { console.log("piece NOT FOUND: " + name); continue; }
+    await el.scrollIntoViewIfNeeded(); await page.waitForTimeout(250);
+    await el.screenshot({ path: out.replace(/\.jpg$/, "") + "-" + name + ".jpg", type: "jpeg", quality: 84 });
+  }
+  if (facts2) console.log("after: " + JSON.stringify(facts2));
   const clip = flag("clip");
   if (clip) { const el = await page.$(clip); if (!el) console.log("CLIP NOT FOUND", clip); else await el.screenshot({ path: out, type: "jpeg", quality: 80 }); }
   console.log(JSON.stringify({ out, w: +w, title: await page.title(), blockedNonGet: blocked, served: [...new Set(served)], pageErrors: errors, facts }));
