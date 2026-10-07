@@ -70,3 +70,85 @@ test("LD1: nothing in the folder carries a key or a token", () => {
   const walk = (d) => readdirSync(d).flatMap((f) => { const p = path.join(d, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
   for (const f of walk(DIR)) { if (/\.png$/.test(f)) continue; const s = readFileSync(f, "utf8"); assert.doesNotMatch(s, /eyJhbGciOi[A-Za-z0-9_-]{8,}|sb_secret_|sk-[A-Za-z0-9]{20,}|apikey=[A-Za-z0-9]{12,}/, `${path.basename(f)} carries something that looks like a key`); }
 });
+
+/* ---- second pass, 7 Oct 2026: the first run stopped before it could return, so its work was re-derived and re-read first-hand ---- */
+const OP = JSON.parse(readFileSync(path.join(DIR, "opinion.json"), "utf8"));
+const AUD = JSON.parse(readFileSync(path.join(DIR, "data/audit-firsthand.json"), "utf8"));
+const RC = JSON.parse(readFileSync(path.join(DIR, "data/closes-recheck.json"), "utf8")).by_symbol;
+
+test("LD1 second pass: the groups are ranked on one close and shown at a later one, and the page says which", () => {
+  assert.ok(S.closes_through > S.ranked_on, "shown at a later close than the ranking");
+  assert.equal(S.ranked_on, SEL.closes_through);
+  for (const [t, n] of Object.entries(S.names)) { assert.ok(Number.isInteger(n.rank) && Number.isInteger(n.rank_now), `${t} carries both ranks`); assert.equal(n.close_last, RC[t].closes[S.closes_through], `${t} is shown at the newest close`); }
+  assert.match(PAGE, /ranked on the 5 Oct close · shown at the 6 Oct close/);
+});
+
+test("LD1 second pass: every return on the page re-derives from the closes pulled first-hand", () => {
+  const cal = Object.keys(RC.SPY.closes).sort(), now = S.closes_through; assert.equal(cal.at(-1), now);
+  for (const [t, n] of Object.entries(S.names)) {
+    const c = RC[t].closes, near = (a, b) => Math.abs(a - b) < 1e-9;
+    assert.ok(near(n.r_run, c[now] / c[S.run_start] - 1), `${t} bounce`); assert.ok(near(n.r3m, c[now] / c[cal.at(-64)] - 1), `${t} 3 months`); assert.ok(near(n.r1m, c[now] / c[cal.at(-22)] - 1), `${t} 1 month`);
+  }
+});
+
+test("LD1 second pass: market value is on one basis, so the same thing never has two figures", () => {
+  const d = S.checks.who_added_the_dollars, c = S.caps;
+  assert.ok(Math.abs(d.leaders_added_b - (c.leaders.now_b - c.leaders.run_start_b)) < 0.01, "what the leaders added is one number, in the table and in the dollars check");
+  assert.ok(Math.abs(d.field_added_b - (c.field.now_b - c.field.run_start_b)) < 0.01, "and so is the field's");
+  for (const n of Object.values(S.names)) if (n.cap_now_b != null) assert.ok(Math.abs(n.cap_now_b - n.shares_m * n.close_last / 1000) < 1e-6, `${n.ticker}: value = shares x close`);
+  assert.deepEqual(c.counted_once, { GOOG: "GOOGL" }, "Alphabet's two share lines are one company");
+  assert.ok(c.field.now_b < 40000, "the field total no longer carries Alphabet twice");
+});
+
+test("LD1 second pass: a first-hand estimate reading is in the counts, and none contradicts the first run", () => {
+  assert.ok(AUD.estimate_pairs.length >= 12);
+  for (const e of AUD.estimate_pairs) {
+    const n = S.names[e.ticker]; assert.ok(n, `${e.ticker} is a studied name`);
+    assert.equal(n.eps_rev_90d_direction, e.direction, `${e.ticker}: the count uses what the page showed on 7 Oct`);
+    const band = e.pct == null ? null : Math.abs(e.pct) <= 2 ? "flat" : e.pct > 0 ? "up" : "down";
+    if (band && e.then > 0 && e.now > 0) assert.equal(e.direction, band, `${e.ticker}: the direction follows the 2% rule`);
+    assert.ok(/^https:\/\//.test(e.source));
+  }
+  for (const [t, n] of Object.entries(S.names)) assert.ok(!String(n.eps_rev_90d_direction_status).startsWith("first-hand re-check disagrees"), `${t}: no contradiction to report`);
+});
+
+test("LD1 second pass: every leader marked 'raised' says which kind of raise it was", () => {
+  const C = Object.fromEntries(S.conditions.map((c) => [c.id, c])), gk = AUD.guidance_kind;
+  const both = [...gk.raised_a_published_full_year_range, ...gk.guided_above_what_analysts_expected];
+  assert.deepEqual([...both].sort(), [...C.guide_raised.leaders.yes].sort(), "the two kinds together are exactly the leaders counted as raised");
+  assert.equal(new Set(both).size, both.length, "no leader is in both kinds");
+  for (const [t, n] of Object.entries(S.names)) if (n.guidance_direction === "raised") assert.ok(["full year", "above forecasts"].includes(n.guidance_kind), `${t} is marked raised without a kind`);
+});
+
+test("LD1 second pass: the Cerebras lock-up arithmetic adds up", () => {
+  const rows = AUD.cbrs.release_schedule.rows, sup = AUD.cbrs.supply_arithmetic, sum = (f) => rows.filter(f).reduce((a, r) => a + r.m, 0), near = (a, b) => Math.abs(a - b) < 0.051;
+  assert.ok(near(sum((r) => r.date <= "2026-10-28"), 171.1), "the ten early releases are about 171 million");
+  assert.ok(near(sum((r) => r.date > "2026-08-12" && r.state === "freed"), sup.freed_since_the_12_aug_report_m));
+  assert.ok(near(sum((r) => r.date > S.run_start && r.date <= S.closes_through), sup.of_which_inside_the_bounce_15sep_6oct_m));
+  assert.ok(near(sum((r) => r.state === "to come" && r.date <= "2026-10-28"), sup.still_to_come_14_and_28_oct_m));
+  assert.ok(Math.abs(sup.shares_outstanding_m - sup.sold_at_the_ipo_m - 171.1 - sup.left_for_9_nov_m_my_arithmetic) < 0.1, "what is left for 9 Nov is outstanding less the listing less the early releases");
+  for (const r of rows) assert.equal(r.state, r.date <= S.closes_through ? "freed" : "to come", `${r.date} is on the right side of today`);
+  const ins = JSON.parse(readFileSync(path.join(DIR, "data/cbrs-insider-sales.json"), "utf8"));
+  assert.equal(ins.total_shares, ins.rows.reduce((a, r) => a + r.shares, 0)); assert.equal(ins.total_usd, ins.rows.reduce((a, r) => a + r.usd, 0));
+});
+
+test("LD1 second pass: the opinion leads with the answer, defines nothing twice, and carries the market-value answer in its own words", () => {
+  const C = Object.fromEntries(S.conditions.map((c) => [c.id, c])), text = OP.paragraphs.map((p) => p.text).join(" ");
+  assert.match(OP.paragraphs[0].text, /^In my opinion the leaders led because/);
+  for (const p of OP.paragraphs) assert.ok(p.head && p.text, "each paragraph has a short heading");
+  for (const id of ["guide_raised", "eps_rev_up", "rev_q_20", "eps_pos", "fcf_pos", "diluting", "comps_up_1m"]) assert.ok(text.includes(`${C[id].leaders_yes} of ${C[id].leaders_n}`), `${id}: the leaders' count in the words is the study's`);
+  for (const id of ["guide_raised", "eps_rev_down", "rev_q_20", "diluting", "comps_up_1m"]) assert.ok(text.includes(`${C[id].laggards_yes} of ${C[id].laggards_n}`), `${id}: the laggards' count in the words is the study's`);
+  const mv = OP.paragraphs.find((p) => p.head === "Market value").text, tr = (v) => `$${(v / 1000).toFixed(2)} trillion`;
+  for (const v of [S.caps.leaders.selloff_start_b, S.caps.leaders.run_start_b, S.caps.leaders.now_b, S.caps.laggards.run_start_b, S.caps.laggards.now_b]) assert.ok(mv.includes(tr(v)), `${tr(v)} is in the market-value paragraph`);
+  assert.ok(mv.includes("Cerebras was worth"), "the stock that was asked about has its own value");
+  assert.doesNotMatch(text, /\b(UP|DOWN|CHANGE|NEXT|LAST|OWN|AND)\b(?! [A-Z])/, "no capitals for stress");
+  assert.ok(OP.against.length >= 6 && OP.short.startsWith("OPINION."));
+});
+
+test("LD1 second pass: the page carries the Cerebras picture and the re-check, and still runs no script", () => {
+  assert.match(PAGE, /2c · CEREBRAS \(CBRS\): ITS SHARE PRICE, AND THE SHARES FREED FOR SALE/);
+  assert.match(PAGE, /11 · THE SECOND PASS, 7 OCT: WHAT WAS RE-READ FIRST-HAND/);
+  assert.equal((PAGE.match(/<svg /g) || []).length, 2, "two pictures drawn as SVG: the field, and Cerebras");
+  assert.match(PAGE, /580 of 580 match/);
+  for (const e of AUD.cbrs.items) assert.ok(PAGE.includes(e.fact.replace(/&/g, "&amp;").replace(/'/g, "&#x27;")), `the Cerebras fact "${e.fact}" has a row`);
+});

@@ -1,5 +1,6 @@
 #!/bin/sh
-# LD1 · rebuild the page from the saved pieces, in order. Run from the repo root. Nothing here fetches anything.
+# LD1 · rebuild the page from the saved pieces, in order. Run from the repo root. Nothing here fetches anything
+# (tools/closes.py is the one tool that does: it re-pulls the closes from the chart API, and is run by hand).
 #   sh deliverables/20261006/leaders-vs-laggards/tools/make.sh [journal.jsonl ...]
 # With journal paths it first re-collects the research records; without, it uses data/ as committed.
 set -e

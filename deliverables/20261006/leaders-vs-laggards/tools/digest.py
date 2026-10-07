@@ -27,7 +27,7 @@ C = {c["id"]: c for c in S["conditions"]}
 out = {
  "question": "Alan, 6 Oct 2026: 'all of these things that are overbought right now have performed in a weird environment and pushed the indexes higher ... do a study with these leaders and whatever the comps system says are comparables for them, versus the ones that are doing wrong, like this CBRS one. What's the big difference between these names? Why is it that these names are the ones that bounced? In your opinion. And also what market cap did that put them at.'",
  "alan_framework": "Alan: 'Growth, revenue growth, earnings growth, is the fundamental driver of everything.' Comps / fundamentals decide WHAT to buy; technicals decide WHEN.",
- "setup": {"field": S["field"], "rule": S["rule"], "the_fall": "30 Jun 2026 -> 15 Sep 2026", "the_run": "15 Sep 2026 -> 5 Oct 2026 (last close on file)",
+ "setup": {"field": S["field"], "rule": S["rule"], "the_fall": "30 Jun 2026 -> 15 Sep 2026", "the_run": "15 Sep 2026 -> %s (the close everything is shown at); groups ranked on the %s close" % (S["closes_through"], S["ranked_on"]),
            "benchmarks_pct": {k: {a: p(b) for a, b in v.items()} for k, v in S["benchmarks"].items()},
            "benchmark_names": {"QQQ": "Nasdaq-100 fund", "SPY": "S&P 500 fund", "RSP": "equal-weight S&P 500", "SMH": "chip fund", "IGV": "software fund", "CIBR": "cybersecurity fund", "XLU": "utilities fund"},
            "groups": S["groups"], "named_in_brief": S["named_in_brief"]},
@@ -42,7 +42,8 @@ out = {
  "market_value_b": S["caps"], "same_cohort_pairs": S["pairs"],
  "names": [name(n) for g in ("leader", "laggard", "named_mid") for n in (S["names"][t] for t in S["groups"][g])],
  "data_quality": {k: v for k, v in S["quality"].items() if k not in ("hub_crosscheck", "comps_rule_vs_live_5oct")} | {"hub_crosscheck": {k: v for k, v in S["quality"]["hub_crosscheck"].items() if k != "rows"},
-     "note": "Fundamentals are public web pages read on 6 Oct by one agent per name, re-checked by a second; estimate direction and guidance were also read blind by a third. The live database was not read."},
+     "note": "Fundamentals are public web pages read on 6 Oct by one agent per name, re-checked by a second; estimate direction and guidance were also read blind by a third. On 7 Oct the load-bearing figures were re-read first-hand (see second_pass). The live database was not read."},
+ "second_pass": S["recheck"]["summary"] | {"rerank": S["recheck"]["rerank"]},
 }
 # one object per line, so the file reads in pieces: a header line per section, then compact JSON lines
 c = lambda o: json.dumps(o, separators=(",", ":"), ensure_ascii=False)
@@ -68,7 +69,7 @@ lines += ["## FOUR CHECKS ON THE FINDING",
          [c({"condition": x["words"], "beat_its_comps": f'{x["a_yes"]} of {x["a_n"]}', "fell_behind": f'{x["b_yes"]} of {x["b_n"]}', "gap_points": x["gap_points"], "how_sure": x["strength"]}) for x in K["beat_own_comps"]["conditions"]] + \
          [c({"check": "ticks all four: guidance raised, earnings estimate raised, profitable, free cash flow above zero", "leaders": f'{K["ticks_every_box"]["leaders"]} of {K["ticks_every_box"]["leaders_total"]}', "laggards": f'{K["ticks_every_box"]["laggards"]} of {K["ticks_every_box"]["laggards_total"]}', "named_mid": f'{K["ticks_every_box"]["named_mid"]} of {K["ticks_every_box"]["named_mid_total"]}', "names_and_ranks": [[b["ticker"], b["group"], b["rank"]] for b in K["ticks_every_box"]["names"]]}),
           c({"check": "bigger estimate raise, bigger move (profitable names with a then-and-now pair)", "names": K["size_of_raise"]["n"], "rank_correlation_with_the_run": r(K["size_of_raise"]["rank_corr_with_run"], 2), "rank_correlation_with_3_months": r(K["size_of_raise"]["rank_corr_with_3m"], 2)}),
-          c({"check": "who added the dollars in the run (whole field, Hub profile value x price change 15 Sep -> 5 Oct), $B", "field_added": r(K["who_added_the_dollars"]["field_added_b"]), "leaders_added": r(K["who_added_the_dollars"]["leaders_added_b"]), "laggards_added": r(K["who_added_the_dollars"]["laggards_added_b"]), "top5_share_of_field_gain": r(K["who_added_the_dollars"]["top5_share"], 2), "top3_leaders_share_of_leader_value": r(K["who_added_the_dollars"]["top3_leaders_share_of_leader_value"], 2), "top": [[a["ticker"], a["group"], a["rank"], r(a["added_b"])] for a in K["who_added_the_dollars"]["top"]]})]
-lines += ["## DATA QUALITY", c(out["data_quality"])]
+          c({"check": "who added the dollars in the run (whole field, shares x close on one basis, 15 Sep -> the newest close; Alphabet counted once), $B", "field_added": r(K["who_added_the_dollars"]["field_added_b"]), "leaders_added": r(K["who_added_the_dollars"]["leaders_added_b"]), "laggards_added": r(K["who_added_the_dollars"]["laggards_added_b"]), "top5_share_of_field_gain": r(K["who_added_the_dollars"]["top5_share"], 2), "top3_leaders_share_of_leader_value": r(K["who_added_the_dollars"]["top3_leaders_share_of_leader_value"], 2), "top": [[a["ticker"], a["group"], a["rank"], r(a["added_b"])] for a in K["who_added_the_dollars"]["top"]]})]
+lines += ["## DATA QUALITY", c(out["data_quality"]), "## SECOND PASS, 7 OCT: WHAT WAS RE-READ FIRST-HAND", c(out["second_pass"])]
 open(os.path.join(D, "digest.txt"), "w").write("\n".join(lines) + "\n")
 print("digest.txt", os.path.getsize(os.path.join(D, "digest.txt")), "bytes,", len(lines), "lines, longest", max(len(l) for l in lines))

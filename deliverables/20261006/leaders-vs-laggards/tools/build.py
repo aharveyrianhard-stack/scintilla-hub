@@ -7,10 +7,17 @@ Reads (all local files):
   ../data/research.json    public-web figures per studied name, first record + checked record   (tools/collect.py)
   ../data/peers.json       forward P/E and EV/sales for the comps that are not studied
   ../hub-saved-figures.json  the Hub comps tab's own figures saved on 3 and 5 Oct (cross-check only)
-  CO1's closes and company profiles (deliverables/20261006/cohort-proposal/data)
+  ../data/closes-recheck.json   daily closes for the field through the newest finished session (tools/closes.py)
+  ../data/geiger-recheck.json   the Hub Geiger as published when those closes were pulled
+  ../data/audit-firsthand.json  figures re-read first-hand on 7 Oct (estimate pairs, guidance, market value, Cerebras)
+  CO1's company profiles (deliverables/20261006/cohort-proposal/data)
 Nothing is fetched and nothing is written outside this folder.
+
+Two dates, kept apart on purpose:
+  RANKED ON  = selection.json's closes (5 Oct): this set the 25 leaders and the laggards, and the fundamentals were read for those names.
+  SHOWN AT   = the newest close in closes-recheck.json (6 Oct): every return, market value and comps move on the page is at this close.
 """
-import csv, json, math, os, re, statistics
+import json, math, os, re, statistics
 SEARCH_LIMIT = re.compile(r"search (budget|was unavailable|unavailable)|WebSearch was unavailable|budget (was )?exhausted", re.I)   # a reader saying its web search ran out
 
 HERE = os.path.dirname(os.path.abspath(__file__)); D = os.path.abspath(os.path.join(HERE, ".."))
@@ -23,23 +30,35 @@ HUB = J("hub-saved-figures.json")
 A = {n["ticker"]: n for n in sel["all"]}
 PROF = {r["ticker"]: r for r in json.load(open(os.path.join(ROOT, "deliverables/20261006/cohort-proposal/data/company_profile-20261006.json")))}
 
-rows = list(csv.reader(open(os.path.join(ROOT, "deliverables/20261006/cohort-proposal/data/closes-6m-20261006.csv"))))
-hdr, body = rows[0], rows[1:]; dates = [r[0] for r in body]
-i_run, i_sell = dates.index(sel["run_start"]), dates.index(sel["selloff_start"])
-def series(t):
-    if t not in hdr: return None
-    i = hdr.index(t); out = []
-    for r in body:
-        try: out.append(float(r[i]))
-        except Exception: out.append(None)
-    return out
-def px(t):
-    s = series(t)
-    if not s or s[-1] is None: return None
-    g = lambda a, b: None if (a in (None, 0) or b is None) else b / a - 1
-    return {"r3m": g(s[-64], s[-1]), "r1m": g(s[-22], s[-1]), "r_run": g(s[i_run], s[-1]), "r_selloff": g(s[i_sell], s[i_run])}
 med = lambda xs: (lambda v: statistics.median(v) if v else None)([x for x in xs if x is not None])
 num = lambda v: v if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+
+# ---- prices: my own pull through the newest finished session. The session calendar is SPY's.
+RC = J("data", "closes-recheck.json")["by_symbol"]
+CAL = sorted(RC["SPY"]["closes"]); NOW = CAL[-1]; RANKED_ON = sel["closes_through"]; RUN, SELL = sel["run_start"], sel["selloff_start"]
+def cl(t, d): return ((RC.get(t) or {}).get("closes") or {}).get(d)
+g_ = lambda a, b: None if (a in (None, 0) or b is None) else b / a - 1
+def px(t):
+    if cl(t, NOW) is None: return None
+    return {"r3m": g_(cl(t, CAL[-64]), cl(t, NOW)), "r1m": g_(cl(t, CAL[-22]), cl(t, NOW)), "r_run": g_(cl(t, RUN), cl(t, NOW)), "r_selloff": g_(cl(t, SELL), cl(t, RUN))}
+GZ = J("data", "geiger-recheck.json"); RERANK = J("data", "rerank-6oct.json")
+# every name in the field: keep what it was ranked on (5 Oct), show it at the newest close
+for a in sel["all"]:
+    t = a["ticker"]; p_ = px(t)
+    a["ranked_on"] = {"r3m": a["r3m"], "r1m": a["r1m"], "geiger": a["geiger"], "close": a["close_last"], "r_run": a["r_run"]}
+    a["rank_now"] = RERANK["rank_6oct"].get(t)
+    if p_:
+        a["close_last"], a["close_last_date"] = cl(t, NOW), NOW
+        a["r3m"], a["r1m"], a["r_run"] = p_["r3m"], p_["r1m"], p_["r_run"]
+        a["vs_selloff_start"] = g_(cl(t, SELL), cl(t, NOW))
+    gnow = (GZ["symbols"].get(t) or {}).get("composite")
+    if gnow is not None: a["geiger"] = gnow
+for c in sel["by_cohort"]:
+    ms = [a for a in sel["all"] if c["cohort"] in a["cohorts"]]
+    c["median_r3m"], c["median_r1m"], c["median_r_run"], c["median_geiger"] = med(a["r3m"] for a in ms), med(a["r1m"] for a in ms), med(a["r_run"] for a in ms), med(a["geiger"] for a in ms)
+for f in list(sel["benchmarks"]):
+    sel["benchmarks"][f] = {"r1m": g_(cl(f, CAL[-22]), cl(f, NOW)), "r3m": g_(cl(f, CAL[-64]), cl(f, NOW)), "r_run": g_(cl(f, RUN), cl(f, NOW)), "r_selloff": g_(cl(f, SELL), cl(f, RUN)),
+                            "vs_selloff_start": g_(cl(f, SELL), cl(f, NOW)), "r_1d": g_(cl(f, CAL[-2]), cl(f, NOW))}
 
 # ---- the record the study uses for each name: the checked one when the checker ran, else the first
 GROUP = {t: g for g, l in cs["groups"].items() for t in l}
@@ -48,7 +67,7 @@ for T, g in GROUP.items():
     r = RES.get(T) or {}
     f = r.get("verify") or r.get("research")
     a = A[T]
-    n = {"ticker": T, "name": a["name"], "group": g, "rank": a["rank"], "cohort": a["cohort_labels"][0], "cohorts": a["cohort_labels"],
+    n = {"ticker": T, "name": a["name"], "group": g, "rank": a["rank"], "rank_now": a["rank_now"], "ranked_on": a["ranked_on"], "cohort": a["cohort_labels"][0], "cohorts": a["cohort_labels"],
          "r3m": a["r3m"], "r1m": a["r1m"], "r_run": a["r_run"], "r_selloff": a["r_selloff"], "worst_in_selloff": a["worst_in_selloff"], "vs_selloff_start": a["vs_selloff_start"],
          "geiger": a["geiger"], "close_last": a["close_last"], "close_run_start": a["close_run_start"], "close_selloff_start": a["close_selloff_start"],
          "cap_profile_b": None if not a["market_cap_profile"] else a["market_cap_profile"] / 1e9,
@@ -61,7 +80,7 @@ for T, g in GROUP.items():
               "one_line_story", "sources", "confidence", "gaps"):
         n[k] = (f or {}).get(k)
     # a public price far from our own close means the page was misread or is another share class: do not trust its market value or multiples
-    p = num(n["price"]); n["price_ok"] = bool(p and 0.75 <= p / a["close_last"] <= 1.33)
+    p = num(n["price"]); n["price_ok"] = bool(p and 0.9 <= p / a["close_last"] <= 1.1)   # close_last is now the 6 Oct close, the day the pages were read
     if p and not n["price_ok"]: n["market_cap_usd_b"] = None
     fp = num(n["forward_pe"]); n["forward_pe"] = fp if (fp is not None and 0 < fp < 2000) else None
     es = num(n["ev_sales"]); n["ev_sales"] = es if (es is not None and es > 0) else None
@@ -84,6 +103,28 @@ for T, n in names.items():
         elif c: n[k], st = c, "one reading (blind only)"
         else: n[k], st = None, "no reading"
         n[k + "_status"] = st
+
+# ---- a third layer: estimate pairs I re-read first-hand on 7 Oct (data/audit-firsthand.json).
+#      Where the first two readings left nothing, the re-read stands as one reading. Where they disagreed, it settles it only if it
+#      matches one of them. Where a direction rested on analysts' notes, the measured pair is attached. A flat contradiction is left out.
+AUD = J("data", "audit-firsthand.json")
+for e in AUD["estimate_pairs"]:
+    n = names.get(e["ticker"])
+    if not n: continue
+    k, d = "eps_rev_90d_direction", e["direction"]; st = n[k + "_status"]; b = (n["blind"] or {}).get("eps_direction")
+    if n[k] is None and st.startswith("two readings disagree"):
+        if d in (known(n["first_read"][k]), known(b)): n[k], n[k + "_status"] = d, "two of three readings agree (first-hand re-check, 7 Oct)"
+    elif n[k] is None: n[k], n[k + "_status"] = d, "one reading (first-hand re-check, 7 Oct)"
+    elif n[k] != d: n[k], n[k + "_status"] = None, f"first-hand re-check disagrees ({n[k]} / re-check {d}): left out"
+    if num(n.get("eps_rev_90d_pct")) is None and num(e.get("pct")) is not None and n[k] == d: n["eps_rev_90d_pct"] = e["pct"]
+    n["eps_recheck"] = {x: e.get(x) for x in ("year", "then", "now", "pct", "direction", "verdict", "note", "source")}
+    n["eps_pair_measured"] = True
+for n in names.values():   # does the estimate direction rest on a measured then-and-now pair, or on analysts' notes?
+    n.setdefault("eps_pair_measured", bool(num(n.get("eps_rev_90d_pct")) is not None or (n["blind"] or {}).get("eps_evidence_type") == "pair"))
+GK = AUD["guidance_kind"]; GKO = GK.get("others_marked_raised", {})
+FULL = set(GK["raised_a_published_full_year_range"]) | set(GKO.get("raised_a_published_full_year_range", [])); ABOVE = set(GK["guided_above_what_analysts_expected"]) | set(GKO.get("guided_above_what_analysts_expected", []))
+for n in names.values():   # which kind of "raised": its own published full-year range, or an outlook set above the analysts' consensus
+    n["guidance_kind"] = None if n["guidance_direction"] != "raised" else "full year" if n["ticker"] in FULL else "above forecasts" if n["ticker"] in ABOVE else None
 
 # ---- multiples for every comparable (studied names from their own record, the rest from the peers pass)
 pool = {}
@@ -109,17 +150,35 @@ for T, s in cs["sets"].items():
     c["evs_vs_comps"] = None if (n["ev_sales"] is None or not c["evs_median"]) else n["ev_sales"] / c["evs_median"] - 1
     comps[T] = c; n["comps"] = c
 
-# ---- market value then -> now. now = the public page's value at its own price (6 Oct close) when that price agrees with our close;
-#      else the Hub profile's value. then = now x (close then / price now): the share count is held constant, so a name that sold new shares in between reads too high at the start.
+# ---- market value then -> now, on ONE basis for every name in the field.
+#      shares = the public page's market value / its price for the 52 names read one by one (re-read first-hand for four of them),
+#               else the Hub company profile's market value / the 5 Oct close it was struck at.
+#      value at a date = shares x that date's close. The share count is held constant, so a name that sold new shares in between
+#      reads too high at the start.
+def shares_m(t):
+    n = names.get(t)
+    if n and n["price_ok"] and num(n["market_cap_usd_b"]) and num(n["price"]): return n["market_cap_usd_b"] / n["price"] * 1000, "public page"
+    c5 = cl(t, RANKED_ON); pc = (A[t]["market_cap_profile"] or 0) / 1e9
+    return (pc / c5 * 1000, "Hub company profile") if (pc and c5) else (None, None)
+def cap_at(t, d):
+    sh, _ = shares_m(t); c = cl(t, d)
+    return None if (sh is None or c is None) else sh * c / 1000
+# A company with two share lines in the field is one company: the Hub profile gives EACH line the whole company's value,
+# so adding both counts it twice (the first build did, by $4.2 trillion). Alphabet is the only one here; it is counted on GOOGL.
+SECOND_LINE = {"GOOG": "GOOGL"}
+for a in sel["all"]:
+    t = a["ticker"]; a["shares_m"], a["shares_from"] = shares_m(t)
+    a["cap_now_b"], a["cap_run_start_b"], a["cap_selloff_start_b"] = cap_at(t, NOW), cap_at(t, RUN), cap_at(t, SELL)
+    a["cap_added_in_run_b"] = None if (a["cap_now_b"] is None or a["cap_run_start_b"] is None) else a["cap_now_b"] - a["cap_run_start_b"]
+    a["counted_in_totals"] = t not in SECOND_LINE
 for T, n in names.items():
-    if n["price_ok"] and num(n["market_cap_usd_b"]):
-        now, pnow, src = n["market_cap_usd_b"], n["price"], "public page, its own price (as of %s)" % (n["as_of"] or "6 Oct")
-    else:
-        now, pnow, src = n["cap_profile_b"], n["close_last"], "Hub company profile read 6 Oct, 5 Oct close"
-    n["cap_now_b"], n["cap_now_from"] = now, src
-    n["cap_run_start_b"] = None if not now else now * n["close_run_start"] / pnow
-    n["cap_selloff_start_b"] = None if (not now or not n["close_selloff_start"]) else now * n["close_selloff_start"] / pnow
-    n["cap_added_in_run_b"] = None if not now else now - n["cap_run_start_b"]
+    a = A[T]
+    for k in ("shares_m", "cap_now_b", "cap_run_start_b", "cap_selloff_start_b", "cap_added_in_run_b"): n[k] = a[k]
+    n["cap_now_from"] = "%s share count x the %s close" % (a["shares_from"], NOW)
+    # the Hub profile's own share count, for the note where the two differ
+    c5 = cl(T, RANKED_ON); pc = n["cap_profile_b"]
+    n["shares_profile_m"] = None if not (pc and c5) else pc / c5 * 1000
+    n["shares_vs_profile_pct"] = None if not (n["shares_m"] and n["shares_profile_m"]) else (n["shares_m"] / n["shares_profile_m"] - 1) * 100
 
 # ---- the counted conditions. Each returns True / False, or None when there is no reading (then the name is left out of that count).
 def has(n, k): return n.get(k) is not None
@@ -227,23 +286,27 @@ bounce_cut = {"bounced": [n["ticker"] for n in BOUNCED], "stayed_down": [n["tick
 def tot(grp, k): return sum(n[k] for n in grp if n[k]) if grp else None
 caps = {"leaders": {"selloff_start_b": tot(L, "cap_selloff_start_b"), "run_start_b": tot(L, "cap_run_start_b"), "now_b": tot(L, "cap_now_b")},
         "laggards": {"selloff_start_b": tot(G, "cap_selloff_start_b"), "run_start_b": tot(G, "cap_run_start_b"), "now_b": tot(G, "cap_now_b")}}
-field_caps = []
-for n in sel["all"]:
-    c = (n["market_cap_profile"] or 0) / 1e9
-    field_caps.append({"ticker": n["ticker"], "cohorts": n["cohorts"], "now": c, "run_start": c * n["close_run_start"] / n["close_last"] if n["close_run_start"] else None,
-                       "selloff_start": c * n["close_selloff_start"] / n["close_last"] if n["close_selloff_start"] else None})
+z_ = lambda a, k: a[k] if a["counted_in_totals"] else None
+field_caps = [{"ticker": a["ticker"], "cohorts": a["cohorts"], "now": z_(a, "cap_now_b"), "run_start": z_(a, "cap_run_start_b"), "selloff_start": z_(a, "cap_selloff_start_b")} for a in sel["all"]]
 cohort_caps = []
 for c in sel["by_cohort"]:
     ms = [f for f in field_caps if c["cohort"] in f["cohorts"]]
-    s = lambda k: sum(f[k] for f in ms if f[k])
-    cohort_caps.append({"cohort": c["cohort"], "label": c["label"], "n": len(ms), "selloff_start_b": s("selloff_start"), "run_start_b": s("run_start"), "now_b": s("now"),
-                        "run_pct": s("now") / s("run_start") - 1 if s("run_start") else None, "median_r1m": c["median_r1m"], "median_r3m": c["median_r3m"], "median_r_run": c["median_r_run"],
-                        "median_geiger": c["median_geiger"], "leaders": c["leaders"], "laggards": [t for t in cs["groups"]["laggard"] if c["cohort"] in A[t]["cohorts"]]})
+    s_ = lambda k: sum(f[k] for f in ms if f[k])
+    lead = [t for t in cs["groups"]["leader"] if c["cohort"] in A[t]["cohorts"]]
+    cohort_caps.append({"cohort": c["cohort"], "label": c["label"], "n": len(ms), "selloff_start_b": s_("selloff_start"), "run_start_b": s_("run_start"), "now_b": s_("now"),
+                        "added_b": s_("now") - s_("run_start"), "run_pct": s_("now") / s_("run_start") - 1 if s_("run_start") else None,
+                        "since_selloff_pct": s_("now") / s_("selloff_start") - 1 if s_("selloff_start") else None,
+                        "median_r1m": c["median_r1m"], "median_r3m": c["median_r3m"], "median_r_run": c["median_r_run"],
+                        "median_geiger": c["median_geiger"], "leaders": lead, "laggards": [t for t in cs["groups"]["laggard"] if c["cohort"] in A[t]["cohorts"]],
+                        "leaders_now_b": sum(A[t]["cap_now_b"] or 0 for t in lead), "leaders_run_start_b": sum(A[t]["cap_run_start_b"] or 0 for t in lead),
+                        "biggest": sorted([[f["ticker"], f["now"]] for f in ms if f["now"]], key=lambda x: -x[1])[:3]})
 seen = set(); field_now = field_run = field_sell = 0.0
 for f in field_caps:
     if f["ticker"] in seen: continue
     seen.add(f["ticker"]); field_now += f["now"] or 0; field_run += f["run_start"] or 0; field_sell += f["selloff_start"] or 0
 caps["field"] = {"n": len(seen), "selloff_start_b": field_sell, "run_start_b": field_run, "now_b": field_now}
+caps["basis"] = "shares x close: the public page's share count for the 52 names read one by one, the Hub company profile's for the other %d; closes from the chart API on %s, %s and %s; Alphabet's two share lines are counted once" % (len(seen) - len(names), SELL, RUN, NOW)
+caps["counted_once"] = SECOND_LINE
 
 # ---- four checks the completeness critic asked for, all on figures already in hand
 # (1) strip out the group move: did the name beat its OWN comps in the run? then re-count the main conditions on that split
@@ -278,14 +341,17 @@ def spearman(xs, ys):
 SZ = [n for n in ALL52 if n["eps_ttm_positive"] is True and num(n["eps_rev_90d_pct"]) is not None]
 size = {"n": len(SZ), "rank_corr_with_run": spearman([n["eps_rev_90d_pct"] for n in SZ], [n["r_run"] for n in SZ]), "rank_corr_with_3m": spearman([n["eps_rev_90d_pct"] for n in SZ], [n["r3m"] for n in SZ]),
         "rows": sorted([{"ticker": n["ticker"], "group": n["group"], "eps_rev_90d_pct": n["eps_rev_90d_pct"], "r_run": n["r_run"], "r3m": n["r3m"]} for n in SZ], key=lambda x: -x["eps_rev_90d_pct"])}
-# (4) who added the dollars in the run: the whole field, profile value x price change (15 Sep -> 5 Oct)
-adds = sorted([{"ticker": n["ticker"], "group": GROUP.get(n["ticker"], "field"), "rank": n["rank"], "cohort": n["cohort_labels"][0],
-                "now_b": (n["market_cap_profile"] or 0) / 1e9, "added_b": (n["market_cap_profile"] or 0) / 1e9 * (1 - n["close_run_start"] / n["close_last"]), "r_run": n["r_run"]} for n in sel["all"] if n["close_run_start"]], key=lambda x: -x["added_b"])
+# (4) who added the dollars in the run: the whole field, on the one share-count basis above (15 Sep -> the newest close)
+adds = sorted([{"ticker": a["ticker"], "group": GROUP.get(a["ticker"], "field"), "rank": a["rank"], "cohort": a["cohort_labels"][0],
+                "now_b": a["cap_now_b"], "added_b": a["cap_added_in_run_b"], "r_run": a["r_run"]} for a in sel["all"] if a["cap_added_in_run_b"] is not None and a["counted_in_totals"]], key=lambda x: -x["added_b"])
 field_added = sum(a["added_b"] for a in adds)
 dollars = {"field_added_b": field_added, "leaders_added_b": sum(a["added_b"] for a in adds if a["group"] == "leader"), "laggards_added_b": sum(a["added_b"] for a in adds if a["group"] == "laggard"),
            "top": adds[:12], "bottom": adds[-6:], "top5_share": sum(a["added_b"] for a in adds[:5]) / field_added if field_added else None,
+           "leaders_share_of_field_gain": (sum(a["added_b"] for a in adds if a["group"] == "leader") / field_added) if field_added else None,
            "median_cap_leaders_b": med([n["cap_now_b"] for n in L]), "median_cap_laggards_b": med([n["cap_now_b"] for n in G]),
-           "top3_leaders_share_of_leader_value": sum(sorted([n["cap_now_b"] or 0 for n in L])[-3:]) / sum(n["cap_now_b"] or 0 for n in L)}
+           "top3_leaders": [[n["ticker"], n["cap_run_start_b"], n["cap_now_b"]] for n in sorted(L, key=lambda n: -(n["cap_now_b"] or 0))[:3]],
+           "top3_leaders_share_of_leader_value": sum(sorted([n["cap_now_b"] or 0 for n in L])[-3:]) / sum(n["cap_now_b"] or 0 for n in L),
+           "top3_leaders_share_of_leader_gain": sum(n["cap_added_in_run_b"] or 0 for n in sorted(L, key=lambda n: -(n["cap_now_b"] or 0))[:3]) / sum(n["cap_added_in_run_b"] or 0 for n in L)}
 checks = {"beat_own_comps": beat_cut, "ticks_every_box": ticks, "size_of_raise": size, "who_added_the_dollars": dollars}
 
 # ---- same cohort, different outcome
@@ -318,7 +384,16 @@ quality = {"studied": len(names), "with_record": sum(n["has_record"] for n in na
            "hub_crosscheck": {"names": len(xc), "forward_pe_within_25pct": agree("pe"), "ev_sales_within_25pct": agree("ev_sales"), "next_year_sales_growth_within_8pts": agree("rev_next"), "rows": xc},
            "comps_rule_vs_live_5oct": cs["check_against_live_5oct"]}
 
-out = {"what": "LD1 · why the leaders held up and bounced, and why others did not", "closes_through": sel["closes_through"], "geiger_published_utc": sel["geiger_published_utc"],
+recheck = {"summary": AUD["summary"], "prices": AUD["prices"], "pages_not_loaded": AUD["estimate_pages_that_would_not_load"], "estimate_pairs": AUD["estimate_pairs"], "guidance": AUD["guidance"],
+           "guidance_kind": GK, "market_value": AUD["market_value"], "cbrs": AUD["cbrs"],
+           "rerank": {k: RERANK[k] for k in ("what", "leaders_kept", "leaders_left", "leaders_entered", "laggards_kept", "laggards_left", "laggards_entered", "named")}}
+# the Cerebras picture: its closes since the listing, and the shares freed from lock-up (first-hand, data/audit-firsthand.json)
+cbx = (RC.get("CBRS") or {}).get("closes") or {}
+cbrs_picture = {"closes": [[d_, cbx[d_]] for d_ in sorted(cbx)], "schedule": AUD["cbrs"]["release_schedule"], "notes": AUD["cbrs"]["price_path_notes"], "supply": AUD["cbrs"]["supply_arithmetic"],
+                "reports": [["2026-06-24", "24 JUN · FIRST REPORT"], ["2026-08-12", "12 AUG · SECOND REPORT"]], "run_start": RUN,
+                "comps_run_median": names["CBRS"]["comps"]["peers_run_median"], "run": names["CBRS"]["r_run"]}
+out = {"what": "LD1 · why the leaders held up and bounced, and why others did not", "closes_through": NOW, "ranked_on": RANKED_ON, "cbrs_picture": cbrs_picture, "storage_note": AUD.get("storage"), "geiger_published_utc": GZ["published_utc"],
+       "geiger_at_ranking_utc": sel["geiger_published_utc"], "recheck": recheck,
        "run_start": sel["run_start"], "selloff_start": sel["selloff_start"], "field": sel["field"], "rule": sel["rule"], "benchmarks": sel["benchmarks"], "named_in_brief": sel["named_in_brief"],
        "groups": cs["groups"], "names": names, "conditions": conditions, "conditions_sorted_ids": [c["id"] for c in conditions_sorted], "kinds": kinds, "bounce_cut": bounce_cut, "checks": checks, "caps": caps,
        "cohort_caps": cohort_caps, "pairs": pairs, "quality": quality,
@@ -342,4 +417,4 @@ for c in beat_cut["conditions"]: print(f"   {c['gap_points']:+6.1f} pts  beat {c
 print(f"CHECK 2 ticks every box: {ticks['leaders']}/{ticks['leaders_total']} leaders, {ticks['laggards']}/{ticks['laggards_total']} laggards, {ticks['named_mid']}/{ticks['named_mid_total']} named mid ·", [(b['ticker'], b['group'][:3], b['rank']) for b in boxes if b['group'] != 'leader'])
 print(f"CHECK 3 size of raise vs move: n {size['n']} · rank corr with the run {size['rank_corr_with_run']} · with 3 months {size['rank_corr_with_3m']}")
 print(f"CHECK 4 dollars added in the run: field {field_added:,.0f}B · leaders {dollars['leaders_added_b']:,.0f}B · laggards {dollars['laggards_added_b']:,.0f}B · top5 share {dollars['top5_share']:.2f} ·", [(a['ticker'], a['group'][:3], round(a['added_b'])) for a in adds[:12]])
-print("caps $B:", {g: {k: round(v) for k, v in d.items() if v} for g, d in caps.items()})
+print("caps $B:", {g: {k: round(v) for k, v in d.items() if num(v)} for g, d in caps.items() if isinstance(d, dict)})
