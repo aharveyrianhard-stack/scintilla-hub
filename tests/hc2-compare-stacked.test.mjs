@@ -42,14 +42,23 @@ test("the nine cards are one column that scrolls up and down; nothing here can s
   assert.match(page, /\.sc-cohstrip\{grid-template-columns:repeat\(var\(--coh-n,10\),minmax\(0,1fr\)\) !important;[^}]*overflow-x:hidden !important/);
 });
 
-test("thinner: a card takes a third of the list, the bar's track is what stretches, and a card is never squeezed under its content", () => {
+/* RE-PINNED 7 Oct 2026 (HM3) — HC2 gave a card a third of the list. Alan, ~16:10 ET, on that column live: "we need to
+   stack them less — two at a time, two per [view], that I can view two in each view before scrolling." So the list's
+   own rule now says two (--cmpx-rows:2) and a third is kept in the two places it was not asked to change: a phone and
+   full screen. What stands beside it: tests/hm3-cards-two-up.test.mjs, which holds the new share to what was measured. */
+test("a card takes its share of the list (half; a third on a phone and in full screen), the bar's track is what stretches, and a card is never squeezed under its content", () => {
   const list = rule(".sc-cmpx__scroll");
-  assert.match(list, /--cmpx-rows:3;/, "three cards to the list: the nine are three screens of three");
+  assert.match(list, /--cmpx-rows:2;/, "two cards to the list (HM3; HC2 had three)");
+  assert.match(rule(".sc-layer0.sc-secfs .sc-cmpx__scroll"), /^\.sc-layer0\.sc-secfs \.sc-cmpx__scroll\{ --cmpx-rows:3; \}$/, "full screen keeps three down: the nine show with nothing to scroll");
+  assert.match(SHEET, /\n@media\(max-width:820px\)\{ \.sc-cmpx__scroll\{ --cmpx-rows:3; \} \}\n/, "a phone keeps three, as it was");
+  assert.ok(SHEET.indexOf("@media(max-width:820px){ .sc-cmpx__scroll{ --cmpx-rows:3; } }") > SHEET.indexOf("\n.sc-cmpx__scroll{"), "…and it comes after the list's own rule, so it wins there");
   assert.match(rule(".sc-cmpx__card"), /min-height:calc\(\(100% - \(var\(--cmpx-rows\) - 1\) \* var\(--cmpx-gap\)\) \/ var\(--cmpx-rows\)\);/, "a card's height is its share of the list's own height");
-  /* the share, worked for the list measured on the 1680 screen (513 px of list, 6 px padding top and bottom, 6 px between cards): a third less the gaps */
+  /* the share, worked for the list measured on the 1680 screen (512–513 px of list, 6 px padding top and bottom, 6 px between cards): half, or a third, less the gaps */
   const share = (listH, rows, gap = 6, pad = 12) => ((listH - pad) - (rows - 1) * gap) / rows;
   assert.equal(+share(513, 3).toFixed(1), 163.0);
-  assert.ok(share(513, 3) / 513 > 0.31 && share(513, 3) / 513 < 0.33, "31.8 % of the list");
+  assert.ok(share(513, 3) / 513 > 0.31 && share(513, 3) / 513 < 0.33, "a third: 31.8 % of the list");
+  assert.equal(+share(512, 2).toFixed(1), 247.0);
+  assert.ok(share(512, 2) / 512 > 0.48 && share(512, 2) / 512 < 0.5, "half: 48.2 % of the list");
   /* only the track stretches; the name and value keep their size */
   const track = rule(".sc-cohtabwrap.sc-cmpx .sc-vmini");
   assert.match(track, /height:auto; flex:1 1 auto; min-height:var\(--cmpx-track\);/);
@@ -164,14 +173,19 @@ test("the list keeps its place — how far DOWN it is — across a feed tick and
 
 test("PAGE SPECS says how the panel is laid out, under the list — never inside a card", () => {
   const t = makeWorld(page).api.CMPX_SPECS.replace(/<[^>]+>/g, " ");
-  for (const s of ["Every compare view sits one above the other: scroll down.", "Nothing here scrolls sideways.", "A card takes a third of the list, so three views show at once and the nine are three screens of three",
+  /* re-pinned 7 Oct 2026 (HM3): the sentence about a third became the sentence about half (the note above the sizing test says why) */
+  for (const s of ["Every compare view sits one above the other: scroll down.", "Nothing here scrolls sideways.", "A card takes half of the list, so two views show at once and the next two are a scroll down (on a phone a card takes a third, so three show)",
     "in full screen the nine sit three across and all show", "Each card stretches its own tallest bar to the top and prints that scale"]) assert.ok(t.includes(s), s);
-  assert.doesNotMatch(t, /side by side|sideways\.\s*A bar/, "the old sentence is gone");
+  assert.doesNotMatch(t, /side by side|sideways\.\s*A bar|three screens of three/, "the old sentences are gone");
   assert.doesNotMatch(makeWorld(page).api.cmpxCardsHTML(), /<p>|sc-pagespecs/, "no sentence inside a card");
 });
 
 /* ── the page as measured in a headless browser (deliverables/20261007/hc2-compare-stacked/data, written by tools/capture.mjs):
-      what the report says, held to what was read off the page ─────────────────────────────────────────────────────────── */
+      what the report says, held to what was read off the page ───────────────────────────────────────────────────────────
+      NOTE 7 Oct 2026 (HM3): the three tests below read HC2's own captures — the column as it was that morning, three cards
+      to the list. They are kept as that report's record and still hold for everything but the share (no sideways scroll,
+      nothing cut, the replay handle, full screen). The page as it stands — two to the list — was measured again, one page
+      at a time, into deliverables/20261007/hm3-cards-two-up/data, and tests/hm3-cards-two-up.test.mjs holds it. */
 const cap = (which, tag) => JSON.parse(fs.readFileSync(new URL("../deliverables/20261007/hc2-compare-stacked/data/capture-" + which + "-" + tag + ".json", import.meta.url), "utf8"));
 const laidOut = (j) => Object.entries(j.steps).filter(([, v]) => v && v.sideways && typeof v.sideways === "object");   // the states read whole
 
