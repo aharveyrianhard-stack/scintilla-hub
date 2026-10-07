@@ -4799,36 +4799,64 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 .sc-gnum{ display:none; }
 /* a difference of two funds has no trend/momentum read of its own: the rows keep their height (the zero line stays level) */
 .sc-cohstrip--bowtie .sc-cohstrip__read, .sc-cohstrip--bowtie .sc-cohstrip__tm{ visibility:hidden; }
-/* ── HC1 (6 Oct) — EVERY COMPARE VIEW ON ONE SCREEN: one row of compact cards that scrolls sideways (Alan: "instead of
-   seeing them as tabs, we show them all horizontally with scrolling"). A card is as wide as its columns need
-   (--cmpx-n columns of --cmpx-col), never squeezed to fit: the row scrolls instead. The bars keep the strip's own
-   look (.sc-cohstrip, .sc-vmini); only their width is the compact one. */
+/* ── HC1 (6 Oct) → HC2 (7 Oct) — EVERY COMPARE VIEW ON ONE SCREEN, ONE ABOVE THE OTHER. HC1 laid the nine cards in one
+   row that scrolled sideways (Alan, 6 Oct: "instead of seeing them as tabs, we show them all horizontally with scrolling").
+   Alan, 7 Oct ~09:15 ET, on that row live: "No, that's gonna make me swipe left to right. No, no, no, bro. Let's organize
+   them one above each other, don't you think? They can be thinner. Think of the proportions of things, try and make it
+   work. I don't want to swipe left to right — scrolling up to down."
+   So the cards are ONE COLUMN. The list scrolls up and down inside the panel; the replay handle sits above the list, not
+   in it, so it and LIVE stay at the top; nothing here can scroll sideways (overflow-x:hidden, and no card is wider than
+   the list). A card is as wide as the panel and its columns share that width (they were a fixed 30 px and the row
+   scrolled instead). It is THIN and never thinner than a readable bar: a card takes a third of the list (--cmpx-rows:3
+   — three views at once and the nine in three screens of three: the consolidated reading, BREADTH and State Street; the
+   three other fund families; our cohorts, our names and the index funds). Where a third would squeeze the bar's track
+   under --cmpx-track the card keeps that track and the list shows a little less than three. Only the track stretches;
+   the labels keep their size. A card that needs more (unfolded in a short window, or two rows of bars on a phone) takes
+   what it needs. The bars keep the strip's own look (.sc-cohstrip, .sc-vmini): still green up and red down from one
+   zero line, hot to cold from the left — the fan, a third of the height it was. (Four to a list was tried: in a browser
+   window of ordinary height it leaves the tallest bar under 20 px.)
+   Rows of horizontal bars were weighed and left out: eleven rows to a card is taller, not thinner, and it is the layout
+   Alan took off this pane in R43 ("the compare fan eats too much vertical height — it should read left-to-right"). */
 .sc-cmpx{ min-width:0; }
 .sc-cmpx__bar{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:6px 8px 5px; min-width:0; border-bottom:.6px solid var(--line2); }
 .sc-cmpx__rep{ display:flex; align-items:center; gap:5px; flex:1 1 auto; min-width:0; flex-wrap:wrap; }
 .sc-cmpx__bar.is-off .sc-cmpx__rep{ visibility:hidden; }   /* no board on this screen, so no REWIND bar to hold a second handle on */
 .sc-cmpx__bar .sc-fsico{ margin-left:auto; }
 .sc-cmpx__rng{ flex:1 1 80px; min-width:60px; max-width:260px; }   /* the REWIND bar's own track and thumb, at this row's width */
-.sc-cmpx__scroll{ flex:1 1 auto; min-height:0; display:flex; align-items:stretch; gap:6px; padding:6px 8px;
-  overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scroll-snap-type:x proximity; }
-.sc-cmpx__scroll::-webkit-scrollbar{ height:5px; }
+/* the list: --cmpx-cols cards to a line (one), each line a third of the list's own height or what its card needs,
+   whichever is more. A wrapping flex row rather than a grid: a grid row sized minmax(a third, auto) does not grow for a
+   card that needs more once the list overflows (MEASURED: on a phone BREADTH's second row of bars ran over the next card). */
+.sc-cmpx__scroll{ --cmpx-rows:3; --cmpx-cols:1; --cmpx-gap:6px; --cmpx-track:44px; flex:1 1 auto; min-height:0; min-width:0; box-sizing:border-box;
+  display:flex; flex-flow:row wrap; align-content:flex-start; align-items:stretch; gap:var(--cmpx-gap); padding:6px 8px;
+  overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scroll-snap-type:y proximity; scroll-padding-top:6px; }
+.sc-cmpx__scroll::-webkit-scrollbar{ width:5px; }
 .sc-cmpx__scroll::-webkit-scrollbar-thumb{ background:var(--line2); }
-.sc-cmpx__card{ flex:0 0 auto; display:flex; flex-direction:column; min-height:0; box-sizing:border-box;
-  width:calc(var(--cmpx-n,11) * var(--cmpx-col,30px) + 10px); border:.6px solid var(--line2); scroll-snap-align:start; }
-.sc-cmpx__card[data-cmpx="COHORTS"]{ --cmpx-col:42px; }   /* cohort names run to six letters: the old strip's column */
-.sc-cmpx__card.is-exp{ --cmpx-col:46px; }                 /* unfolded: the full strip's column, which holds the word and the pair */
-.sc-cmpx__hd{ flex:0 0 22px; height:22px; box-sizing:border-box; display:flex; align-items:center; gap:6px; padding:3px 6px 0; font-family:var(--mono); min-width:0; }   /* one height, with or without ⤢: the cards' zero lines stay level */
+/* a card's width is its share of the line (it grows into the last pixel and never past its share); its height is at
+   least its share of the list — where the list's height is not known the share counts as nothing and the card is as
+   tall as its content, which is the thin end of the same design */
+.sc-cmpx__card{ flex:1 1 calc(100% / var(--cmpx-cols) - var(--cmpx-gap)); max-width:calc((100% - (var(--cmpx-cols) - 1) * var(--cmpx-gap)) / var(--cmpx-cols));
+  min-height:calc((100% - (var(--cmpx-rows) - 1) * var(--cmpx-gap)) / var(--cmpx-rows));
+  display:flex; flex-direction:column; min-width:0; box-sizing:border-box; border:.6px solid var(--line2); scroll-snap-align:start; }
+.sc-cmpx__hd{ flex:0 0 18px; height:18px; box-sizing:border-box; display:flex; align-items:center; gap:6px; padding:2px 6px 0; font-family:var(--mono); min-width:0; }   /* one height, with or without ⤢ */
 .sc-cmpx__ttl{ font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink2); white-space:nowrap; }
 .sc-cmpx__card[data-cmpx="BLEND"] .sc-cmpx__ttl{ color:var(--crk); }
-.sc-cmpx__sub{ font-size:8px; letter-spacing:.04em; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.sc-cmpx__sub{ font-size:8px; letter-spacing:.04em; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .sc-cmpx__x{ margin-left:auto; background:none; border:0; padding:0 3px; cursor:pointer; font-family:inherit; font-size:13px; line-height:1; color:var(--ink3); }
 .sc-cmpx__x:hover, .sc-cmpx__x[aria-pressed="true"]{ color:var(--crk); }
 .sc-cmpx__none{ flex:1 1 auto; display:flex; align-items:center; justify-content:center; padding:10px 8px; text-align:center;
   font-family:var(--mono); font-size:8.5px; letter-spacing:.04em; line-height:1.5; color:var(--dim); }
+/* inside a card the strip is tight: the name and the value sit against the bar, and the track takes every pixel left.
+   min-height:auto (the tab's own strip has 0, to fit a pane) — a card is never squeezed under its content: the slots and
+   the track's floor count, so a row of the list is a third of it or what the card needs, whichever is more */
+.sc-cohtabwrap.sc-cmpx .sc-cohstrip{ min-height:auto; padding-top:1px; padding-bottom:3px; }
+.sc-cohtabwrap.sc-cmpx .sc-cohstrip__col{ min-height:auto; gap:2px; padding:1px 1px 2px; }
+.sc-cohtabwrap.sc-cmpx .sc-cohstrip__slot{ height:20px; flex:0 0 20px; gap:0; }
+/* the bar is a share of its column, so it keeps its proportion in every card and on every screen (11, 12 or 14 columns);
+   never wider than it is in the pane (16 px), so a card with two rows of wide columns does not turn its bars into blocks */
+.sc-cohtabwrap.sc-cmpx .sc-vmini{ height:auto; flex:1 1 auto; min-height:var(--cmpx-track); width:38%; min-width:10px; max-width:16px; }
 /* a compact card is label, value, bar: the word, the trend / momentum pair and the names count are folded away until ⤢ */
 .sc-cmpx__card:not(.is-exp) .sc-cohstrip__read, .sc-cmpx__card:not(.is-exp) .sc-cohstrip__tm,
 .sc-cmpx__card:not(.is-exp) .sc-cohstrip__n:not(.sc-cohstrip__n--of){ display:none; }
-.sc-cmpx__card:not(.is-exp) .sc-vmini{ width:13px; }
 .sc-cohstrip__n--of{ font-size:7.5px; }
 .sc-cohstrip__n--of.is-miss, .sc-cmpx__of.is-miss{ color:var(--warn,#e0a24a); }
 .sc-pagespecs{ flex:0 0 auto; margin:0; padding:0 8px 6px; font-family:var(--mono); font-size:9px; color:var(--dim); }
@@ -4836,10 +4864,30 @@ body.gwx-motion .sc-lists .sc-lst{display:none}
 .sc-pagespecs > div{ max-height:38vh; overflow:auto; padding:2px 0 4px; line-height:1.55; letter-spacing:.02em; color:var(--ink3); }
 .sc-pagespecs p{ margin:0 0 6px; max-width:92ch; }
 .sc-pagespecs b{ color:var(--ink2); font-weight:600; }
-@media(max-width:820px){
-  /* a card is one row on a phone too (the old strip split itself in two there), so its bars may take the pane's height */
-  .sc-cohtabwrap.sc-cmpx .sc-vmini{ height:auto; flex:1 1 auto; min-height:88px; }
-  .sc-cmpx__card:not(.is-exp) .sc-vmini{ width:12px; }
+/* HOW MANY BARS TO A ROW. A card's columns share its width, so what a column can hold depends on how wide the pane is:
+     · a window 1280 px wide or more — the pane is then about 500 px at every size, because the page scales itself:
+       one row. Only an unfolded card of more than eleven columns (COHORTS) takes two rows: its words need 40 px a
+       column and it has 38.
+     · a narrower window, down to a phone: a card of up to eleven columns is one row; more columns, or an unfolded
+       card, take two rows (--coh-half, from the render).
+   Nothing is cut and nothing scrolls sideways: a card that needs the room gets taller instead. */
+@media(max-width:1279px){
+  .sc-cohtabwrap.sc-cmpx .sc-cmpx__card .sc-cohstrip{ grid-template-columns:repeat(var(--coh-half,6),minmax(0,1fr)) !important; }
+}
+@media(min-width:1280px){
+  .sc-cohtabwrap.sc-cmpx .sc-cmpx__card.is-exp.is-wide .sc-cohstrip{ grid-template-columns:repeat(var(--coh-half,6),minmax(0,1fr)) !important; }
+  /* FULL SCREEN (the panel's own ⛶) is three times as wide as the pane: the same cards sit three across and three
+     down, so all nine show at once and there is nothing to scroll — still no sideways scroll. A card's share of its
+     line is its share of the line's columns (--cmpx-f, from the render; 1 = an even third). An unfolded card there
+     shows its columns in two rows (three across leaves a column about 32 px, and the words need 40) and its line grows */
+  .sc-layer0.sc-secfs .sc-cmpx__scroll{ --cmpx-cols:3; }
+  .sc-layer0.sc-secfs .sc-cmpx__card{ flex-basis:calc((100% / var(--cmpx-cols) - var(--cmpx-gap)) * var(--cmpx-f,1));
+    max-width:calc((100% - (var(--cmpx-cols) - 1) * var(--cmpx-gap)) / var(--cmpx-cols) * var(--cmpx-f,1)); }
+  .sc-layer0.sc-secfs .sc-cmpx__card.is-exp .sc-cohstrip{ grid-template-columns:repeat(var(--coh-half,6),minmax(0,1fr)) !important; }
+}
+@media(min-width:821px) and (max-width:1279px){
+  /* full screen in a window this size is one column as wide as the screen: every card is one row of bars there */
+  .sc-layer0.sc-secfs .sc-cmpx__card .sc-cohstrip{ grid-template-columns:repeat(var(--coh-n,11),minmax(0,1fr)) !important; }
 }
 /* the Geiger cell is the button that opens the breakdown; the bar inside it fills the cell */
 .sc-gcell{ display:flex; align-items:center; min-width:0; cursor:pointer; border-radius:2px; }
@@ -8590,8 +8638,12 @@ function cohortCompareStripHTML() {
    horizontally with scrolling. And then maybe a replay, see how it moves … how are we doing on that consolidated sector
    compare? We could present that instead of all these individual methods … we could always expand to the State Street
    ones." And: "this bow tie thing is more the breadth compare? We can change the title from bow tie to breadth."
-   So COHORT COMPARE is one row of cards, left to right, scrolling sideways: the consolidated sector reading first, then
-   BREADTH (the view that was BOW TIE: the name changed, the number did not), then each view that used to be a tab.
+   So COHORT COMPARE is every view at once, as cards: the consolidated sector reading first, then BREADTH (the view that
+   was BOW TIE: the name changed, the number did not), then each view that used to be a tab.
+   HC2 (7 Oct) — the cards were one row scrolling sideways; Alan, on it live: "that's gonna make me swipe left to right …
+   Let's organize them one above each other … They can be thinner … scrolling up to down." They are one column now, each a
+   third of the list, scrolling up and down under the replay handle (the sheet above says how). What a card draws did
+   not change: the same rows, the same columns, the same hovers.
    Nothing is recomputed: a card draws the rows cohortCompareRows() gives for its own [mode, family] with the columns
    cohStripColsHTML() draws for the single strip, so a bar here is the bar that tab showed. Cards are compact (label,
    value, bar); a card's ⤢ unfolds the word and the trend / momentum pair, as the full strip had them.
@@ -8610,6 +8662,23 @@ const CMPX_VIEWS = [
 /* the four letters BREADTH already prints for a sector: a compact column is 30 px wide, and "UTILITIES" is not */
 const CMPX_SHORT = { MATERIALS: "MATL", ENERGY: "ENRG", FINANCIALS: "FINL", INDUSTRIAL: "INDU", TECH: "TECH", STAPLES: "STPL",
   "REAL EST": "REAL", UTILITIES: "UTIL", HEALTH: "HLTH", DISCRET: "DISC", COMMS: "COMM" };
+/* HC2 — a card is as wide as the panel, so where the panel is narrow (a phone, a small window) eleven columns fit one
+   row (30 px each) and no more: a card with more columns (is-wide), or an unfolded one (its words need 40 px), shows
+   them in two rows there. This is the count per row; the sheet decides where it applies. */
+const CMPX_ROW_MAX = 11;
+function cmpxPerRow(n, exp) { return (n > CMPX_ROW_MAX || exp) ? Math.ceil(n / 2) : n; }
+/* HC2 — FULL SCREEN lays the cards three to a line (the pane: one). There a card's share of its line is its share of
+   that line's columns, so a column is as wide in one card of a line as in the next and the view with the most columns
+   gets the most room (BREADTH's fourteen beside two elevens). A cohort column counts 1.4: cohort names run to six
+   letters (HC1 gave them 42 px against 30). CMPX_W is each card's weighted columns as last drawn; --cmpx-f its share,
+   1 = an even third. The pane does not read either. */
+const CMPX_PER_LINE = 3, CMPX_W = {};
+function cmpxColWeight(id) { return id === "COHORTS" ? 1.4 : 1; }
+function cmpxLineShare(ids, id) {
+  const i = ids.indexOf(id), line = ids.slice(i - i % CMPX_PER_LINE, i - i % CMPX_PER_LINE + CMPX_PER_LINE);
+  const sum = line.reduce((t, k) => t + (CMPX_W[k] || 0), 0);
+  return sum > 0 && CMPX_W[id] ? CMPX_W[id] * line.length / sum : 1;
+}
 const CMPX_EXP_KEY = "hub.compare.expanded";      // which cards are unfolded, remembered per browser
 const CMPX_EXP = new Set(String(lsGet(CMPX_EXP_KEY) || "").split(",").filter(Boolean));
 function cmpxCanExpand(id) { return id !== "BLEND" && id !== "BOWTIE"; }   // those two have no word or pair to unfold
@@ -8643,6 +8712,7 @@ function cmpxCardHTML(v) {
     if (!exp && id === "MEMBERS") list = list.map((r) => Object.assign({}, r, { short: CMPX_SHORT[r.label] || r.short }));
     const span = cohortCompareSpan(list), have = list.filter((r) => r.mean != null).length;
     const wait = id === "BLEND" && !SC_BLEND.at;
+    CMPX_W[id] = Math.max(1, list.length) * cmpxColWeight(id);
     /* how many of the five readings were read: said once beside the card's name when every sector has the same count (the
        usual case: 5/5 live, fewer on a replayed day), so the bars keep the height — and the zero line — of the cards beside
        them; under each bar only when the sectors differ */
@@ -8659,20 +8729,23 @@ function cmpxCardHTML(v) {
     if (tOnly) of += ' · <span class="sc-cmpx__of is-miss" title="' + esc(id === "BOWTIE"
       ? "on this replayed day " + tOnly + " of these pairs are read on trend alone, both funds alike: one of them has no stored momentum"
       : "on this replayed day " + tOnly + " of these funds have no stored momentum: their bars are the trend alone") + '">trend only</span>';
-    return '<section class="sc-cmpx__card' + (exp ? " is-exp" : "") + '" data-cmpx="' + id + '" style="--cmpx-n:' + Math.max(1, list.length) + '">' +
+    return '<section class="sc-cmpx__card' + (exp ? " is-exp" : "") + (list.length > CMPX_ROW_MAX ? " is-wide" : "") + '" data-cmpx="' + id + '" style="--cmpx-n:' + Math.max(1, list.length) + '">' +
       '<header class="sc-cmpx__hd" title="' + esc(v[3]) + '"><span class="sc-cmpx__ttl">' + esc(v[1]) + "</span>" +
         '<span class="sc-cmpx__sub">' + (have && !wait ? "±" + span.toFixed(2) + of : "") + "</span>" +
         (cmpxCanExpand(id) ? '<button type="button" class="sc-cmpx__x" data-act="cmpxexp" data-v="' + id + '" aria-pressed="' + exp + '" title="' +
           (exp ? "fold back to the bars" : "unfold: the word and the trend / momentum pair under each bar") + '">' + (exp ? "⤡" : "⤢") + "</button>" : "") +
       "</header>" +
       (have && !wait
-        ? '<div class="sc-cohstrip' + (id === "BOWTIE" ? " sc-cohstrip--bowtie" : "") + '" style="--coh-n:' + list.length + ";--coh-half:" + list.length + '">' +
+        ? '<div class="sc-cohstrip' + (id === "BOWTIE" ? " sc-cohstrip--bowtie" : "") + '" style="--coh-n:' + list.length + ";--coh-half:" + cmpxPerRow(list.length, exp) + '">' +
             cohStripColsHTML(list, span, !exp) + "</div>"
         : '<div class="sc-cmpx__none">' + esc(cmpxNoneText(id, scRewindAsof())) + "</div>") +
     "</section>";
   });
 }
-function cmpxCardsHTML() { return CMPX_VIEWS.map(cmpxCardHTML).join(""); }
+function cmpxCardsHTML() {
+  const ids = CMPX_VIEWS.map((v) => v[0]), cards = CMPX_VIEWS.map(cmpxCardHTML);   // every card is drawn first: a share needs its line's columns
+  return cards.map((html, i) => html.replace('" style="--cmpx-n:', '" style="--cmpx-f:' + cmpxLineShare(ids, ids[i]).toFixed(3) + ";--cmpx-n:")).join("");
+}
 /* REPLAY — a second handle on the REWIND bar, not a second clock. Every control here presses the bar's own control
    (#gwxPlay, #gwxSpeed, #gwxBack, #gwxSc, #gwxLive) and shows what that control shows; the days are the bar's stored days.
    It is here because the bar lives on the board, which this screen covers when it is full screen and which sits far above
@@ -8735,7 +8808,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("change", (e) => { if (e.target && e.target.id === "cmpxSc") e.target.blur(); });   // let go: the thumb follows the bar again
 }
 const CMPX_SPECS = '<details class="sc-pagespecs sc-cmpx__specs"><summary>PAGE SPECS</summary><div>' +
-  "<p>Every compare view sits side by side: scroll sideways. A bar is a Geiger reading, from −1 (washed out) to +1 (stretched). Each card stretches its own tallest bar to the top and prints that scale (±) beside its name, so compare heights inside a card and numbers across cards.</p>" +
+  "<p>Every compare view sits one above the other: scroll down. Nothing here scrolls sideways. A card takes a third of the list, so three views show at once and the nine are three screens of three; in full screen the nine sit three across and all show. A bar is a Geiger reading, from −1 (washed out) to +1 (stretched). Each card stretches its own tallest bar to the top and prints that scale (±) beside its name, so compare heights inside a card and numbers across cards.</p>" +
   "<p><b>SECTORS · BLENDED</b> is one reading per sector: the average of five readings, each counting a fifth — the State Street fund's Geiger · that fund and its equal-weight twin, averaged · our names in the sector, equal-weighted · the tree's close tier for the sector · the sector ranking table. The small count under a bar says how many of the five were read (5/5); a missing one is named in the hover and the others carry its share. It is the allocation tool's method, with its default weights.</p>" +
   "<p><b>BREADTH</b> is the equal-weight fund's Geiger minus the cap-weight fund's — the view that was called BOW TIE; only the name changed. Above zero the average stock is stronger than the index; below, the biggest names carry it. Geiger points, not percent.</p>" +
   "<p><b>STATE STREET, iSHARES, VANGUARD, EQUAL-WEIGHT, INDEX FUNDS</b>: each bar is that fund's own Geiger. <b>COHORTS</b> and <b>OUR NAMES</b> average our names. ⤢ on a card unfolds the word and the trend / momentum pair under each bar.</p>" +
@@ -8744,20 +8817,21 @@ const CMPX_SPECS = '<details class="sc-pagespecs sc-cmpx__specs"><summary>PAGE S
 function cohCompareScreenHTML() {
   return cmpxBarHTML() + '<div class="sc-cmpx__scroll" id="cmpxScroll">' + cmpxCardsHTML() + "</div>" + CMPX_SPECS;
 }
-/* THE ONE PAINTER of #cohCompare. Only the cards are redrawn, and the row keeps where it was scrolled to: a feed tick
+/* THE ONE PAINTER of #cohCompare. Only the cards are redrawn, and the list keeps where it was scrolled to: a feed tick
    must not throw the reader back to the first card. The replay handle and PAGE SPECS are left standing (a scrub in
    progress and an open note survive the tick). */
-/* …and a REBUILD of the pane starts a new row at 0 — a click on a cohort's bar remounts it (MEASURED: clicking METALS in
-   the COHORTS card threw the row back to the first card). So the place is remembered here as the reader scrolls, and put
-   back whenever the row is drawn anew: the same cards are in front of them after the click, or after a visit to MAP. */
-let CMPX_X = 0;
-if (typeof document !== "undefined") document.addEventListener("scroll", (e) => { if (e.target && e.target.id === "cmpxScroll") CMPX_X = e.target.scrollLeft; }, true);
-function cmpxRestoreScroll() { const sc = el("cmpxScroll"); if (sc && CMPX_X > 0 && Math.abs(sc.scrollLeft - CMPX_X) > 1) sc.scrollLeft = CMPX_X; }
+/* …and a REBUILD of the pane starts a new list at 0 — a click on a cohort's bar remounts it (MEASURED in HC1: clicking
+   METALS in the COHORTS card threw the reader back to the first card). So the place is remembered here as the reader
+   scrolls, and put back whenever the list is drawn anew: the same cards are in front of them after the click, or after
+   a visit to MAP. HC2 — the list scrolls up and down now, so the place is how far DOWN it is (it was how far across). */
+let CMPX_Y = 0;
+if (typeof document !== "undefined") document.addEventListener("scroll", (e) => { if (e.target && e.target.id === "cmpxScroll") CMPX_Y = e.target.scrollTop; }, true);
+function cmpxRestoreScroll() { const sc = el("cmpxScroll"); if (sc && CMPX_Y > 0 && Math.abs(sc.scrollTop - CMPX_Y) > 1) sc.scrollTop = CMPX_Y; }
 function cohComparePaint() {
   const cc = el("cohCompare"); if (!cc) return;
   const sc = el("cmpxScroll");
   if (!sc) { cc.classList.add("sc-cmpx"); cc.innerHTML = cohCompareScreenHTML(); cmpxRestoreScroll(); }
-  else { const x = sc.scrollLeft; sc.innerHTML = cmpxCardsHTML(); if (x) sc.scrollLeft = x; }
+  else { const y = sc.scrollTop; sc.innerHTML = cmpxCardsHTML(); if (y) sc.scrollTop = y; }
   cmpxBarSync();
   scBlendLoad();
 }
@@ -9003,7 +9077,7 @@ function updateBoard() {
   const bs = el("boardScroll");
   if (bs) { bs.innerHTML = boardRowsHTML(); bs.classList.toggle("is-seed", S.boardSeedAt != null); }
   const cg = el("cohGeiger"); if (cg) cg.innerHTML = cohortGeigerHTML();   // cohort-level aggregate tracks every board repaint
-  cohComparePaint();   // R43 §2 — the compare lives in Layer 0 (HC1: every view side by side, one painter)
+  cohComparePaint();   // R43 §2 — the compare lives in Layer 0 (HC1: every view at once, one painter; HC2: one above the other)
   /* R49 §2 — a cohort/scope change moves the MAP's ticker set, so re-resolve which
      batched (tf, cohort) series is on screen BEFORE the grid is rebuilt. Inside
      Layer 0 the tiles read through l0MapChg (TF-aware); the standalone #133 heat
@@ -11111,7 +11185,7 @@ function mountL0Body() {
      built from the board rows already in memory, so it mounts with zero network.
      HC1 (6 Oct) — except the consolidated card: three of its five readings are not in memory, and are read when the tab is
      drawn (once, then again only when a draw finds them older than 15 minutes — scBlendLoad). A pane drawn anew also gets
-     its row of cards back where the reader had scrolled it (cmpxRestoreScroll). */
+     its list of cards back where the reader had scrolled it (cmpxRestoreScroll). */
   if (LAYER0_TAB === "COHORT") { cmpxRestoreScroll(); cmpxBarSync(); scBlendLoad(); return; }
   if (LAYER0_TAB === "MAP") {
     l0MapSync();                                                          // R49 §2 — resolve/kick the batched TF series for this cohort
