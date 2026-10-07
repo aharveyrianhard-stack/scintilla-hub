@@ -34,6 +34,11 @@ const HM2_PC_REFRESH_MS = 60000, HM2_PC_FLASH_MS = 6000;
    else (no element, or a stand-in that is not a DOM node) means the room on screen is not this one, and the part
    neither reads nor paints. So the room's own mount and its own reads never wait on, or share a queue with, these. */
 const hm2Host = (id) => { const h = el(id); return h && h.nodeType === 1 ? h : null; };
+/* HM3 (7 Oct, ~16:10 ET) — THE LOOK. Alan, on these cards: "antiquated and analog … boxy … the economic one [the slider]
+   looks way better." The HM3 layer (above this block) redraws the curve, the auctions, the prints and the event card
+   in the slider's look. It is asked for the HTML in the six places marked HM3 below, and only when it is on the page
+   and switched on — without it, or with HM3_ON = false, every card here is drawn exactly as before. */
+const hm3On = () => typeof HM3_ON !== "undefined" && HM3_ON;
 const hm2Fix = (v, d) => (v == null || !isFinite(+v) ? "—" : (+v).toFixed(d == null ? 2 : d));
 const hm2Sign = (v, d) => (v == null || !isFinite(+v) ? "—" : (+v > 0 ? "+" : +v < 0 ? "−" : "") + Math.abs(+v).toFixed(d == null ? 2 : d));
 const hm2Tone = (v) => (v == null || !isFinite(+v) || +v === 0 ? "" : +v > 0 ? "up" : "dn");
@@ -303,7 +308,7 @@ async function hm2CurveFill() {
     const rows = await pg("treasury_rates?select=*&order=date.desc&limit=270");
     if (hm2Host("hm2Curve") !== host) return;
     /* a year back must be inside the read; if a short table cannot reach it, the 1Y line is simply not drawn */
-    host.innerHTML = hm2CurveHTML(rows || [], host.clientWidth);
+    host.innerHTML = (hm3On() ? hm3CurveHTML : hm2CurveHTML)(rows || [], host.clientWidth);   /* HM3 */
     const h = hm2Host("hm2CurveAsOf"); if (h && rows && rows[0]) h.textContent = "as of " + rows[0].date;
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">the curve could not be read</div>'; }
 }
@@ -408,7 +413,7 @@ function hm2AucLater(rows, calendar, today) {
 }
 function hm2AuctionsPaint() {
   const host = hm2Host("hm2Auctions"); if (!host || !HM2_ON || !HM2_AUC.rows) return;
-  host.innerHTML = hm2AuctionsHTML(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));
+  host.innerHTML = (hm3On() ? hm3AuctionsHTML : hm2AuctionsHTML)(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));   /* HM3 */
 }
 function hm2AuctionsHTML(rows, later) {
   const today = ecToday();
@@ -456,7 +461,7 @@ async function hm2AuctionsFill() {
     const rows = await pg("treasury_auctions?select=cusip,auction_date,term,reopening,closing_time_et,offering_amount,high_yield,median_yield,bid_to_cover,indirect_pct,direct_pct,dealer_pct,results_pdf,status&order=auction_date.desc&limit=280", 1);
     if (hm2Host("hm2Auctions") !== host) return;
     HM2_AUC.rows = rows || [];
-    host.innerHTML = hm2AuctionsHTML(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));
+    host.innerHTML = (hm3On() ? hm3AuctionsHTML : hm2AuctionsHTML)(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));   /* HM3 */
     try { hm2EventPaint(); } catch (_) {}         /* an auction on the event card can now link its own result */
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">auction results are not stored yet</div>'; }
 }
@@ -529,7 +534,7 @@ async function hm2StripsFill() {
     const by = hm2StripRows(all), have = HM2_STRIPS.filter((b) => by[b] && by[b].length >= 2);
     if (!have.length) { host.innerHTML = '<div class="sc-senttxt">no print with a consensus is stored yet</div>'; return; }
     const first = Math.min.apply(null, have.map((b) => +by[b][0].event_ts));
-    host.innerHTML = have.map((b) => hm2StripHTML(b, by[b])).join("");
+    host.innerHTML = hm3On() ? hm3PrintsHTML(have, by) : have.map((b) => hm2StripHTML(b, by[b])).join("");   /* HM3 */
     host.querySelectorAll(".hm2-st__b").forEach((b) => { b.scrollLeft = b.scrollWidth; });
     const h = hm2Host("hm2StripsSince"); if (h) h.textContent = "since " + HM2_MON[+ecDateKey(first).slice(5, 7) - 1].toUpperCase() + " " + ecDateKey(first).slice(0, 4);
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">the prints could not be read</div>'; }
@@ -682,7 +687,7 @@ function hm2EventPaint() {
   const auction = term && HM2_AUC.rows ? HM2_AUC.rows.find((r) => r.term === term[1] + "-Year" && r.auction_date === day) || null : null;
   const fresh = HM2_EV.newsKey === key;
   if (out && !HM2_EV.busy && (!fresh || (Date.now() - HM2_EV.newsAt >= HM2_EV_NEWS_MS && nowSec - ev.ets <= HM2_EV_NEWS_FOR_S))) hm2EventNews(ev, key);
-  const html = hm2EventHTML(ev, nowSec, fresh ? HM2_EV.news : null, auction);
+  const html = (hm3On() ? hm3EventHTML : hm2EventHTML)(ev, nowSec, fresh ? HM2_EV.news : null, auction);   /* HM3 */
   if (host.innerHTML !== html) host.innerHTML = html;
   HM2_EV.key = key;
 }
@@ -778,17 +783,19 @@ function hm2PcArm() {
 
 /* ---- the rail's two new cards, the room mount and the clicks ---------------------------------------- */
 function hm2RailCardsHTML() {
+  if (hm3On()) return hm3RailCardsHTML();   /* HM3 — the same three hosts, in flat frames */
   return '<div class="card hm2-card"><h4>TREASURY CURVE <i class="ec-li-note" id="hm2CurveAsOf"></i></h4><div id="hm2Curve"><div class="sc-senttxt">—</div></div></div>' +
     '<div class="card hm2-card"><h4>TREASURY AUCTIONS <i class="ec-li-note">each against the six before it</i></h4><div id="hm2Auctions"><div class="sc-senttxt">—</div></div></div>' +
     '<div class="card hm2-card"><h4>MACRO PRINTS · SURPRISES <i class="ec-li-note" id="hm2StripsSince"></i></h4><div id="hm2Strips"><div class="sc-senttxt">—</div></div></div>';
 }
 const HM2_SPECS = '<details class="sc-pagespecs hm2-specs"><summary>PAGE SPECS</summary><div>' +
   "<p><b>The slider.</b> One bar is a day, a week or a month of releases that pass the region tab, the category chip and HIGH ONLY. Height is how many; colour is the load (cyan: no high-importance release, orange: one to four, red: five or more, which is about one day in eight — a week is ranked against the busiest week on the slider). A star marks the Fed’s decision, payrolls, CPI, core PCE or GDP. Click a bar to open it below.</p>" +
+  (hm3On() ? HM3_SPECS_P :   /* HM3 — the four redrawn cards say what they now show */
   "<p><b>Treasury curve.</b> treasury_rates (Treasury’s daily par yields). Today’s line is green when the 10-year closed above the day before and red when below; the week-, month- and year-ago curves are the stored curve nearest to that date. 2s10s = 10-year minus 2-year; 3m10y = 10-year minus 3-month; each with its last 252 sessions.</p>" +
   "<p><b>Treasury auctions.</b> An r beside a term is a reopening: more of a bond that already trades. COMING is what Treasury has announced, with its size; LATER is dated on the calendar and not yet sized, shown with the size of that term’s last auction. TreasuryDirect’s own results, a few minutes after the 1:00 PM New York deadline. STOPPED AT is the highest yield accepted. COVER is dollars bid per dollar sold. INDIRECT, DIRECT and DEALERS are each bidder class’s share of what competitive bidders were awarded. Each is compared with the average of the six auctions of the same term before it: green is more demand than usual, red less (for DEALERS a smaller share is the stronger auction). The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it.</p>" +
   "<p><b>The event card.</b> At the top of the rail, for the release that is happening or the one you click in the day table. FROM THE CALENDAR is exactly what FMP’s calendar row holds. OFFICIAL SOURCE is who publishes it; it becomes a link at the release minute, and an auction links Treasury’s own one-page result. FROM OUR NEWS FEED is the first three headlines our feed carried after the release. A release with no source on file says so.</p>" +
   "<p><b>Auction history.</b> Thirty auctions of one term, oldest on the left. A bar is green when it showed more demand than the six auctions before it and red when less; for DEALERS a smaller share is the stronger auction; STOPPED AT is coloured by which way it moved from the auction before.</p>" +
-  "<p><b>Macro prints.</b> econ_calendar (FMP’s economic calendar), every US print stored with a consensus, oldest on the left. Up and green is better than expected, down and red is worse; for inflation, unemployment and jobless claims a lower number is the better one. A yellow dot is a print exactly on consensus. Indicators nobody forecasts (money supply, the Fed’s balance sheet, mortgage rates) have no strip.</p>" +
+  "<p><b>Macro prints.</b> econ_calendar (FMP’s economic calendar), every US print stored with a consensus, oldest on the left. Up and green is better than expected, down and red is worse; for inflation, unemployment and jobless claims a lower number is the better one. A yellow dot is a print exactly on consensus. Indicators nobody forecasts (money supply, the Fed’s balance sheet, mortgage rates) have no strip.</p>") +
   "</div></details>";
 /* called beside the room's mount and NOT awaited by it: the calendar and the rail are ready exactly when they were */
 function hm2Mount() {

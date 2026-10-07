@@ -20,6 +20,16 @@ block = (HERE / "hm2-block.js").read_text(encoding="utf-8")
 css = (HERE / "hm2-style.css").read_text(encoding="utf-8")
 assert block.endswith(BLOCK_END), "hm2-block.js must end with its END line"
 BLOCK_START = block[: block.index("\n") + 1]
+# HM3 (7 Oct, the look) — a second, smaller layer that redraws four of these cards. It rides with this block: its script
+# goes just above the HM2 block (the HM2 block still ends on the economic room's module) and its stylesheet just after
+# HM2's. --remove takes both out; a tree without the HM3 folder injects HM2 alone, as before.
+HM3 = ROOT / "deliverables" / "20261007" / "hm3-macro-look" / "tools"
+HM3_STYLE_OPEN = '<style id="hm3-macro-look-20261007">\n'
+HM3_END = "/* ==== END HM3 ============================================================== */\n"
+hm3_block = (HM3 / "hm3-block.js").read_text(encoding="utf-8") if (HM3 / "hm3-block.js").exists() else ""
+hm3_css = (HM3 / "hm3-style.css").read_text(encoding="utf-8") if hm3_block else ""
+assert not hm3_block or hm3_block.endswith(HM3_END), "hm3-block.js must end with its END line"
+HM3_START = hm3_block[: hm3_block.index("\n") + 1] if hm3_block else "/* ==== HM3 · "
 
 # (anchor that exists exactly once, the line this lane adds, where: "before" | "after" | "replace")
 OLD_CARDS = ("      '<div class=\"card\"><h4>Treasury curve</h4><div class=\"sc-senttxt\" id=\"econCurve\">—</div></div>' +\n"
@@ -51,6 +61,12 @@ HOOKS = [
 JS_ANCHOR = "/* ---- Room 9 · ECONOMIC (wired: treasury_rates curve + econ_history latest prints) */\n"
 
 def remove(s):
+    i = s.find(HM3_STYLE_OPEN)
+    if i >= 0:
+        j = s.index(STYLE_CLOSE, i) + len(STYLE_CLOSE); s = s[:i] + s[j:]
+    i = s.find(HM3_START)
+    if i >= 0:
+        j = s.index(HM3_END, i) + len(HM3_END); s = s[:i] + s[j:]
     i = s.find(STYLE_OPEN)
     if i >= 0:
         j = s.index(STYLE_CLOSE, i) + len(STYLE_CLOSE); s = s[:i] + s[j:]
@@ -71,8 +87,8 @@ def inject(s):
         s = s.replace(anchor, add + anchor if how == "before" else anchor + add if how == "after" else add, 1)
     for anchor in ("</head>\n", JS_ANCHOR):
         if s.count(anchor) != 1: sys.exit("HM2 inject: expected exactly one of: " + anchor.strip()[:80])
-    s = s.replace("</head>\n", STYLE_OPEN + css + STYLE_CLOSE + "</head>\n", 1)
-    return s.replace(JS_ANCHOR, block + JS_ANCHOR, 1)
+    s = s.replace("</head>\n", STYLE_OPEN + css + STYLE_CLOSE + (HM3_STYLE_OPEN + hm3_css + STYLE_CLOSE if hm3_block else "") + "</head>\n", 1)
+    return s.replace(JS_ANCHOR, hm3_block + block + JS_ANCHOR, 1)
 
 out = remove(src) if "--remove" in sys.argv else inject(src)
 if out != src: page.write_text(out, encoding="utf-8")
