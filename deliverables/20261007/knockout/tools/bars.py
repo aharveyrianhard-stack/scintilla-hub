@@ -6,6 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 A = "https://scintilla-massive-chart-api.fly.dev"
 LIM = {"D": 560, "3D": 400, "W": 310, "180": 2200, "240": 1700, "6h": 1400, "12h": 850}
 GH = os.environ.get("KO1_FULL_BARS", "")   # a folder of full-depth bars already fetched after the close (the Geiger-history study's), if there is one
+if not os.path.exists("symbols-to-replay.json"):
+    # who is replayed: every served company (a profile that is not a fund), and the fund each branch of the tree names as its own line
+    L = lambda n: json.load(open(f"snap/{n}.json")); served = set(json.load(open("quotes-all-raw.json"))["quotes"]); prof = {r["ticker"]: r for r in L("company_profile")}
+    comp = sorted(t for t in served if t in prof and not prof[t]["is_etf"]); spine = sorted({r["spine_fund"] for r in L("cohort_tree") if r.get("spine_fund")} & served)
+    json.dump(list(dict.fromkeys(comp + spine + ["SPY", "QQQ", "IWM", "RSP", "SMH", "DRAM", "XLU"])), open("symbols-to-replay.json", "w"))
 syms = json.load(open("symbols-to-replay.json"))
 linked = 0
 for s in list(syms):

@@ -223,6 +223,12 @@ skip_html = f'<div class="panel"><div class="ph">COUNTED, NEVER DROPPED</div>{tb
 # ---------------------------------------------------------------- page specs
 W = RU["weights"]; ck = K["checks"]
 one_off = sorted((t, n["one_off"]) for t, n in N.items() if n["one_off"]); dips = sorted(t for t, n in N.items() if n.get("dip_years")); vent = sorted(t for t, n in N.items() if n.get("venture"))
+import re as _re
+def one_off_ps(t):                       # the per-share one-off this run read for a name's year in progress, from its own words
+    m = [_re.search(r"carries about ([0-9.]+) a share", w) for w in N[t]["one_off"] if "this year" in w]; return m[0].group(1) if m and m[0] else "—"
+FX = json.load(open(os.path.join(ROOT, "data", "fixture-one-off.json"), encoding="utf-8"))["study"]
+foreign = sorted(t for t, n in N.items() if (n.get("currency") or "USD") != "USD"); reviewed = sorted(t for t, n in N.items() if n["reviewed"])
+num_word = lambda k: {15: "fifteen", 16: "sixteen", 17: "seventeen"}.get(k, str(k))
 ups = [n["comps"] for n in N.values() if n["comps"] is not None]
 specs = f"""
 <details class="sc-pagespecs"><summary>PAGE SPECS</summary>
@@ -254,13 +260,13 @@ specs = f"""
 <h4>GROWTH ON A CLEAN BASE</h4>
 <p><b>The same calendar for everyone.</b> Companies end their years in different months. So a fiscal year in progress is blended with the next one by the share of it still to run, and every company is compared over the same twelve months. Micron's year has just begun, so its next twelve months are nearly all of fiscal 2027.</p>
 <p><b>Last year's earnings</b> are taken on the analysts' footing: the four quarters as the street scored them, or, where a quarter is missing, the analysts' own row for that year ({sum(1 for n in N.values() if n.get("base_basis") == "row")} names).</p>
-<p><b>One-off gains.</b> The rule is the estimates-versus-guidance study's: the consensus follows GAAP when the street's reported number is within 10% of the filed one; a quarter carries a one-off when other income is more than a quarter of its profit; and when the one-offs reach 15% of the year's earnings, the year is cleaned. That study read the pre-tax lines from the filings of six names. The Hub's tables hold operating income and net income only, so for the whole universe a quarter is marked when it shows more net income than operations could have left after an ordinary tax, and that is unusual for the company itself (measured against its own other quarters). On Alphabet this reads 8.18 a share for 2026 against the study's 8.92, and on Amazon 4.20 against 4.91: a little under, so the clean growth shown here is a little lower than that study's.</p>
+<p><b>One-off gains.</b> The rule is the estimates-versus-guidance study's: the consensus follows GAAP when the street's reported number is within 10% of the filed one; a quarter carries a one-off when other income is more than a quarter of its profit; and when the one-offs reach 15% of the year's earnings, the year is cleaned. That study read the pre-tax lines from the filings of six names. The Hub's tables hold operating income and net income only, so for the whole universe a quarter is marked when it shows more net income than operations could have left after an ordinary tax, and that is unusual for the company itself (measured against its own other quarters). On Alphabet this reads {one_off_ps("GOOGL")} a share for 2026 against the study's {FX["GOOGL"]["one_off_per_share"]}, and on Amazon {one_off_ps("AMZN")} against {FX["AMZN"]["one_off_per_share"]}: a little under, so the clean growth shown here is a little lower than that study's.</p>
 <p>The base was cleaned for {len(one_off)} names: {E(", ".join(t for t, _ in one_off))}.</p>
 <p><b>A base that cannot be grown from.</b> Earnings growth is not ranked when the base holds a loss, or a one-off year (one more than 40% under the years either side of it: {E(", ".join(dips))}). Those names are ranked on revenue growth for that year. A company whose sales are under 1% of its market value is priced on what it may become: growth from so small a base is not a rate, there is no comps number to lean on, and this process does not judge it. There are {len(vent)}: {E(", ".join(vent))}.</p>
 <h4>ROUND 3 — TIMING AND LEVELS</h4>
 <ul>
 <li><b>Geiger and its own year.</b> The live reading, and where it sits among the name's own last {RU["year"]} evenings. The history is the Geiger-history study's replay of the Hub's seven rungs, run here for every company. On the 6 October evening the replay equals the live Geiger to four decimals on {ck["replay"]["equal_4dp"]} of {ck["replay"]["names"]} names; the largest gap is {ck["replay"]["max"]:.3f}.</li>
-<li><b>Levels.</b> The 21, 50, 100 and 200-day averages of daily closes, and, for the fifteen companies the Lab has reviewed, its lines under the Lab's own labels (AMZN, AVGO, BE, CBRS, CRWV, GOOGL, MU, NBIS, NFLX, NVDA, ORCL, SNDK, VST, WDC, WMT).</li>
+<li><b>Levels.</b> The 21, 50, 100 and 200-day averages of daily closes, and, for the {num_word(len(reviewed))} companies the Lab has reviewed, its lines under the Lab's own labels ({E(", ".join(reviewed))}).</li>
 <li><b>Zones.</b> The confluence study's rule: two or more levels all within 1% of each other. For a reviewed name the zones are that study's. For every other name the same rule is run on its four averages.</li>
 <li><b>Where it would be bought.</b> For a name that is not hot: the nearest level under the close, then the nearest zone. A name under all four of its averages has no level under it, so its 52-week low is given and the first average to win back.</li>
 <li><b>Cools at.</b> For a name above its 70th percentile: the close at which its Geiger would read its own 70th again, found by running the Hub's own Geiger arithmetic on one more session ending at that close. "Back to its usual" is the same for its own median. One session is the fastest way down. If the name drifts sideways instead, it cools at a higher price, because its averages catch up.</li>
@@ -286,7 +292,8 @@ specs = f"""
 <li><b>A company with no earnings can still win a branch.</b> Its comps number is not used, so it stands on growth, revisions and cash against companies that are also judged on their price. Lucid leads autos that way. The comps column says "no earnings" where this applies.</li>
 <li><b>The one-session cool-down.</b> Replayed on the last 20 sessions of each green name, the one-session read missed the real next-day Geiger by {ck["cool"]["median_gap"]} at the median and {ck["cool"]["p90_gap"]} nine times in ten ({ck["cool"]["sessions"]:,} sessions).</li>
 {"<li><b>The Lab's installed line packs</b> are marked not yet approved by you in the Lab's own registry.</li>" if ck["confluence"].get("approved_by_alan") is False else ""}
-<li><b>Foreign reporters.</b> For the sixteen that report in another currency the one-off rule is not applied, and their filed earnings are not always on the analysts' footing.</li>
+<li><b>Foreign reporters.</b> For the {num_word(len(foreign))} that report in another currency ({E(", ".join(foreign))}) the one-off rule is not applied, and their filed earnings are not always on the analysts' footing.</li>
+<li><b>"No earnings" covers two kinds of company.</b> A comps number is not used when earnings are not positive, trailing or expected. That is a loss-maker such as Nebius, and also a profitable company in a year of a large one-off charge, such as Gilead.</li>
 </ul>
 <h4>WHAT WAS NOT DONE</h4>
 <ul>

@@ -8,7 +8,7 @@ Every step reads; none writes a table, deploys, or needs a Fly key. Run from an 
 |---|---|---|
 | 1 | `python3 tools/snapshot.py` | `snap/*.json` — one read of each public table, about 100 requests |
 | 2 | `node tools/comps-universe.mjs` | `comps-universe.json` — the fixed comps for every company, from the snapshot |
-| 3 | `python3 tools/bars.py` | `bars/*.npz` — bars for the Geiger replay (needs `symbols-to-replay.json`) |
+| 3 | `python3 tools/bars.py` | `bars/*.npz` — bars for the Geiger replay of every served company and each branch's own fund |
 | 4 | `python3 tools/bars_tail.py` | the newest session's intraday bars joined on |
 | 5 | `python3 tools/replay_all.py` | `replay.pkl` — every name's Geiger, evening by evening, checked against the live one |
 | 6 | `python3 tools/fundamentals.py` | `fundamentals.json` — growth on a clean base, revisions, cash |
