@@ -12,7 +12,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url)), WT = path.resolve(HER
 const { inputs: c4inputs, readSet, snapshotFromCohort } = await import(WT + "/deliverables/20261001/comps-mechanic/read.mjs");
 const { buildSet, votesFor, CP1_LINES_OFF, CP1_LINES_ON, REFERENCE_PEERS, SIM_MIN } = await import(WT + "/deliverables/20261003/comps-c5/lines.mjs");
 const { conclusion6, CP1_ALL, CP1_NONE, FD1_ALL, FD1_ALL_LAST } = await import(WT + "/deliverables/20261005/comps-c6/outliers.mjs");
-const { isValuation, pegGrowth } = await import(WT + "/deliverables/20261003/comps-c5/field.mjs");
+const { isValuation, pegGrowth, wquantile } = await import(WT + "/deliverables/20261003/comps-c5/field.mjs");
 const { referenceOf, withReference, withReferenceQuotes } = await import(WT + "/deliverables/20261003/comps-c5/reference.mjs");
 const argv = process.argv.slice(2), opt = (k, d = null) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 const OUT = opt("--out", "comps-rerun.json"), TODAY = opt("--today", "2026-10-06"), factsArg = opt("--facts");
@@ -37,7 +37,7 @@ inp.segments = JSON.parse(readFileSync(WT + "/deliverables/20261003/comps-c5/seg
   inp.funds = inp.funds.map((f) => { const h = top[f.ticker] || {}; const all = new Map(f.holdings.map(([s, w]) => [String(s).toUpperCase(), w])); for (const r of h.top || []) if (r.ticker) all.set(String(r.ticker).toUpperCase(), r.weight_pct); return { ...f, all: [...all], count: h.count_in_fund || f.holdings.length, as_of: h.as_of || null, rows_in_file: h.rows_in_file || null }; }); }
 console.log("inputs ready · profiles", Object.keys(inp.profiles).length, "· reference facts", refFile ? path.basename(refFile) + " (" + Object.keys(REF.peers).join(" ") + (REF.missing.length ? "; missing " + REF.missing.join(" ") : "") + ")" : "none on file", "· closes fetched", RAW.fetched_utc, "· today", TODAY);
 const r2 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100), r1 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
-const SNAPS = new Map(), FIXTURES = ["LLY", "VST", "MU"];   /* the offline sets of tests/fd1-growth-forward.test.mjs */
+const SNAPS = new Map(), FIXTURES = (process.env.FD1_FIXTURES || "LLY,VST,MU").split(",");   /* the offline sets of tests/fd1-growth-forward.test.mjs; FD1_FIXTURES=… names others */
 async function snapOf(T, set) {
   const served = { ...set, kept: set.kept.filter((r) => !r.reference || r.has_figures) }, key = T + "|" + served.kept.map((r) => r.ticker).join(",");
   if (SNAPS.has(key)) return SNAPS.get(key);
@@ -54,6 +54,7 @@ async function price(T, set, label, fx) {
   if (!pricedPeers.length) return { label, ok: false, n: 0, reason: "no peers" };
   const { snap, estimates } = await snapOf(T, set), C = conclusion6(snap, [], estimates, TODAY, "C", { set, fx });
   const c6 = C.c6, band = (x) => (x ? { lo: r2(x.lo), centre: r2(x.mid), hi: r2(x.hi) } : null), up = (x) => (x && snap.price > 0 ? r1((x.mid / snap.price - 1) * 100) : null);
+  const wayC = (C.ways || []).find((w) => w.way === "C") || null;
   const mw = C.measureWeights || { weights: {}, parts: {} }, keys = C.rows.filter((r) => isValuation(r.key)).map((r) => r.key), peg = C.rows.find((r) => r.key === "peg");
   const foreign = (t) => { const f = t === T ? snap.fx : snap.fx_peers && snap.fx_peers[t]; return !!(f && f.currency && f.currency !== "USD"); };
   const gOf = (t) => { const a = pegGrowth(estimates[t], TODAY, { consensusOnly: foreign(t) }), b = pegGrowth(estimates[t], TODAY, { consensusOnly: true }), c = pegGrowth(estimates[t], TODAY, { consensusOnly: true, fromLast: true }); return { trailing: a ? r1(a.pct) : null, trailing_basis: a ? a.basis : null, forecast: b ? r1(b.pct) : null, forecast_basis: b ? b.basis : null, last_year: c ? r1(c.pct) : null, last_year_basis: c ? c.basis : null }; };
@@ -62,6 +63,11 @@ async function price(T, set, label, fx) {
     whole_set: c6.wholeSet ? { band: band(c6.wholeSet.bandFromPeers || c6.wholeSet.band), upside_pct: up(c6.wholeSet.bandFromPeers || c6.wholeSet.band) } : null,
     growth_credit: C.cp1 && C.cp1.growth ? { own: r1(C.cp1.growth.own), peers: r1(C.cp1.growth.peers), n: C.cp1.growth.n, ratio: r2(C.cp1.growth.ratio), credit: r2(C.cp1.growth.credit), from: C.cp1.growth.from || null, why: C.cp1.growth.why || null } : null,
     peg_basis: peg ? peg.basis : null,
+    /* THE READINGS BEHIND THE CENTRE (way C): every priced peer's multiple on every weighed yardstick is one implied price
+       for the company, with its weight; the centre is their weighted median. per_peer: the weighted median of ONE peer's
+       readings — what the company would be worth on that peer alone. Arithmetic on the figures held; no peer is invented. */
+    points: wayC && wayC.ok ? wayC.points.map((p) => ({ key: p.key, peer: p.ticker, multiple: r2(p.multiple), price: r2(p.price), upside_pct: r1((p.price / snap.price - 1) * 100), weight: Math.round(p.w * 1000) / 1000 })).sort((a, b) => a.price - b.price) : [],
+    per_peer: wayC && wayC.ok ? Object.fromEntries([...new Set(wayC.points.map((p) => p.ticker))].map((t) => { const mine = wayC.points.filter((p) => p.ticker === t), mid = wquantile(mine, 0.5); return [t, { readings: mine.length, centre: r2(mid), upside_pct: r1((mid / snap.price - 1) * 100), weight: Math.round(mine.reduce((a, p) => a + p.w, 0) * 1000) / 1000 }]; })) : {},
     rows: Object.fromEntries(keys.map((k) => { const r = C.rows.find((x) => x.key === k), e = (r && r.ends) || {}, p = mw.parts[k] || {}; return [k, { label: r.label, own: r2(r.own && r.own.multiple), median: r2(r.band && r.band.median), n: r.n || 0, ok: !!r.ok, price: r2(r && r.ok && e.median ? e.median.price : null), weight: r2(mw.weights[k]), credit: p.credit ? r2(p.credit) : null, off: p.off || null }]; })),
     multiples: Object.fromEntries([T, ...pricedPeers.map((r) => r.ticker)].map((t) => [t, Object.fromEntries(keys.map((k) => { const r = C.rows.find((x) => x.key === k); return [k, r2(t === T ? (r.own && r.own.multiple) : (r.values && r.values[t] ? r.values[t].multiple : null))]; }))])),
     growth: Object.fromEntries([T, ...pricedPeers.map((r) => r.ticker)].map((t) => [t, gOf(t)])),

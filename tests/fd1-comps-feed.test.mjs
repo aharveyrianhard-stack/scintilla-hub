@@ -62,22 +62,25 @@ test("v5 ratios: a single quarter under a full market value (Micron P/S 20 again
   /* Western Digital in one night: the quarter's row (49.6) at 05:45Z, the fiscal year's (14.4) at 06:02Z — the same request */
   const wdc = R.filter((r) => r.ticker === "WDC" && r.fiscal_date === "2026-07-03"), E = FX.v5.earlier_same_night;
   near(E.batch60_0545Z.WDC.ps, wdc.find((r) => r.period === "Q4").ps, 1e-9); near(FX.v5.answered_batch60.WDC.ps, wdc.find((r) => r.period === "FY").ps, 1e-9);
-  near(rowOf("WDC").ps, 185955000000 / 12919000000, 1e-9, "v6: market value ÷ twelve months of sales, every time");
+  near(rowOf("WDC").ps, of(T.profiles, "WDC")[0].market_cap / 12919000000, 1e-9, "v6: today's market value ÷ twelve months of sales, every time"); assert.ok(rowOf("WDC").ps > 10.5 && rowOf("WDC").ps < 11.5);
   /* and the growth flips with the batch: Micron −59% in one batch of sixty and +146% in the next; SanDisk, Oracle, IREN likewise */
   near(E.batch60_0545Z.MU.rev_growth, -0.5928386941766526, 1e-12); near(E.batch18_0545Z.MU.rev_growth, 1.4560290619410279, 1e-12);
   for (const t of ["SNDK", "ORCL", "IREN"]) assert.ok(Math.abs(E.batch60_0545Z[t].rev_growth - E.batch18_0545Z[t].rev_growth) > 0.5, t + " read two different growths within a minute");
 });
 
 /* ---- the fix ---------------------------------------------------------------------------------------- */
-test("v6 Micron: +256% a year, forward P/E 6.1 on the fiscal year to Sep 2027, P/S 8.1, margins of the twelve months", () => {
+test("v6 Micron: +256% a year, forward P/E 6.0 on the fiscal year to Sep 2027, P/S 8.9 on today's market value, margins of the twelve months", () => {
   const r = rowOf("MU");
   near(r.rev_growth, 133188 / 37378 - 1, 1e-9); assert.equal(r.basis.growth, "twelve months over the twelve before"); assert.equal(r.basis.sales_to, "2026-09-03");
-  near(r.fwd_pe, 1058.74 / 173.77169, 1e-9); assert.equal(r.basis.forward_year, "2027-09-03");
-  near(r.ps, 1082720800000 / 133188000000, 1e-9); near(r.net_m, 84969 / 133188, 1e-9); near(r.gross_m, 107504 / 133188, 1e-9);
-  near(r.pe, 14.2648881703045, 1e-12, "trailing P/E is the fundamentals row's, as before");
+  near(r.fwd_pe, 1045.56 / 173.77169, 1e-9); assert.equal(r.basis.forward_year, "2027-09-03");
+  near(r.ps, 1180845008400 / 133188000000, 1e-9); near(r.net_m, 84969 / 133188, 1e-9); near(r.gross_m, 107504 / 133188, 1e-9);
+  near(r.pe, 1045.56 / 74.22, 1e-9, "today's price over the last twelve months' EPS"); assert.equal(r.mktcap, 1180845008400);
+  /* the comps tab's own Micron figures on the 6 Oct close (CP1's set, the company's own multiples): the same numbers */
+  const own = JSON.parse(read("deliverables/20261007/feed-fix/data/fixtures/set-MU-fd1-2026-10-06.json")).after.snap.rows;
+  near(r.pe, own.find((x) => x.key === "pe_ttm").own.multiple, 1e-6, "trailing P/E = the comps tab's"); near(r.fwd_pe, own.find((x) => x.key === "pe_fwd").own.multiple, 1e-4, "forward P/E = the comps tab's");
   assert.equal(r.updated, "2026-10-01T12:07:05.000Z", "the row's own date, not the minute of the request");
   const p = pageParse(feed(["MU"]).csv).MU;
-  near(p.fwd_pe, 6.0927, 1e-3); near(p.rev_growth, 2.5633, 1e-4); assert.ok(p.fwd_pe > 0 && p.pe > 0);
+  near(p.fwd_pe, 6.0169, 1e-3); near(p.rev_growth, 2.5633, 1e-4); assert.ok(p.fwd_pe > 0 && p.pe > 0);
 });
 test("the header and the units are v5's, so no page changes", () => {
   assert.equal(F.HEAD, "sym,mktcap,pe,fwd_pe,ps,pb,gross_m,net_m,de,div_yld,rev_growth,updated");
@@ -126,7 +129,7 @@ test("a restated year: Western Digital's FY2025 quarters still carry SanDisk, so
   near(r.rev_growth, 12919 / 9520 - 1, 1e-9); assert.match(r.basis.growth, /last fiscal year over the one before \(the year before was restated/);
   near(k2flow(h.filter((x) => x.period !== "FY"), h.filter((x) => x.period === "FY"), "revenue").now / 11396000000 - 1, 0.1336, 1e-3, "summing the quarters would say +13%");
   assert.equal(r.basis.sales, "TTM", "the newest four quarters add up to FY2026: they are used");
-  near(r.ps, 185955000000 / 12919000000, 1e-9);
+  near(r.ps, of(T.profiles, "WDC")[0].market_cap / 12919000000, 1e-9);
   assert.deepEqual([...F.restatedYears(of(T.history, "MU"))], []); assert.deepEqual([...F.restatedYears(of(T.history, "SNDK"))], []);
   /* Nebius: FY2024's row (117m) is 10% above its quarters (105m) — restated too, so the year before is not summed */
   assert.deepEqual([...F.restatedYears(of(T.history, "NBIS"))], [2024]); assert.match(rowOf("NBIS").basis.growth, /restated/); assert.equal(rowOf("NBIS").basis.sales, "TTM");
@@ -134,21 +137,41 @@ test("a restated year: Western Digital's FY2025 quarters still carry SanDisk, so
   const y = (fy, qs) => [{ period: "FY", fiscal_year: 2025, fiscal_date: "2025-12-31", revenue: fy }, ...qs.map((v, i) => ({ period: "Q" + (i + 1), fiscal_year: 2025, fiscal_date: `2025-${String(3 * (i + 1)).padStart(2, "0")}-28`, revenue: v }))];
   assert.deepEqual([...F.restatedYears(y(100, [25, 25, 25, 26.9]))], []); assert.deepEqual([...F.restatedYears(y(100, [25, 25, 25, 28]))], [2025]); assert.deepEqual([...F.restatedYears(y(100, [25, 25, 25]))], []);
 });
-test("one currency per multiple (C5b): TSMC's EPS and market value are put in dollars at the stored rate; with no rate they are withheld, never mixed", () => {
-  const f = of(T.fundamentals, "TSM")[0], rate = F.rateToUsd("TWD", T.fx, TODAY), r = rowOf("TSM");
+test("one currency per multiple (C5b): TSMC's EPS and sales are put in dollars at the stored rate; with no rate the multiples are withheld, never mixed", () => {
+  const f = of(T.fundamentals, "TSM")[0], pr = of(T.profiles, "TSM")[0], rate = F.rateToUsd("TWD", T.fx, TODAY), r = rowOf("TSM");
   assert.ok(f.trailing_pe < 2, "the stored trailing P/E divides dollars by Taiwan dollars: " + f.trailing_pe);
   assert.ok(rate && rate.rate > 0.02 && rate.rate < 0.05 && rate.date <= TODAY);
-  near(r.pe, f.price / (f.eps_ttm * rate.rate), 1e-9); assert.ok(r.pe > 15 && r.pe < 60, "a P/E a chip foundry can carry: " + r.pe);
-  near(r.mktcap, f.market_cap * rate.rate, 1); assert.ok(r.mktcap > 1e12 && r.mktcap < 5e12);
+  near(r.pe, pr.price / (f.eps_ttm * rate.rate), 1e-9); assert.ok(r.pe > 15 && r.pe < 60, "a P/E a chip foundry can carry: " + r.pe);
+  assert.equal(r.mktcap, pr.market_cap, "the profile's market value is the US listing's, in dollars"); assert.ok(r.mktcap > 1e12 && r.mktcap < 5e12);
   assert.ok(r.fwd_pe > 10 && r.fwd_pe < r.pe); assert.equal(r.pb, null); assert.equal(r.div_yld, null); assert.equal(r.basis.currency, "TWD");
-  near(r.ps, f.market_cap / F.flow(of(T.history, "TSM"), "revenue").now, 1e-9, "P/S: both sides in the statement currency, no rate");
+  near(r.ps, pr.market_cap / (F.flow(of(T.history, "TSM"), "revenue").now * rate.rate), 1e-9, "P/S: dollars over dollars"); assert.ok(r.ps > 10 && r.ps < 25);
   const noRate = rowOf("TSM", { ...T, fx: [] });
-  assert.equal(noRate.pe, null); assert.equal(noRate.fwd_pe, null); assert.equal(noRate.mktcap, null); assert.equal(noRate.basis.withheld, true);
-  assert.ok(noRate.ps > 0 && noRate.net_m > 0 && noRate.rev_growth != null, "what needs no rate stays");
+  assert.equal(noRate.pe, null); assert.equal(noRate.fwd_pe, null); assert.equal(noRate.ps, null); assert.equal(noRate.basis.withheld, true);
+  assert.equal(noRate.mktcap, pr.market_cap, "the dollar market value needs no rate"); assert.ok(noRate.net_m > 0 && noRate.rev_growth != null && noRate.de != null, "what needs no rate stays");
+  /* no profile figures: the fundamentals row stands in — its market value is in Taiwan dollars, so it takes the rate, or is withheld */
+  const noProfile = rowOf("TSM", { ...T, profiles: [] });
+  near(noProfile.mktcap, f.market_cap * rate.rate, 1); near(noProfile.pe, f.price / (f.eps_ttm * rate.rate), 1e-9); assert.match(noProfile.basis.market_value_from, /fundamentals row/);
+  assert.equal(rowOf("TSM", { ...T, profiles: [], fx: [] }).mktcap, null);
   assert.equal(rowOf("TSM", { ...T, filers: [] }).basis.currency, "TWD", "the C5b list covers a company filer_currency does not carry");
   assert.equal(rowOf("TSM", { ...T, filers: [{ ticker: "TSM", reported_currency: "USD" }] }).basis.currency, "USD", "filer_currency outranks the list");
   assert.equal(F.rateToUsd("TWD", [{ pair: "TWDUSD", date: "2026-10-08", rate: 9 }, { pair: "TWDUSD", date: "2026-10-06", rate: 0.03 }], TODAY).rate, 0.03, "never a rate from after today");
   assert.equal(rowOf("MU").basis.rate, null); assert.equal(Object.keys(F.REPORTS_IN).length, 16);
+});
+test("the market value is today's: the stored one is the last fiscal period end's (its writer says so), 31% high for Western Digital and 18% low for Nvidia", () => {
+  assert.match(read("supabase/functions/fmp-fundamentals/index.ts"), /market_cap: FMP key-metrics marketCap at the latest FISCAL PERIOD END \(kmAll\[0\]\), not a current value/);
+  const ratio = (t) => of(T.fundamentals, t)[0].market_cap / of(T.profiles, t)[0].market_cap;
+  near(ratio("WDC"), 1.313, 0.002); near(ratio("NVDA"), 0.820, 0.002); near(ratio("NBIS"), 1.289, 0.002); near(ratio("MU"), 0.917, 0.002);
+  for (const t of ["MU", "WDC", "NVDA", "NBIS", "SNDK", "STX", "GOOGL", "ORCL"]) {
+    const r = rowOf(t), pr = of(T.profiles, t)[0];
+    assert.equal(r.mktcap, pr.market_cap, t); assert.match(r.basis.market_value_from, /company_profile \(today's price × shares\)/); assert.equal(r.basis.price_at, "2026-10-07");
+    near(r.ps, pr.market_cap / (F.flow(of(T.history, t), "revenue").now ?? of(T.fundamentals, t)[0].revenue_ttm), 1e-9, t + " P/S");
+  }
+  near(rowOf("WDC").ps / (of(T.fundamentals, "WDC")[0].market_cap / 12919000000), 1 / 1.313, 0.002, "on the stored market value Western Digital's P/S read 14.4; it is 11.0");
+  /* a company with no profile figures: the fundamentals row stands in, and the basis says which */
+  const bare = rowOf("MU", { ...T, profiles: [] });
+  assert.equal(bare.mktcap, 1082720800000); near(bare.pe, 1058.74 / 74.22, 1e-9); assert.match(bare.basis.market_value_from, /fundamentals row \(the last fiscal period end's\)/); assert.equal(bare.basis.price_at, null);
+  const half = rowOf("MU", { ...T, profiles: [{ ticker: "MU", price: 1045.56, market_cap: null }] });
+  assert.equal(half.mktcap, 1082720800000, "price and market value are taken together or not at all"); near(half.pe, 1058.74 / 74.22, 1e-9);
 });
 test("a name with nothing on file is a line of blanks, and the page reads each as not held", () => {
   const csv = feed(["ZZZZ", "MU"]).csv, p = pageParse(csv);
@@ -166,7 +189,8 @@ test("every read names its period, carries a total order and is paged to its end
   assert.match(q.estimates, /period=eq\.annual/); assert.match(q.estimates, /fiscal_date=gte\.2026-10-07/); assert.match(q.estimates, /order=ticker\.asc,fiscal_date\.asc$/);
   assert.match(q.history, /order=ticker\.asc,fiscal_date\.desc,period\.asc$/); assert.match(q.ratios, /order=ticker\.asc,fiscal_date\.desc,period\.asc$/);
   assert.match(q.history, /fiscal_date=gte\.2023-10-0[0-9]/, "three years: eight quarters and two fiscal years with room");
-  for (const k of ["fundamentals", "history", "ratios", "estimates", "filers"]) assert.match(q[k], /ticker=in\.\(%22MU%22,%22BRK\.B%22\)/, k);
+  for (const k of ["fundamentals", "profiles", "history", "ratios", "estimates", "filers"]) assert.match(q[k], /ticker=in\.\(%22MU%22,%22BRK\.B%22\)/, k);
+  assert.match(q.profiles, /^company_profile\?select=ticker,price,market_cap,updated_ts&/);
   for (const p of Object.values(q)) assert.ok(!/limit=|offset=/.test(p), "the caller pages");
   const rows = Array.from({ length: 2345 }, (_, i) => ({ i })), asked = [];
   const get = async (p) => { asked.push(p); const lim = +/limit=(\d+)/.exec(p)[1], off = +/offset=(\d+)/.exec(p)[1]; return rows.slice(off, off + lim); };
@@ -193,7 +217,7 @@ test("the function itself, run end to end on the fixture: the same line as the p
   let handler = null, fail = null; const asked = [];
   const realFetch = globalThis.fetch, realDeno = globalThis.Deno;
   globalThis.Deno = { env: { get: (k) => (k === "SUPABASE_URL" ? "https://db.test" : k === "SUPABASE_SERVICE_ROLE_KEY" ? "test-key" : "") }, serve: (h) => { handler = h; } };
-  const TABLE = { fundamentals: T.fundamentals, fundamentals_history: T.history, ratios_history: T.ratios, analyst_estimates: T.estimates, filer_currency: T.filers, fx_rates: T.fx };
+  const TABLE = { fundamentals: T.fundamentals, company_profile: T.profiles, fundamentals_history: T.history, ratios_history: T.ratios, analyst_estimates: T.estimates, filer_currency: T.filers, fx_rates: T.fx };
   globalThis.fetch = async (url, init) => {
     const u = new URL(url), name = u.pathname.split("/").pop(); asked.push({ name, method: (init && init.method) || "GET", auth: init && init.headers && init.headers.Authorization });
     if (fail === name) return new Response("{}", { status: 500 });
@@ -209,7 +233,8 @@ test("the function itself, run end to end on the fixture: the same line as the p
     const text = await ok.text(), lines = text.split("\n");
     assert.equal(lines[0], F.HEAD); assert.equal(lines.length, 4);
     assert.equal(lines[1], feed(["MU"]).csv.split("\n")[1]); assert.equal(lines[2], feed(["WDC"]).csv.split("\n")[1]); assert.equal(lines[3], "ZZZZ,,,,,,,,,,,");
-    assert.ok(asked.length >= 6 && asked.every((a) => a.method === "GET" && a.auth === "Bearer test-key"), "six reads, all GET");
+    assert.ok(asked.length >= 7 && asked.every((a) => a.method === "GET" && a.auth === "Bearer test-key"), "seven reads, all GET");
+    assert.deepEqual([...new Set(asked.map((a) => a.name))].sort(), ["analyst_estimates", "company_profile", "filer_currency", "fundamentals", "fundamentals_history", "fx_rates", "ratios_history"]);
     assert.ok(!text.includes("test-key"));
     const js = await (await handler(new Request("https://fn.test/comps-feed?syms=MU&format=json"))).json();
     assert.equal(js.version, "comps-feed-v6"); assert.equal(js.rows[0].basis.forward_year, "2027-09-03"); assert.equal(js.rows[0].basis.growth, "twelve months over the twelve before");
@@ -219,7 +244,7 @@ test("the function itself, run end to end on the fixture: the same line as the p
     assert.equal(bad.status, 503); assert.equal(await bad.text(), F.HEAD, "a failed read is no line at all — never a guess"); assert.match(bad.headers.get("x-comps-feed-error"), /analyst_estimates 500/);
     fail = "fx_rates";
     const soft = await handler(new Request("https://fn.test/comps-feed?syms=MU,TSM")); assert.equal(soft.status, 200);
-    const sp = pageParse(await soft.text()); assert.ok(sp.MU.fwd_pe > 0); assert.equal(sp.TSM.pe, null, "no rates → the foreign multiples are withheld"); assert.ok(sp.TSM.ps > 0);
+    const sp = pageParse(await soft.text()); assert.ok(sp.MU.fwd_pe > 0); assert.equal(sp.TSM.pe, null, "no rates → the foreign multiples are withheld"); assert.equal(sp.TSM.ps, null); assert.ok(sp.TSM.mktcap > 1e12 && sp.TSM.net_m > 0);
     fail = null;
     assert.equal((await handler(new Request("https://fn.test/comps-feed?syms=MU", { method: "POST" }))).status, 405);
     assert.equal((await handler(new Request("https://fn.test/comps-feed", { method: "OPTIONS" }))).headers.get("access-control-allow-origin"), "*");

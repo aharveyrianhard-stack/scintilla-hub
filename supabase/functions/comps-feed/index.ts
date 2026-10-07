@@ -8,7 +8,8 @@
 //   GET /functions/v1/comps-feed?syms=MU,SNDK,…   (up to 60 symbols, as before; no key needed, as before)
 //   → text/csv:  sym,mktcap,pe,fwd_pe,ps,pb,gross_m,net_m,de,div_yld,rev_growth,updated
 //   A figure that is not held is an EMPTY cell (v5 printed 0). Margins and growth are fractions (0.64, 2.56).
-//   `updated` is now the fundamentals row's own date, not the minute of the request.
+//   The price and the market value behind pe, fwd_pe, ps and mktcap are today's, from company_profile (v5 used the
+//   market value of the last fiscal period end). `updated` is the fundamentals row's own date, not the minute asked.
 //   ?format=json adds the basis of every figure (which twelve months, which fiscal year, which currency rate).
 //
 // THE RULES IT WILL NOT BREAK.

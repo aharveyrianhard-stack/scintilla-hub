@@ -18,6 +18,9 @@
 //   4. P/S, MARGINS and the DIVIDEND came from the newest ratios_history row, again whatever its period: a single
 //      quarter's sales under a full market value (WDC 49.6×, NVDA 49.4×) and a single quarter's margin (GOOGL 94%).
 //   5. A company reporting in another currency was divided as if it reported in dollars (TSM: P/E 1.1).
+//   6. THE MARKET VALUE was fundamentals.market_cap, which its writer (fmp-fundamentals) fills with the market value at
+//      the last FISCAL PERIOD END, "not a current value". Against today's (company_profile, refreshed daily: price ×
+//      shares) it is more than 10% off for 256 of 452 names and more than 25% off for 102 (WDC +31%, NVDA −18%).
 //
 // THE RULES NOW (each is the comps tab's own definition — deliverables/20260927/comps-single/comps.mjs — so a number
 // means the same thing on the Hub's COMPS tab, on a decision card and in the knockout):
@@ -29,8 +32,12 @@
 //     than 2% apart), the year was restated after the quarters were filed — Western Digital's FY2025 row is the
 //     drives business alone, 9.5bn, while its December 2024 quarter still carries SanDisk, so the quarters add to
 //     11.4bn. Those quarters are not like for like, so they are not summed: the fiscal-year rows are used instead.
-//   · fwd_pe      = price ÷ the consensus EPS of the nearest FISCAL YEAR ending today or later (annual rows only).
-//   · ps          = market value ÷ sales of those twelve months (both from the same statement currency).
+//   · PRICE AND MARKET VALUE ARE TODAY'S, TOGETHER: company_profile's price and market_cap (the profile is refreshed
+//     every day; its market value is its price × its shares), the rule C5b already uses for a foreign reporter. Only
+//     when a company has no profile figures does the fundamentals row stand in, and the basis says so.
+//   · pe          = that price ÷ EPS of the last twelve months (the fundamentals row's, the four newest quarters).
+//   · fwd_pe      = that price ÷ the consensus EPS of the nearest FISCAL YEAR ending today or later (annual rows only).
+//   · ps          = that market value ÷ sales of those twelve months, both in dollars.
 //   · gross_m, net_m = gross profit, net income ÷ sales, the same twelve months.
 //   · pb, de      = the newest balance on file (a balance is a moment, so the newest row of either kind is right).
 //   · div_yld     = the last fiscal year's (the only row that holds a year of dividends).
@@ -80,6 +87,7 @@ export function queries(syms, today) {
     history: `fundamentals_history?select=ticker,period,fiscal_year,fiscal_date,revenue,gross_profit,net_income&ticker=${inq}&fiscal_date=gte.${since}&order=ticker.asc,fiscal_date.desc,period.asc`,
     ratios: `ratios_history?select=ticker,period,fiscal_date,pe,pb,debt_to_equity,dividend_yield&ticker=${inq}&fiscal_date=gte.${since}&order=ticker.asc,fiscal_date.desc,period.asc`,
     estimates: `analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg&period=eq.annual&ticker=${inq}&fiscal_date=gte.${today}&order=ticker.asc,fiscal_date.asc`,
+    profiles: `company_profile?select=ticker,price,market_cap,updated_ts&ticker=${inq}&order=ticker.asc`,
     filers: `filer_currency?select=ticker,reported_currency&ticker=${inq}&order=ticker.asc`,
     fx: `fx_rates?select=pair,date,rate&date=gte.${daysBefore(today, 30)}&date=lte.${today}&order=pair.asc,date.desc`,
   };
@@ -155,26 +163,30 @@ export function rateToUsd(ccy, rates, today) {
   return best;
 }
 
-/** One symbol's figures. t: { fundamentals, history[], ratios[], estimates[], filer }. null = not held (a blank cell). */
+/** One symbol's figures. t: { fundamentals, profile, history[], ratios[], estimates[], filer }. null = not held (a blank cell). */
 export function feedRow(sym, t, today, rates = []) {
-  const f = t.fundamentals || {}, hist = t.history || [];
+  const f = t.fundamentals || {}, p = t.profile || {}, hist = t.history || [];
   /* the ratio rows newest first; on one date the fiscal-year row before the quarter's, so a tie has one answer */
   const rat = (t.ratios || []).slice().sort((a, b) => newestFirst(a, b) || (isFY(a) ? -1 : isFY(b) ? 1 : String(a.period).localeCompare(String(b.period))));
   const ccy = String((t.filer && t.filer.reported_currency) || REPORTS_IN[sym] || "USD").toUpperCase(), dollars = ccy === "USD";
   const fx = rateToUsd(ccy, rates, today), usd = fx ? fx.rate : null;   // null: a foreign figure with no rate on file
   const nz = (x) => { const n = num(x); return n == null || n === 0 ? null : n; };
-  const price = num(f.price), mcap = num(f.market_cap), epsTtm = nz(f.eps_ttm);
-  const rev = flow(hist, "revenue"), g = revenueGrowth(hist), revNow = rev.now ?? num(f.revenue_ttm);
+  /* today's price and market value, together, from the profile (always dollars: the US listing's); else the fundamentals
+     row's — its price as it is, its market value only for a dollar reporter (a foreign one is in its own currency: × rate) */
+  const today$ = num(p.price) > 0 && num(p.market_cap) > 0;
+  const price = today$ ? num(p.price) : num(f.price);
+  const mcap = today$ ? num(p.market_cap) : num(f.market_cap) == null ? null : dollars ? num(f.market_cap) : usd != null ? num(f.market_cap) * usd : null;
+  const epsTtm = nz(f.eps_ttm), eps$ = epsTtm == null ? null : dollars ? epsTtm : usd != null ? epsTtm * usd : null;
+  const rev = flow(hist, "revenue"), g = revenueGrowth(hist), revNow = rev.now ?? num(f.revenue_ttm), rev$ = revNow == null ? null : dollars ? revNow : usd != null ? revNow * usd : null;
   const fy1 = forwardYear(t.estimates, today), ratFY = rat.find(isFY) || null, ratNew = rat[0] || null;
-  let pe = null;
-  if (dollars) pe = nz(f.trailing_pe) ?? (price != null && epsTtm != null ? price / epsTtm : null) ?? (ratFY ? nz(ratFY.pe) : null);
-  else if (usd != null && price != null && epsTtm != null) pe = price / (epsTtm * usd);
+  let pe = price != null && eps$ != null ? price / eps$ : null;
+  if (pe == null && dollars) pe = nz(f.trailing_pe) ?? (ratFY ? nz(ratFY.pe) : null);
   return {
     sym,
-    mktcap: mcap == null ? null : dollars ? mcap : usd != null ? mcap * usd : null,
+    mktcap: mcap,
     pe,
     fwd_pe: price > 0 && fy1 && fy1.eps > 0 && usd != null ? price / (fy1.eps * usd) : null,
-    ps: mcap > 0 && revNow > 0 ? mcap / revNow : null,   // both in the statement currency: no rate enters
+    ps: mcap > 0 && rev$ > 0 ? mcap / rev$ : null,
     pb: dollars && ratNew ? nz(ratNew.pb) : null,
     gross_m: margin(hist, "gross_profit"),
     net_m: margin(hist, "net_income"),
@@ -182,16 +194,17 @@ export function feedRow(sym, t, today, rates = []) {
     div_yld: dollars && ratFY ? num(ratFY.dividend_yield) : null,
     rev_growth: g.value,
     updated: num(f.updated_ts) != null ? new Date(num(f.updated_ts) * 1000).toISOString() : null,
-    basis: { currency: ccy, rate: fx && !dollars ? fx : null, withheld: !dollars && usd == null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, balance: ratNew ? iso(ratNew.fiscal_date) : null },
+    basis: { currency: ccy, rate: fx && !dollars ? fx : null, withheld: !dollars && usd == null, price_from: price == null ? null : today$ ? "company_profile (today's price and market value together)" : "fundamentals row", market_value_from: mcap == null ? null : today$ ? "company_profile (today's price × shares)" : "fundamentals row (the last fiscal period end's)",
+      price_at: today$ && num(p.updated_ts) != null ? new Date(num(p.updated_ts) * 1000).toISOString().slice(0, 10) : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, balance: ratNew ? iso(ratNew.fiscal_date) : null },
   };
 }
 
 const COLS = ["mktcap", "pe", "fwd_pe", "ps", "pb", "gross_m", "net_m", "de", "div_yld", "rev_growth"];
-/** The whole answer. tables: { fundamentals[], history[], ratios[], estimates[], filers[], fx[] } as the reads returned them. */
+/** The whole answer. tables: { fundamentals[], profiles[], history[], ratios[], estimates[], filers[], fx[] } as the reads returned them. */
 export function buildFeed(syms, tables, today) {
   const by = (rows) => { const m = new Map(); for (const r of rows || []) { const k = String(r.ticker).toUpperCase(); if (!m.has(k)) m.set(k, []); m.get(k).push(r); } return m; };
-  const F = by(tables.fundamentals), H = by(tables.history), R = by(tables.ratios), E = by(tables.estimates), C = by(tables.filers);
-  const rows = syms.map((s) => feedRow(s, { fundamentals: (F.get(s) || [])[0] || null, history: H.get(s) || [], ratios: R.get(s) || [], estimates: E.get(s) || [], filer: (C.get(s) || [])[0] || null }, today, tables.fx || []));
+  const F = by(tables.fundamentals), P = by(tables.profiles), H = by(tables.history), R = by(tables.ratios), E = by(tables.estimates), C = by(tables.filers);
+  const rows = syms.map((s) => feedRow(s, { fundamentals: (F.get(s) || [])[0] || null, profile: (P.get(s) || [])[0] || null, history: H.get(s) || [], ratios: R.get(s) || [], estimates: E.get(s) || [], filer: (C.get(s) || [])[0] || null }, today, tables.fx || []));
   const csv = [HEAD, ...rows.map((r) => [r.sym, ...COLS.map((k) => cell(r[k])), r.updated || ""].join(","))].join("\n");
   return { csv, rows };
 }
@@ -206,6 +219,6 @@ export async function readAll(get, path, { page = PAGE, max = 200 } = {}) {
 /** Everything one request needs, read to the end. A table that does not exist (filer_currency, fx_rates) reads as empty. */
 export async function readTables(get, syms, today) {
   const q = queries(syms, today), soft = (p) => readAll(get, p).catch(() => []);
-  const [fundamentals, history, ratios, estimates, filers, fx] = await Promise.all([readAll(get, q.fundamentals), readAll(get, q.history), readAll(get, q.ratios), readAll(get, q.estimates), soft(q.filers), soft(q.fx)]);
-  return { fundamentals, history, ratios, estimates, filers, fx };
+  const [fundamentals, profiles, history, ratios, estimates, filers, fx] = await Promise.all([readAll(get, q.fundamentals), readAll(get, q.profiles), readAll(get, q.history), readAll(get, q.ratios), readAll(get, q.estimates), soft(q.filers), soft(q.fx)]);
+  return { fundamentals, profiles, history, ratios, estimates, filers, fx };
 }
