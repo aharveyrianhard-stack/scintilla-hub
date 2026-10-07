@@ -1,0 +1,516 @@
+{
+ "what": "TR2 migration dry run. Every scenario ran in PGlite (Postgres in memory, throw-away). The live database was not read or written.",
+ "engine": "PostgreSQL 18.3 (PGlite 0.5.8) on wasm32-unknown-emscripten, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74 (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit",
+ "databases_opened": 13,
+ "loaded_at_note": "after TR1's load the harness stamps loaded_at with a different fixed time on every row, so fingerprints from separate databases can be compared and a row that came back with another row's loaded_at would show",
+ "fingerprint": "md5 over every TR1 column of every row, source and loaded_at included, for cohort_tree and cohort_tree_members",
+ "fingerprint_note": "the 19 nodes and 10 member rows TR2 itself writes take the clock for loaded_at, so the fingerprint of an APPLIED tree differs from one database to the next; every equality claimed here is between states TR2 has left (rolled back) or inside one database",
+ "how_files_are_run": "each file is sent whole, as the coordinator's one query call would send it; after a failure the harness issues ROLLBACK, which is what closing the connection does. TR1's ROLLBACK file has no begin/commit of its own, so it is also run one statement at a time (the worst case)",
+ "sql_sha256": {
+  "forward": "d02e646f4c30dd3700989e0966a4e17a10a7e0ee590b69ca46ba0391b7e9ab04",
+  "rollback": "b09e840d8ecdacc96a3b9775b5beb1fd32bc2cad17410437d69de0ef5433a651",
+  "undoAfterAdmission": "14452c3dc3f31435ec3a9bc9974232d5d60dcafe8b78378dfad3b29ba4e98518",
+  "tr1_load": "fe24935b2d9ad5ef0654bb7e357b71e29fa85809e9dccfdd30cc344ac9f4af6f",
+  "tr1_rollback": "e04e0d920d74c6ca6cf5e2b461748fc8aa3aa69dcf3e7ea1b6e20ad387f176a9",
+  "tr1_afterAdmission": "537c5424b540d96fddfc4dbd8e0f70fd3cedce8b2fa836046c969f088ff90844"
+ },
+ "reference": {
+  "tr1_load_alone": {
+   "nodes": 91,
+   "members": 771,
+   "pending": 10,
+   "fp_tree": "f72a8c89b29308bd179cee01c313f237",
+   "fp_members": "19c59f04a579fc95698ac5b9fa4e8d7b",
+   "spines": {
+    "ASIA_PACIFIC": "EWJ → EWT",
+    "CANADA": "EFA → EWC",
+    "IDX_WORLD": "VT → ACWI",
+    "LATAM": "EEM → EWZ"
+   }
+  },
+  "tr1_load_then_after_admission_alone": {
+   "nodes": 91,
+   "members": 771,
+   "pending": 0,
+   "fp_tree": "9f0dff2c1e5a79d3cb0ecac76e468623",
+   "fp_members": "ff0aebf13d8025b622e594b274ce5292",
+   "spines": {
+    "ASIA_PACIFIC": "EWT → null",
+    "CANADA": "EWC → null",
+    "IDX_WORLD": "ACWI → null",
+    "LATAM": "EWZ → null"
+   }
+  }
+ },
+ "all_ok": true,
+ "scenarios": {
+  "A": {
+   "what": "TR1 load → forward → forward again → rollback → rollback again → forward once more → rollback",
+   "ok": true,
+   "before": {
+    "nodes": 91,
+    "members": 771,
+    "pending": 10,
+    "fp_tree": "f72a8c89b29308bd179cee01c313f237",
+    "fp_members": "19c59f04a579fc95698ac5b9fa4e8d7b",
+    "spines": {
+     "ASIA_PACIFIC": "EWJ → EWT",
+     "CANADA": "EFA → EWC",
+     "IDX_WORLD": "VT → ACWI",
+     "LATAM": "EEM → EWZ"
+    }
+   },
+   "forward": {
+    "ok": true
+   },
+   "after_forward": {
+    "nodes": 105,
+    "members": 781,
+    "pending": 10,
+    "links": 357,
+    "candidates": 75,
+    "stash": 5,
+    "fp_tree": "619fc85c46cc691bc34d292e18de8715",
+    "fp_members": "e9e2c65c33cf86acc60cdcf5178e3c0c",
+    "fp_tr2": "ae82957ac5cc4d52ea4a206fb1d352d9",
+    "spines": {
+     "ASIA_PACIFIC": "EWJ → EWT",
+     "CANADA": "EFA → EWC",
+     "IDX_WORLD": "VT → ACWI",
+     "LATAM": "EEM → EWZ"
+    }
+   },
+   "checks": {
+    "sector_nodes_with_four_funds": 11,
+    "nodes_written_by_tr2": 19,
+    "member_rows_written_by_tr2": 10,
+    "moved_rows_keep_tr1_source_and_loaded_at": 60,
+    "guard_keys": [
+     "cohort_tree_fund_links_cohort_fkey_tr2_roll_back_tr2_first",
+     "cohort_tree_fund_links_fund_node_fkey_tr2_roll_back_tr2_first",
+     "cohort_tree_fund_links_member_fkey_tr2_roll_back_tr2_first"
+    ],
+    "guard_keys_cascade_or_deferrable": 0,
+    "row_level_security_on": [
+     "cohort_tree",
+     "cohort_tree_candidates",
+     "cohort_tree_fund_links",
+     "cohort_tree_members",
+     "cohort_tree_tr2_removed"
+    ],
+    "policies": [
+     "cohort_tree_candidates_read",
+     "cohort_tree_fund_links_read",
+     "cohort_tree_members_read",
+     "cohort_tree_read"
+    ],
+    "anon_can_read_stash": false,
+    "hub_pick": {
+     "off": 19,
+     "on": 24,
+     "undecided": 62
+    },
+    "layers": {
+     "0": 1,
+     "1": 9,
+     "2": 11,
+     "3": 15,
+     "4": 69
+    },
+    "frontier_cohorts": {
+     "AUTONOMY_EVTOL": [
+      "AEROSPACE_DEFENCE",
+      null
+     ],
+     "DEFENCE_PRIMES": [
+      "AEROSPACE_DEFENCE",
+      null
+     ],
+     "DEFENCE_TECH": [
+      "AEROSPACE_DEFENCE",
+      "SOFTWARE_INTERNET"
+     ],
+     "QUANTUM": [
+      "TECH",
+      null
+     ],
+     "SPACE": [
+      "AEROSPACE_DEFENCE",
+      null
+     ]
+    }
+   },
+   "forward_again": {
+    "ok": true,
+    "changed_anything": false
+   },
+   "rollback": {
+    "ok": true
+   },
+   "after_rollback": {
+    "nodes": 91,
+    "members": 771,
+    "pending": 10,
+    "fp_tree": "f72a8c89b29308bd179cee01c313f237",
+    "fp_members": "19c59f04a579fc95698ac5b9fa4e8d7b",
+    "spines": {
+     "ASIA_PACIFIC": "EWJ → EWT",
+     "CANADA": "EFA → EWC",
+     "IDX_WORLD": "VT → ACWI",
+     "LATAM": "EEM → EWZ"
+    }
+   },
+   "fingerprint_equals_before_forward": true,
+   "tables_after_rollback": [
+    "cohort_tree",
+    "cohort_tree_members",
+    "ticker_cohorts",
+    "tickers"
+   ],
+   "tree_columns_after_rollback": [
+    "cohort",
+    "label",
+    "kind",
+    "parent_1",
+    "parent_2",
+    "spine",
+    "spine_fund",
+    "spine_fund_next",
+    "source",
+    "loaded_at"
+   ],
+   "rollback_again": {
+    "ok": true,
+    "changed_anything": false
+   },
+   "forward_once_more": {
+    "ok": true,
+    "nodes": 105,
+    "members": 781
+   },
+   "rollback_once_more": {
+    "ok": true,
+    "fingerprint_equals_before_forward": true
+   }
+  },
+  "B": {
+   "what": "TR1 load → forward → TR1 AFTER_ADMISSION → rollback; compared with (TR1 load + AFTER_ADMISSION) run alone in another database",
+   "ok": true,
+   "forward": {
+    "ok": true
+   },
+   "after_admission": {
+    "ok": true
+   },
+   "middle": {
+    "nodes": 105,
+    "members": 781,
+    "pending": 0,
+    "links": 357,
+    "candidates": 75,
+    "stash": 5,
+    "fp_tree": "d57106bdf4b122765c9d1d317147e1fd",
+    "fp_members": "d0f09e92dc62517d5d189a4e7baf65e4",
+    "fp_tr2": "b39da8c0c1ee43e1892417da6b63c29d",
+    "spines": {
+     "ASIA_PACIFIC": "EWT → null",
+     "CANADA": "EWC → null",
+     "IDX_WORLD": "ACWI → null",
+     "LATAM": "EWZ → null"
+    }
+   },
+   "rollback": {
+    "ok": true
+   },
+   "after_rollback": {
+    "nodes": 91,
+    "members": 771,
+    "pending": 0,
+    "fp_tree": "9f0dff2c1e5a79d3cb0ecac76e468623",
+    "fp_members": "ff0aebf13d8025b622e594b274ce5292",
+    "spines": {
+     "ASIA_PACIFIC": "EWT → null",
+     "CANADA": "EWC → null",
+     "IDX_WORLD": "ACWI → null",
+     "LATAM": "EWZ → null"
+    }
+   },
+   "reference_run_alone": {
+    "nodes": 91,
+    "members": 771,
+    "pending": 0,
+    "fp_tree": "9f0dff2c1e5a79d3cb0ecac76e468623",
+    "fp_members": "ff0aebf13d8025b622e594b274ce5292",
+    "spines": {
+     "ASIA_PACIFIC": "EWT → null",
+     "CANADA": "EWC → null",
+     "IDX_WORLD": "ACWI → null",
+     "LATAM": "EWZ → null"
+    }
+   },
+   "fingerprint_equals_reference": true
+  },
+  "C": {
+   "what": "TR1 load → TR1 AFTER_ADMISSION → forward → rollback",
+   "ok": true,
+   "after_admission": {
+    "ok": true
+   },
+   "before_forward": {
+    "nodes": 91,
+    "members": 771,
+    "pending": 0,
+    "fp_tree": "9f0dff2c1e5a79d3cb0ecac76e468623",
+    "fp_members": "ff0aebf13d8025b622e594b274ce5292",
+    "spines": {
+     "ASIA_PACIFIC": "EWT → null",
+     "CANADA": "EWC → null",
+     "IDX_WORLD": "ACWI → null",
+     "LATAM": "EWZ → null"
+    }
+   },
+   "forward": {
+    "ok": true
+   },
+   "after_forward": {
+    "nodes": 105,
+    "members": 781,
+    "pending": 0,
+    "links": 357,
+    "candidates": 75,
+    "stash": 5,
+    "fp_tree": "c1eb7d2195c96cb0cebb0656a81a92a0",
+    "fp_members": "56891b5092f5327e1b10af0fe18d4e22",
+    "fp_tr2": "37a3f72cb024911902578d18273751f8",
+    "spines": {
+     "ASIA_PACIFIC": "EWT → null",
+     "CANADA": "EWC → null",
+     "IDX_WORLD": "ACWI → null",
+     "LATAM": "EWZ → null"
+    }
+   },
+   "rollback": {
+    "ok": true
+   },
+   "after_rollback": {
+    "nodes": 91,
+    "members": 771,
+    "pending": 0,
+    "fp_tree": "9f0dff2c1e5a79d3cb0ecac76e468623",
+    "fp_members": "ff0aebf13d8025b622e594b274ce5292",
+    "spines": {
+     "ASIA_PACIFIC": "EWT → null",
+     "CANADA": "EWC → null",
+     "IDX_WORLD": "ACWI → null",
+     "LATAM": "EWZ → null"
+    }
+   },
+   "fingerprint_equals_before_forward": true
+  },
+  "D": {
+   "what": "drift after TR1 load → forward must refuse and leave rows and schema as they were",
+   "ok": true,
+   "cases": [
+    {
+     "what": "INDUSTRIAL label edited (a column the revision does not change, on a row it does)",
+     "refused": true,
+     "error": "TR2 refused, nothing changed: a row the revision touches is not as TR1 left it — INDUSTRIAL.label is 'INDUSTRIALS (edited)' (TR1 loaded 'INDUSTRIAL')",
+     "untouched": true,
+     "tables": [
+      "cohort_tree",
+      "cohort_tree_members",
+      "ticker_cohorts",
+      "tickers"
+     ],
+     "tree_columns": [
+      "cohort",
+      "label",
+      "kind",
+      "parent_1",
+      "parent_2",
+      "spine",
+      "spine_fund",
+      "spine_fund_next",
+      "source",
+      "loaded_at"
+     ]
+    },
+    {
+     "what": "AI parent_1 edited (a column the revision is about to change)",
+     "refused": true,
+     "error": "TR2 refused, nothing changed: a row the revision touches is not as TR1 left it — AI.parent_1 is 'TECH' (TR1 loaded 'MARKET')",
+     "untouched": true,
+     "tables": [
+      "cohort_tree",
+      "cohort_tree_members",
+      "ticker_cohorts",
+      "tickers"
+     ],
+     "tree_columns": [
+      "cohort",
+      "label",
+      "kind",
+      "parent_1",
+      "parent_2",
+      "spine",
+      "spine_fund",
+      "spine_fund_next",
+      "source",
+      "loaded_at"
+     ]
+    },
+    {
+     "what": "one member row deleted",
+     "refused": true,
+     "error": "TR2 refused, nothing changed: expected TR1's 91 nodes and 771 member rows, found 91 and 770",
+     "untouched": true,
+     "tables": [
+      "cohort_tree",
+      "cohort_tree_members",
+      "ticker_cohorts",
+      "tickers"
+     ],
+     "tree_columns": [
+      "cohort",
+      "label",
+      "kind",
+      "parent_1",
+      "parent_2",
+      "spine",
+      "spine_fund",
+      "spine_fund_next",
+      "source",
+      "loaded_at"
+     ]
+    }
+   ]
+  },
+  "E": {
+   "what": "the neighbours, with TR2 applied",
+   "ok": true,
+   "tr1_load_after_tr2": {
+    "what": "TR1's LOAD file run with TR2 applied",
+    "failed": true,
+    "error": "update or delete on table \"cohort_tree_members\" violates foreign key constraint \"cohort_tree_fund_links_member_fkey_tr2_roll_back_tr2_first\" on table \"cohort_tree_fund_links\"",
+    "changed_anything": false,
+    "after": {
+     "nodes": 105,
+     "members": 781,
+     "pending": 10,
+     "links": 357,
+     "candidates": 75,
+     "stash": 5,
+     "fp_tree": "53b0c031cc15ef36f4aedd2bcc43c5c7",
+     "fp_members": "27b7b561b077c086a2920ceb5de7eccf",
+     "fp_tr2": "f6f63a3adaff9b3e23924bdfaa87d533",
+     "spines": {
+      "ASIA_PACIFIC": "EWJ → EWT",
+      "CANADA": "EFA → EWC",
+      "IDX_WORLD": "VT → ACWI",
+      "LATAM": "EEM → EWZ"
+     }
+    }
+   },
+   "tr1_rollback_after_tr2_statement_by_statement": {
+    "what": "TR1's ROLLBACK file run with TR2 applied, one statement at a time",
+    "steps": [
+     {
+      "statement": "drop policy if exists cohort_tree_members_read on public.cohort_tree_members",
+      "ok": true,
+      "error": null
+     },
+     {
+      "statement": "drop policy if exists cohort_tree_read on public.cohort_tree",
+      "ok": true,
+      "error": null
+     },
+     {
+      "statement": "drop table if exists public.cohort_tree_members",
+      "ok": false,
+      "error": "cannot drop table cohort_tree_members because other objects depend on it"
+     },
+     {
+      "statement": "drop table if exists public.cohort_tree",
+      "ok": false,
+      "error": "cannot drop table cohort_tree because other objects depend on it"
+     }
+    ],
+    "tables_lost": [],
+    "policies_lost": [
+     "cohort_tree_members_read",
+     "cohort_tree_read"
+    ],
+    "rows_unchanged": true,
+    "repair": {
+     "what": "re-run TR1's schema file (20261006_tr1_cohort_tree.sql)",
+     "ok": true,
+     "policies_back": true,
+     "rows_unchanged": true
+    }
+   },
+   "tr1_rollback_after_tr2_one_batch": {
+    "what": "TR1's ROLLBACK file run with TR2 applied, sent as one batch",
+    "failed": true,
+    "error": "cannot drop table cohort_tree_members because other objects depend on it",
+    "tables_lost": [],
+    "policies_lost": [],
+    "changed_anything": false
+   },
+   "right_order": {
+    "what": "the right order: TR2's ROLLBACK, then TR1's ROLLBACK",
+    "tr2_rollback": {
+     "ok": true
+    },
+    "tr1_rollback": {
+     "ok": true
+    },
+    "tables_left": [
+     "ticker_cohorts",
+     "tickers"
+    ]
+   },
+   "undo_after_admission": {
+    "what": "TR1 load → forward → TR1 AFTER_ADMISSION → UNDO_TR1_AFTER_ADMISSION (twice) → TR2 rollback",
+    "starts_from_scenario_B_middle_state": true,
+    "pending_before_undo": 0,
+    "undo": {
+     "ok": true
+    },
+    "pending_after_undo": 10,
+    "spines_after_undo": {
+     "ASIA_PACIFIC": "EWJ → EWT",
+     "CANADA": "EFA → EWC",
+     "IDX_WORLD": "VT → ACWI",
+     "LATAM": "EEM → EWZ"
+    },
+    "spines_as_tr1_loaded": true,
+    "equals_tr2_before_admission": true,
+    "undo_again": {
+     "ok": true,
+     "changed_anything": false
+    },
+    "then_tr2_rollback": {
+     "ok": true
+    },
+    "equals_tr1_load_alone": true
+   },
+   "undo_after_admission_without_tr2": {
+    "what": "TR1 load → TR1 AFTER_ADMISSION → UNDO_TR1_AFTER_ADMISSION, TR2 not applied",
+    "undo": {
+     "ok": true
+    },
+    "pending": 10,
+    "equals_tr1_load_alone": true
+   }
+  },
+  "F": {
+   "what": "the stand-in ticker_cohorts and tickers tables, fingerprinted at every state read above",
+   "ok": true,
+   "distinct_fingerprints_seen": 1,
+   "fingerprint": {
+    "ticker_cohorts": "6e03e2c830aa6e76f27c9a6e7db4124e",
+    "tickers": "0bb29f0d82edd0184e6f925c1a5104bc"
+   }
+  }
+ }
+}
