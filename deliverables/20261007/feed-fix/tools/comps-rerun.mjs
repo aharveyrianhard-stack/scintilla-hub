@@ -38,10 +38,10 @@ inp.segments = JSON.parse(readFileSync(WT + "/deliverables/20261003/comps-c5/seg
 console.log("inputs ready · profiles", Object.keys(inp.profiles).length, "· reference facts", refFile ? path.basename(refFile) + " (" + Object.keys(REF.peers).join(" ") + (REF.missing.length ? "; missing " + REF.missing.join(" ") : "") + ")" : "none on file", "· closes fetched", RAW.fetched_utc, "· today", TODAY);
 const r2 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100), r1 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
 const SNAPS = new Map(), FIXTURES = (process.env.FD1_FIXTURES || "LLY,VST,MU").split(",");   /* the offline sets of tests/fd1-growth-forward.test.mjs; FD1_FIXTURES=… names others */
-async function snapOf(T, set) {
-  const served = { ...set, kept: set.kept.filter((r) => !r.reference || r.has_figures) }, key = T + "|" + served.kept.map((r) => r.ticker).join(",");
+async function snapOf(T, set, mv = false) {
+  const served = { ...set, kept: set.kept.filter((r) => !r.reference || r.has_figures) }, key = (mv ? "mv|" : "") + T + "|" + served.kept.map((r) => r.ticker).join(",");
   if (SNAPS.has(key)) return SNAPS.get(key);
-  const ctx = await readSet(T, served, { today: TODAY, pg, quotes, fxStandin }), snap = snapshotFromCohort(ctx, T);
+  const ctx = await readSet(T, served, { today: TODAY, pg, quotes, fxStandin, marketValueFrom: mv ? "profile" : null }), snap = snapshotFromCohort(ctx, T);
   /* the estimate years from the one just reported (400 days back) on: the trailing and forecast rules read only the rows
      from today on, as before; growthFromLastYear reads the newest row before today */
   const since = new Date(Date.parse(TODAY + "T00:00:00Z") - 400 * 86400e3).toISOString().slice(0, 10);
@@ -49,10 +49,10 @@ async function snapOf(T, set) {
   const estimates = Object.fromEntries(ctx.inputs.map((i) => [i.ticker, { eps_ttm: i.eps_ttm ?? null, est: estRows.filter((e) => e.ticker === i.ticker).map((e) => ({ fiscal_date: e.fiscal_date, eps: e.est_eps_avg })) }]));
   const v = { snap, estimates, ctx }; SNAPS.set(key, v); return v;
 }
-async function price(T, set, label, fx) {
+async function price(T, set, label, fx, mv = false) {
   const pricedPeers = set.kept.filter((r) => !r.reference || r.has_figures);
   if (!pricedPeers.length) return { label, ok: false, n: 0, reason: "no peers" };
-  const { snap, estimates } = await snapOf(T, set), C = conclusion6(snap, [], estimates, TODAY, "C", { set, fx });
+  const { snap, estimates } = await snapOf(T, set, mv), C = conclusion6(snap, [], estimates, TODAY, "C", { set, fx });
   const c6 = C.c6, band = (x) => (x ? { lo: r2(x.lo), centre: r2(x.mid), hi: r2(x.hi) } : null), up = (x) => (x && snap.price > 0 ? r1((x.mid / snap.price - 1) * 100) : null);
   const wayC = (C.ways || []).find((w) => w.way === "C") || null;
   const mw = C.measureWeights || { weights: {}, parts: {} }, keys = C.rows.filter((r) => isValuation(r.key)).map((r) => r.key), peg = C.rows.find((r) => r.key === "peg");
@@ -72,20 +72,22 @@ async function price(T, set, label, fx) {
     multiples: Object.fromEntries([T, ...pricedPeers.map((r) => r.ticker)].map((t) => [t, Object.fromEntries(keys.map((k) => { const r = C.rows.find((x) => x.key === k); return [k, r2(t === T ? (r.own && r.own.multiple) : (r.values && r.values[t] ? r.values[t].multiple : null))]; }))])),
     growth: Object.fromEntries([T, ...pricedPeers.map((r) => r.ticker)].map((t) => [t, gOf(t)])),
     fx: Object.fromEntries([T, ...pricedPeers.map((r) => r.ticker)].map((t) => { const f = t === T ? snap.fx : snap.fx_peers && snap.fx_peers[t]; return [t, f && f.currency && f.currency !== "USD" ? { currency: f.currency, converted: !!f.converted, withheld: !!f.withheld, why: f.why || null } : null]; }).filter(([, v]) => v)),
-    eps_fy1: r2(snap.eps_fy1), fy1_date: snap.fy1_date || null, eps_fy2: r2(snap.eps_fy2), fy2_date: snap.fy2_date || null, eps_ttm: r2(snap.eps_ttm) };
+    shares: snap.shares, mcap: snap.mcap, eps_fy1: r2(snap.eps_fy1), fy1_date: snap.fy1_date || null, eps_fy2: r2(snap.eps_fy2), fy2_date: snap.fy2_date || null, eps_ttm: r2(snap.eps_ttm) };
 }
 const out = { run_utc: new Date().toISOString(), today: TODAY, price_is: "the 6 Oct 2026 regular-session close (chart API /quotes, captured by CP1 " + RAW.fetched_utc + ")", reference: { file: refFile ? path.basename(refFile) : null, taken: REF.taken, carried: Object.keys(REF.peers), missing: REF.missing }, names: {} };
 for (const T of syms) {
   try {
     const set0 = buildSet(T, inp, { fx: CP1_LINES_OFF }), set1 = buildSet(T, inp, { fx: CP1_LINES_ON });
     const before = await price(T, set0, "as the comps system stands (C6b)", CP1_NONE), cp1 = await price(T, set1, "CP1's twelve switches on", CP1_ALL), fd1 = await price(T, set1, "the same, growth from one forecast year to the next", FD1_ALL), last = await price(T, set1, "the same, growth from the year just reported (analysts' basis)", FD1_ALL_LAST);
+    /* the same two readings on TODAY'S market value for every company (cohort.mjs marketValueFrom "profile") */
+    const before_mv = await price(T, set0, "as it stands, on today's market values", CP1_NONE, true), cp1_mv = await price(T, set1, "CP1's twelve switches on, on today's market values", CP1_ALL, true);
     if (FIXTURES.includes(T) && !FACTS) { const a1 = await snapOf(T, set1); mkdirSync("fixtures", { recursive: true });
       const slim = (set) => ({ ...set, dropped: undefined, members: undefined, named_not_in: undefined, kept: set.kept.map((r) => ({ ticker: r.ticker, exact: r.exact, sim: r.sim, score: r.score, ratio: r.ratio, same_business: r.same_business, added: r.added, reference: r.reference, has_figures: r.has_figures, seat: r.seat })) });
       writeFileSync(`fixtures/set-${T}-fd1-${TODAY}.json`, JSON.stringify({ today: TODAY, ticker: T, set_after: slim(set1), after: { snap: a1.snap, estimates: a1.estimates }, expect: { cp1_upside_pct: cp1.upside_pct, fd1_upside_pct: fd1.upside_pct, last_upside_pct: last.upside_pct, cp1_credit: cp1.growth_credit, fd1_credit: fd1.growth_credit, last_credit: last.growth_credit } })); }
     const peer = (r) => ({ ticker: r.ticker, name: r.name || (inp.profiles[r.ticker] || {}).name || (REFERENCE_PEERS[r.ticker] || {}).name || null, same_business: r.same_business ?? (r.exact >= SIM_MIN), added: !!r.added, reference: !!r.reference, has_figures: r.reference ? !!r.has_figures : true });
-    out.names[T] = { ok: true, name: (inp.profiles[T] || {}).name || null, set_before: set0.kept.map((r) => r.ticker), set_after: set1.kept.map(peer), reference: set1.reference || [], votes: Object.fromEntries(set1.kept.filter((r) => r.reference).map((r) => [r.ticker, votesFor(T, r.ticker, inp, { also: (REFERENCE_PEERS[r.ticker] || {}).also || [] })])), before, cp1, fd1, last };
+    out.names[T] = { ok: true, name: (inp.profiles[T] || {}).name || null, set_before: set0.kept.map((r) => r.ticker), set_after: set1.kept.map(peer), reference: set1.reference || [], votes: Object.fromEntries(set1.kept.filter((r) => r.reference).map((r) => [r.ticker, votesFor(T, r.ticker, inp, { also: (REFERENCE_PEERS[r.ticker] || {}).also || [] })])), before, cp1, fd1, last, before_mv, cp1_mv, market_value: { stored_shares: before.shares, todays_shares: before_mv.shares, stored_over_today: before.shares && before_mv.shares ? r2(before.shares / before_mv.shares) : null } };
     const f = (x) => (x && x.band ? `${x.band.centre} (${x.upside_pct >= 0 ? "+" : ""}${x.upside_pct}%)${x.priced_on === "business" ? "[biz " + (x.business_peers || []).join(" ") + "]" : ""}` : x && x.no_peer_set ? "NO PEER SET" : "—");
-    console.log(`${T.padEnd(5)} $${before.price} · C6b ${f(before)} · CP1 ${f(cp1)} · FD1 ${f(fd1)} · LAST ${f(last)} (${last.growth_credit ? last.growth_credit.own + " vs " + last.growth_credit.peers + " ×" + last.growth_credit.credit : "—"}) · credit CP1 ${cp1.growth_credit ? cp1.growth_credit.own + " vs " + cp1.growth_credit.peers + " ×" + cp1.growth_credit.credit : "—"} → FD1 ${fd1.growth_credit ? fd1.growth_credit.own + " vs " + fd1.growth_credit.peers + " ×" + fd1.growth_credit.credit : "—"}${(set1.reference || []).length ? " · ref " + set1.kept.filter((r) => r.reference).map((r) => r.ticker + (r.has_figures ? "✓" : "∅")).join(" ") : ""}`);
+    console.log(`${T.padEnd(5)} $${before.price} · C6b ${f(before)} · CP1 ${f(cp1)} · on today's market values: C6b ${f(before_mv)} CP1 ${f(cp1_mv)} (shares stored ÷ today's ${out.names[T].market_value.stored_over_today}) · FD1 ${f(fd1)} · LAST ${f(last)} (${last.growth_credit ? last.growth_credit.own + " vs " + last.growth_credit.peers + " ×" + last.growth_credit.credit : "—"}) · credit CP1 ${cp1.growth_credit ? cp1.growth_credit.own + " vs " + cp1.growth_credit.peers + " ×" + cp1.growth_credit.credit : "—"} → FD1 ${fd1.growth_credit ? fd1.growth_credit.own + " vs " + fd1.growth_credit.peers + " ×" + fd1.growth_credit.credit : "—"}${(set1.reference || []).length ? " · ref " + set1.kept.filter((r) => r.reference).map((r) => r.ticker + (r.has_figures ? "✓" : "∅")).join(" ") : ""}`);
   } catch (e) { out.names[T] = { ok: false, error: String((e && e.stack) || e).slice(0, 900) }; console.log(`${T.padEnd(5)} FAILED ${out.names[T].error}`); }
   writeFileSync(OUT, JSON.stringify(out, null, 1));
 }

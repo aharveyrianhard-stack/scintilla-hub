@@ -25,7 +25,16 @@ export function cohortChoice(ticker, tags, asked) { const cohort = cohortFor(tic
 
 /** Read one cohort. pg: PostgREST GET; quotes: tickers → {quotes}; fxStandin: { CCY: [[date, rate]] } with a `source` word
     (used only for a currency fx_rates does not carry, and named as such on the row). */
-export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes, livePrices = {}, fxStandin = null, membersAsked = null, labelAsked = null, reportedCcy = null }) {
+/* FD1 (7 Oct) · marketValueFrom: "profile" — TODAY'S MARKET VALUE FOR EVERY COMPANY, a switch that is off by default.
+   fundamentals.market_cap is FMP's key-metrics market value at the latest FISCAL PERIOD END (its writer says so:
+   supabase/functions/fmp-fundamentals), while fundamentals.price is a quote taken when the row was written. This file
+   and comps.mjs read the two as "measured on one day" and take shares = market value ÷ price: the share count, and with
+   it the market value, EV/sales, EV/EBITDA and P/S, are off by however far the price has moved since the period ended
+   (measured 7 Oct on the 26 card names: Western Digital +25%, Nebius +35%, Coherent +33%, Lam +26%, Nvidia −15%,
+   Micron −9.5%). C5b already takes a FOREIGN reporter's market value and price together from company_profile, which is
+   refreshed every day (its market value is its price × its shares). With the switch on, a dollar reporter is read the
+   same way. Off, this file answers exactly as before. */
+export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes, livePrices = {}, fxStandin = null, membersAsked = null, labelAsked = null, reportedCcy = null, marketValueFrom = null }) {
   const TICKER = String(ticker).toUpperCase(), TODAY = today;
   const [own, home] = await Promise.all([pg(`ticker_cohorts?select=ticker,cohort&ticker=eq.${encodeURIComponent(TICKER)}`), pg(`tickers?select=cohort&ticker=eq.${encodeURIComponent(TICKER)}`).catch(() => [])]);
   /* the peer set is the company's HOME cohort on our board (tickers.cohort, the one the board files it under), unless asked
@@ -104,8 +113,11 @@ export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes
         const mv = usdMarketValue(out, ci.currency); out = mv.src; note.market_value = mv.from;
       }
     }
+    /* FD1 marketValueFrom "profile": a dollar reporter's market value and price, together, from the profile (today's) */
+    let mvFrom = null;
+    if (marketValueFrom === "profile" && ci.currency === "USD" && num(p.market_cap) > 0 && num(p.price) > 0) { out = { ...out, fundamentals: { ...out.fundamentals, market_cap: Number(p.market_cap), price: Number(p.price), _mcap_from_profile: true } }; mvFrom = "company_profile (today's market value and price together)"; }
     fx[t] = note; src = out;
-    srcs.set(t, src);
+    srcs.set(t, src); if (mvFrom) note.market_value = mvFrom;
     const g = first(gg, t);
     meta[t] = { price_from: q ? (q.live ? "the Hub's live quote" : "chart API /quotes") : (num(f.price) != null ? "fundamentals row (dated)" : null), fund_date: tsToISO(f.updated_ts), geiger: g ? num(g.composite) : null, geiger_at: g ? tsToISO(g.updated_ts) : null, sector: p.sector || null, industry: p.industry || null };
   }
@@ -114,7 +126,7 @@ export async function readCohort({ ticker, cohortAsked = null, today, pg, quotes
   const inputs = T.map((t) => buildInputs(srcs.get(t), TODAY)).filter((i) => i && i.ticker);
   const names = Object.fromEntries(T.map((t) => [t, ((first(prof, t) || {}).name) || t]));
   return { taken: new Date().toISOString(), today: TODAY, ticker: TICKER, cohort, cohort_options: options, home_cohort: homeCohort, members: T, inputs, names, meta, fx,
-    fx_tables: { filer_currency: filers != null, fx_rates: fxRows != null, rate_days: (fxRows || []).length },
+    fx_tables: { filer_currency: filers != null, fx_rates: fxRows != null, rate_days: (fxRows || []).length }, market_value_from: marketValueFrom || "fundamentals row (the last fiscal period end's market value over a later price)",
     excluded: inputs.filter((i) => i.is_etf).map((i) => ({ ticker: i.ticker, why: "a fund, not a company" })),
     quotes_error: quotesRes && quotesRes.error ? quotesRes.error : null, peer_source: cohort === homeCohort ? `${cohort}, the company's home cohort on our board` : `the ${cohort} cohort on our board${homeCohort ? " (its home cohort is " + homeCohort + ")" : ""}` };
 }
