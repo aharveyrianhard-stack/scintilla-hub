@@ -26,6 +26,7 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 <div><b>the slider is in the economic room</b><span>the earnings slider’s own frame: one bar a day, a TODAY line, DAYS / WEEKS, click a bar to open it.</span></div>
 <div><b>the ladder is now a picture</b><span>today against a week, a month and a year ago, with 2s10s (+0.48) and 3m10y (+1.06) and each spread’s own year.</span></div>
 <div><b>18 indicators, since June 2024</b><span>actual and consensus were already stored for every one of them; each now has a strip of its surprises.</span></div>
+<div><b>FOMC minutes: where to find them</b><span>a card at the top of the rail: what the calendar holds (the item only), the Fed’s own page as a link from 2:00 PM, and our feed’s first two headlines, 2:05 and 2:06.</span></div>
 <div><b>71 names, two factors each</b><span>calls and puts each against the name’s own usual day. At 1:30 PM today 14 of them stood at 1.5× their usual ratio.</span></div>
 </div>
 
@@ -71,6 +72,44 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 </div>
 </div>
 <p class="small">History kept: 712 auctions, 9 Jan 2018 to 8 Oct 2026, in one new table. The first fill is ready as one file; nothing has been loaded.</p>
+
+<h2>2b · AUCTIONS, TO LEARN FROM</h2>
+<p>“We should implement some kind of area where we can see the historical evolution of these metrics, for me to learn a little bit more about them.” (2:15 PM, through the coordinator)</p>
+<div class="pair">
+<div class="narrow">{fig("after-economic-1680-auctions.jpg", "The whole card. The lower half is the history: one term at a time (the chips), its last thirty auctions, oldest on the left, and one plain line under each number.")}</div>
+<div>
+<p><b>What the history says about today’s 10-year</b>, against its own thirty auctions since May 2024:</p>
+<table>
+<tr><th>NUMBER</th><th>THE ONE LINE ON THE CARD</th><th class="r">TODAY</th><th>WHERE THAT SITS IN THIRTY</th></tr>
+<tr><td>Stopped at</td><td>The yield it took to sell it all. It follows the market: read the four below with it.</td><td class="r">5.300%</td><td>the highest yield of the thirty (they ran 3.65 to 5.30)</td></tr>
+<tr><td>Bid-to-cover</td><td>Dollars bid for every dollar sold. Higher is more demand.</td><td class="r up">2.77×</td><td>the highest of the thirty (2.32 to 2.77)</td></tr>
+<tr><td>Indirect</td><td>Foreign buyers and big funds, bidding through a dealer. Higher is stronger.</td><td class="r up">80.3%</td><td>fourth highest (61 to 88)</td></tr>
+<tr><td>Direct</td><td>Domestic funds bidding for themselves.</td><td class="r">17.1%</td><td>middle of the pack (1 to 25)</td></tr>
+<tr><td>Dealers</td><td>What the banks were left holding. Lower is the stronger auction.</td><td class="r up">2.5%</td><td>the lowest of the thirty (2.5 to 17.9)</td></tr>
+</table>
+<p>So: the highest yield in two and a half years brought the most bidding and left the banks with the least. A bar is green when it showed more demand than the six auctions before it, red when less. The stop has no better or worse, so its colour is only which way it moved.</p>
+<p class="small"><b>One number will look different from the note you were given.</b> The coordinator’s note had indirect 77.8% and direct 16.6%. Those divide by everything issued that day, which includes $0.93B the Fed added for itself and $0.33B of small non-competitive bids. The card divides by what bidders actually competed for, the way desks quote it, so the three shares add up to 100: 80.3, 17.1 and 2.5. Same auction; dealers are 2.5% and the lowest either way.</p>
+<p class="small">OFFICIAL RESULT on the card opens the Treasury’s own one-page result for that auction (today’s was opened and answers).</p>
+</div>
+</div>
+
+<h2>2c · WHAT IS HAPPENING NOW · THE EVENT CARD</h2>
+<p>“FOMC minutes now … where do I find this? How am I supposed to track this? … Does FMP give us anything, or just that the item is on the calendar?” (2:05 PM, through the coordinator)</p>
+<p><b>For the minutes, FMP gives only that the item is on the calendar: its name, its time and its importance. No text and no number.</b> The card says so, then gives the two things that were missing:</p>
+<div class="pair">
+{fig("after-economic-1680-room-event.jpg", "2:33 PM today, on the branch: the card is first on the rail. FOMC MINUTES, out 33 minutes; the Fed’s own page as a link; the first headlines from our own news feed.")}
+<div>
+{fig("after-economic-1680-event.jpg", "The card, close. Real: both headlines were read from our feed (Investing.com, 2:05 and 2:06 PM).")}
+<div style="height:10px"></div>
+{fig("after-economic-1680-event-auction.jpg", "Click any release in the day table and the card becomes that release. Here the 10-year auction: the calendar had one bare number (the stop); the card links the Treasury’s own result.")}
+</div>
+</div>
+<ul>
+<li><b>From the calendar:</b> exactly what FMP’s row holds, said plainly. For a print it is the numbers and no text; for minutes, a statement or a speech it is the item only.</li>
+<li><b>Official source:</b> who publishes it. It becomes a link at the release minute; before that there is nothing new there to read, so it is words (“Federal Reserve publishes it at 14:00 ET on federalreserve.gov”). 29 kinds of release have a source on file (the Fed, BLS, BEA, Census, the Treasury, the Labor Department, EIA and others); one with none says so rather than guess.</li>
+<li><b>From our news feed:</b> the first three headlines our own feed carried after the release, with who and when. Nothing is read before the release, and it looks again at most every 90 seconds for three hours.</li>
+<li><b>Which release it shows:</b> the one you click in the day table; else the one the tape or the rail list sent you to; else, by itself, the high-importance US release that came out in the last three hours, or the next one inside two hours. With nothing happening the card is not there and takes no room.</li>
+</ul>
 
 <h2>3 · THE YIELD CURVE, AS A PICTURE</h2>
 <p>“the treasury yield ladder — wouldn’t the graphic be better for this?”</p>
@@ -145,7 +184,8 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 <div class="phones">
 {fig("after-economic-390.jpg", "The economic room: the slider fits the width and scrolls sideways under the thumb.")}
 {fig("after-economic-390-curve.jpg", "The curve card.")}
-{fig("after-economic-390-auctions.jpg", "The auctions card: four numbers become two rows of two.")}
+{fig("after-economic-390-event.jpg", "The event card.")}
+{fig("after-economic-390-auctions.jpg", "The auctions card with its history: four numbers become two rows of two, each line sits above its strip.")}
 {fig("after-economic-390-strips.jpg", "The surprise strips.")}
 {fig("after-dash-390.jpg", "The dashboard with the put/call tape.")}
 </div>
@@ -175,6 +215,9 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 <li>Consensus history before June 2024 was not fetched (the key lives on Fly; the job is ready).</li>
 <li>The tail is not shown: no free source for the pre-auction yield.</li>
 <li>The rail was not rearranged beyond replacing the ladder with the picture and adding the two cards. The rest is the proposal.</li>
+<li>The event card links each publisher’s page for that kind of release, not the exact document: the Fed lists minutes by meeting on one page, and that is where the link lands.</li>
+<li>Four of the official addresses (the Bureau of Labor Statistics pages for payrolls, CPI, PPI and job openings) could not be opened from here: BLS refuses automated visitors. They are its long-standing addresses; open each once by hand before this goes live. The other 25 answered.</li>
+<li>Headlines are found by the words a headline would carry (“Fed minutes”), so a preview published in the same minute can slip in. The 10-year auction had no headline in our feed, and the card says so.</li>
 <li>The call-heavy mirror of the flash (a ratio at two-thirds of its usual or less) was not built: you asked for 1.5×. Today 7 names stood there.</li>
 <li>The Station’s put/call row reads the list straight from the database mirror, like the tapes’ own lists. An earlier note preferred such data to come through the chart API; that route was not built.</li>
 </ul>
@@ -193,7 +236,8 @@ page = head("The macro screens · slider, yield curve, auctions, macro prints, p
 
 <details class="sc-pagespecs"><summary>PAGE SPECS</summary><div>
 <p>Pictures: headless Chromium, one page at a time, every non-GET request blocked and counted. BEFORE pictures are the live Hub and Station. AFTER pictures are the live address answered with the branch’s page (tools/shoot.mjs --map), so every read on screen is the real one, except the two tables that do not exist yet (--data), answered from data/treasury-auctions.json (the Treasury’s own rows, read 7 Oct 13:26 ET) and data/putcall-names-now-20261007-1330.json (the view’s SQL run read-only over the stored readings).</p>
-<p>The Hub block lives in tools/hm2-block.js and tools/hm2-style.css and is placed by tools/inject-hm2.py through seven one-line hooks; --remove gives the page back to the byte. It sits above the economic room’s own module, never inside it: that module is still pinned to three tables and two calendar reads. The slider asks through the room’s one window reader; the strips add one read of their own, recorded in the room’s guard test with its neighbours. Nothing in the block reads or paints unless its own element is on the page, and the room’s mount never waits on it. One switch, HM2_ON; the put/call tape has its own, HM2_PC_ON. The Station row has PC_TAPE_DEFAULT_ON = false.</p>
+<p>The Hub block lives in tools/hm2-block.js and tools/hm2-style.css and is placed by tools/inject-hm2.py through eight one-line hooks; --remove gives the page back to the byte. It sits above the economic room’s own module, never inside it: that module is still pinned to three tables and two calendar reads. The slider asks through the room’s one window reader; the strips add one read of their own, recorded in the room’s guard test with its neighbours. Nothing in the block reads or paints unless its own element is on the page, and the room’s mount never waits on it. One switch, HM2_ON; the put/call tape has its own, HM2_PC_ON. The Station row has PC_TAPE_DEFAULT_ON = false.</p>
+<p>The event card reads nothing new for the release itself (it uses the calendar rows the slider already holds) and one filtered read of our own news table after a release. Its 29 publisher addresses were opened on 7 Oct 2026: 25 answered; the four bls.gov pages refuse automated visitors.</p>
 <p>Sources: econ_calendar (FMP economic calendar, existing job) · treasury_rates (the Treasury’s daily par curve, existing job) · treasury_auctions (TreasuryDirect TA_WS, new) · ibkr_option_volume_15m and putcall_names_now (IBKR option volume, new, written by putcall-aggregate).</p>
 </div></details>
 </main></body></html>
@@ -220,7 +264,7 @@ mock = head("The macro rail · keep / merge / drop") + f'''<style>
 <p class="sub">7 Oct 2026 · a proposal only · nothing here is decided or built into the rail’s order · “this macro rail … we need a little bit of a rearrangement … we might not need it”</p>
 
 <div class="kpi">
-<div><b>six cards become four</b><span>two lists become one, the ladder goes into the curve, the plain list goes into the strips, the footnotes go to PAGE SPECS.</span></div>
+<div><b>six cards become five</b><span>two lists become one, the ladder goes into the curve, the plain list goes into the strips, the footnotes go to PAGE SPECS; a card for what is happening now comes and goes at the top.</span></div>
 <div><b>nothing leaves the room</b><span>every number on the rail today is still on screen in the proposal, or one click away.</span></div>
 <div><b>or no rail at all</b><span>the second option at the bottom: the room goes full width and the rail’s cards become a tab.</span></div>
 </div>
@@ -228,6 +272,7 @@ mock = head("The macro rail · keep / merge / drop") + f'''<style>
 <h2>1 · CARD BY CARD</h2>
 <div class="wrap"><table>
 <tr><th>ON THE RAIL TODAY</th><th>PROPOSAL</th><th>WHY</th></tr>
+<tr><td>—</td><td><span class="tag">NEW</span> the EVENT card, first on the rail</td><td>“FOMC minutes now … where do I find this?” Only there while something is happening or clicked: the official source and our first headlines. Built on the branch.</td></tr>
 <tr><td>UPCOMING · RELEASES (US watch list, 7 days)</td><td><span class="tag">MERGE</span> into THIS WEEK</td><td>It and PRINTED are one list cut in two. Joined, the NOW line sits between what has printed and what is coming, as it does everywhere else in the room.</td></tr>
 <tr><td>PRINTED · THIS WEEK</td><td><span class="tag">MERGE</span> into THIS WEEK</td><td>Same list. Its actual-against-expected reading is kept exactly.</td></tr>
 <tr><td>TREASURY CURVE (one line of text)</td><td><span class="tag">MERGE</span> into the curve picture</td><td>The picture carries the same three numbers and the shape.</td></tr>
@@ -250,7 +295,8 @@ mock = head("The macro rail · keep / merge / drop") + f'''<style>
 {card("DROP", "SOURCES &amp; FRESHNESS", '<img src="shots/before-economic-1680-sources.jpg" alt="live: sources and freshness" loading="lazy">')}
 </div>
 <div>
-<h3>PROPOSED (the three pictures are the branch; the two lists are drawn here with today’s real numbers)</h3>
+<h3>PROPOSED (the four pictures are the branch; the two lists are drawn here with today’s real numbers)</h3>
+{card("NEW", "WHAT IS HAPPENING NOW", '<img src="shots/after-economic-1680-event.jpg" alt="branch: the event card" loading="lazy">')}
 {card("NEW", "THIS WEEK · US", """<table>
 <tr><th>WHEN (ET)</th><th>RELEASE</th><th class="r">ACTUAL</th><th class="r">EXPECTED</th><th>READ</th></tr>
 <tr><td>MON 10:00</td><td>ISM Services PMI</td><td class="r dn">54.9</td><td class="r">55</td><td>0.1 below</td></tr>
@@ -287,7 +333,7 @@ mock = head("The macro rail · keep / merge / drop") + f'''<style>
 <ul>
 <li><b>For it:</b> the calendar gets about two-thirds more width (954 px becomes 1,586 on the MacBook screen), and the strips get room to show every print without scrolling.</li>
 <li><b>Against it:</b> the curve and today’s auction are one click away instead of always in view.</li>
-<li><b>Recommendation: keep a rail, with the four cards above plus LIQUIDITY.</b> On an auction day or a CPI morning you want the result and the curve beside the calendar, not behind a tab.</li>
+<li><b>Recommendation: keep a rail, with the cards above.</b> On an auction day or a CPI morning you want the result and the curve beside the calendar, not behind a tab.</li>
 </ul>
 
 <details class="sc-pagespecs"><summary>PAGE SPECS</summary><div>

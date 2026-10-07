@@ -10,6 +10,11 @@
 export const TERMS = Object.freeze(["2-Year", "3-Year", "5-Year", "7-Year", "10-Year", "20-Year", "30-Year"]);
 export const SOURCE = "TreasuryDirect TA_WS";
 export const SEARCH_URL = "https://www.treasurydirect.gov/TA_WS/securities/search";
+/* Treasury's own one-page documents for an auction: the announcement (A_…) and the results (R_…). The web service
+   gives the file name; the folder is the year in the name. Checked 7 Oct 2026: R_20261007_2.pdf answers 200. */
+export const PDF_BASE = "https://www.treasurydirect.gov/instit/annceresult/press/preanre/";
+const pdfName = (v) => (typeof v === "string" && /^[A-Z]{1,3}_\d{8}_\d+\.pdf$/.test(v.trim()) ? v.trim() : null);
+export function officialPdfUrl(file) { const f = pdfName(file); return f ? PDF_BASE + f.slice(f.indexOf("_") + 1, f.indexOf("_") + 5) + "/" + f : null; }
 
 const num = (v) => { if (v === null || v === undefined || String(v).trim() === "") return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 const day = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
@@ -41,6 +46,7 @@ export function auctionRow(r) {
     /* the takedown: each bidder class's share of what the public competitive bidders were awarded */
     indirect_pct: pct(indirect, competitive), direct_pct: pct(direct, competitive), dealer_pct: pct(dealer, competitive),
     /* a result exists once Treasury has printed the stop; before that the row is the announcement */
+    announcement_pdf: pdfName(r.pdfFilenameAnnouncement), results_pdf: pdfName(r.pdfFilenameCompetitiveResults),
     status: high_yield != null ? "auctioned" : "announced",
     source: SOURCE, source_updated_at: typeof r.updatedTimestamp === "string" ? r.updatedTimestamp : null,
   };

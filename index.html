@@ -5397,6 +5397,27 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
 .hm2-st__s i.eq{ height:4px; border-radius:50%; background:var(--sv3); }
 .hm2-st__v{ white-space:nowrap; color:var(--ink3); font-variant-numeric:tabular-nums; }
 .hm2-st__v b{ font-weight:700; } .hm2-st__v.is-up b{ color:var(--bull); } .hm2-st__v.is-dn b{ color:var(--bear); } .hm2-st__v.is-eq b{ color:var(--sv3); }
+/* the event card */
+.hm2-ev:empty{ display:none; }
+.hm2-ev h4{ flex-wrap:wrap; }
+.hm2-evx{ margin-left:auto; font-size:11px !important; }
+.hm2-evr{ display:grid; grid-template-columns:132px minmax(0, 1fr); gap:8px; align-items:baseline; padding:4px 0; border-top:.5px solid var(--line);
+  font-family:var(--mono); font-size:11px; color:var(--ink2); line-height:1.45; }
+.hm2-src{ color:var(--crk); letter-spacing:.08em; text-decoration:none; white-space:nowrap; } .hm2-src:hover{ text-decoration:underline; }
+.hm2-ah__t .hm2-src{ margin-left:auto; }
+.hm2-evf{ display:grid; gap:4px; } .hm2-evn a{ color:var(--ink); text-decoration:none; } .hm2-evn a:hover{ color:var(--crk); }
+.hm2-evn i{ font-style:normal; color:var(--dim); white-space:nowrap; }
+/* the auction history */
+.hm2-al{ margin-top:10px; border-top:.5px solid var(--line2); padding-top:7px; font-family:var(--mono); }
+.hm2-al__h{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding-bottom:4px; }
+.hm2-al__h .se-zm, .hm2-evx{ font-size:11px; padding:1px 6px; }
+.hm2-alr{ display:grid; grid-template-columns:minmax(0, 40%) minmax(0, 1fr) auto; gap:10px; align-items:center; padding:5px 0; border-top:.5px solid var(--line); font-size:11px; }
+.hm2-alr__t b{ display:block; color:var(--ink); letter-spacing:.1em; font-weight:400; } .hm2-alr__t span{ display:block; color:var(--dim); line-height:1.35; }
+.hm2-alr__s{ display:flex; align-items:flex-end; gap:1.5px; height:24px; overflow:hidden; justify-content:flex-end; }
+.hm2-alr__s i{ flex:0 0 4px; width:4px; border-radius:1px 1px 0 0; background:var(--crk); opacity:.6; }
+.hm2-alr__s i.up{ background:var(--bull); } .hm2-alr__s i.dn{ background:var(--bear); } .hm2-alr__s i.is-now{ opacity:1; flex-basis:6px; width:6px; margin-left:2px; }
+.hm2-alr__v{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; } .hm2-alr__v b{ display:block; font-size:13px; color:var(--ink); }
+.hm2-alr__v.up b{ color:var(--bull); } .hm2-alr__v.dn b{ color:var(--bear); } .hm2-alr__v i{ font-style:normal; color:var(--dim); }
 .hm2-specs{ padding:0 12px 8px; }
 .hm2-specs, .hm2-specs > summary{ font-size:11px; }
 /* the put/call tape (the scintillas tape's own box and track) */
@@ -5413,6 +5434,8 @@ body.tk-pinned .sc-head__wm{ visibility:hidden; }
   .hm2-ass{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .hm2-sps{ grid-template-columns:1fr; }
   .hm2-atbl th:nth-child(7), .hm2-atbl td:nth-child(7){ display:none; }
+  .hm2-alr{ grid-template-columns:minmax(0, 1fr) auto; } .hm2-alr__t{ grid-column:1 / -1; }
+  .hm2-evr{ grid-template-columns:1fr; gap:1px; }
 }
 </style>
 </head>
@@ -17016,6 +17039,12 @@ async function fillEvents(quiet) {
                       and who took it, each against the six auctions of the same term before it; what is coming, with size.
      4. hm2Strips   — one strip of surprises per indicator, oldest on the left: up and green = better than expected,
                       down and red = worse (the room's own EC_INVERT rule decides which way is better).
+     6. hm2Event    — the EVENT card at the top of the rail (added 14:15 ET the same day: "FOMC minutes now … where do
+                      I find this? … Does FMP give us anything, or just that the item is on the calendar?"): for the
+                      release that is happening, or the one clicked — what the calendar holds, said plainly; the
+                      official source, as a link from the release minute; the first headlines from our own news feed.
+     7. the auctions card's HISTORY ("some kind of area where we can see the historical evolution of these metrics,
+                      for me to learn a little bit more about them"): each metric with one plain line and its strip.
      5. hm2Pc       — the put/call tape on the dashboard: for each name, calls ÷ its usual day and puts ÷ its usual
                       day side by side, then the ratio against its usual; the name flashes at 1.5× (scScint).
    WHAT IT READS: econ_calendar, treasury_rates (both already read by this room), treasury_auctions and
@@ -17094,6 +17123,7 @@ async function hm2TlLoad(z) {
   finally { if (HM2_TL.busy === key) HM2_TL.busy = ""; }
   hm2EcTapePaint();
   try { hm2AuctionsPaint(); } catch (_) {}        /* the calendar just arrived: the auctions card can now name what is dated further out */
+  try { hm2EventPaint(); } catch (_) {}           /* and the event card can name what is happening now */
 }
 function hm2TlIndex(rows, z) {
   const idx = {}, reg = S.econCty || "US", cat = S.econCat || "ALL";
@@ -17193,6 +17223,7 @@ function hm2TlToToday(sc, smooth) {
   if (smooth && typeof sc.scrollTo === "function") sc.scrollTo({ left: to, behavior: "smooth" }); else sc.scrollLeft = to;
 }
 function hm2EcTapePaint() {
+  try { hm2EventPaint(); } catch (_) {}            /* the room's tick repaints the table; the event card keeps its clock on the same tick */
   const host = hm2Host("hm2EcTape"); if (!host || !HM2_ON) return;
   if (HM2_TL.key !== hm2TlKey(HM2_TL.z) || !HM2_TL.rows) hm2TlLoad(HM2_TL.z);
   const html = hm2EcTapeHTML(), old = hm2Host("hm2TlScroll");
@@ -17337,7 +17368,54 @@ function hm2AucVs(val, avg, better, d, unit) {
 /* FURTHER OUT. Treasury names a size about a week ahead, so beyond that an auction has a date and no size yet. The
    date is already in the room: the calendar the slider reads carries "20-Year Bond Auction" on its day. Those are
    listed after COMING with the size of that term's last auction, said as such — never as this one's size. */
-let HM2_AUC = { rows: null };
+let HM2_AUC = { rows: null, term: null };
+const HM2_PDF_BASE = "https://www.treasurydirect.gov/instit/annceresult/press/preanre/";
+/* Treasury's own one-page result (or announcement) for an auction: the stored file name, in the folder of its year */
+function hm2AucPdf(file) {
+  const f = typeof file === "string" && /^[A-Z]{1,3}_\d{8}_\d+\.pdf$/.test(file) ? file : null;
+  return f ? HM2_PDF_BASE + f.slice(f.indexOf("_") + 1, f.indexOf("_") + 5) + "/" + f : null;
+}
+/* THE LEARNING VIEW. One term at a time (the chips), its last thirty auctions, oldest on the left, and for each of
+   the five numbers ONE plain line saying what it is — asked for by name, so these lines sit beside their strips and
+   not in PAGE SPECS. A bar is green when it shows more demand than the six auctions before it and red when less;
+   for DEALERS less is the stronger auction; the stop has no better or worse, so it is the direction it moved. */
+const HM2_AUC_METRICS = [
+  ["STOPPED AT", "high_yield", 0, 3, "%", "The yield it took to sell it all. It follows the market: read the four below with it."],
+  ["BID-TO-COVER", "bid_to_cover", 1, 2, "×", "Dollars bid for every dollar sold. Higher is more demand."],
+  ["INDIRECT", "indirect_pct", 1, 1, "%", "Foreign buyers and big funds, bidding through a dealer. Higher is stronger."],
+  ["DIRECT", "direct_pct", 1, 1, "%", "Domestic funds bidding for themselves."],
+  ["DEALERS", "dealer_pct", -1, 1, "%", "What the banks were left holding. Lower is the stronger auction."],
+];
+const HM2_AUC_LEARN_N = 30;
+function hm2AucLearnHTML(done, term) {
+  const all = done.filter((r) => r.term === term), seq = all.slice(0, HM2_AUC_LEARN_N).reverse();      /* done is newest first */
+  if (seq.length < 2) return "";
+  const chips = HM2_TERMS.filter((t) => done.some((r) => r.term === t)).map((t) =>
+    '<span class="se-zm' + (t === term ? " on" : "") + '" data-hm2="aucterm" data-t="' + t + '">' + t.replace("-Year", "Y") + "</span>").join("");
+  const rows = HM2_AUC_METRICS.map(([lbl, k, better, d, unit, say]) => {
+    const v = seq.map((r) => num(r[k])).filter((x) => x != null && isFinite(x));
+    if (v.length < 2) return "";
+    const lo = Math.min.apply(null, v), hi = Math.max.apply(null, v), span = hi - lo || 1;
+    let lastTone = "", lastAvg = null;
+    const bars = seq.map((r, i) => {
+      const val = num(r[k]); if (val == null || !isFinite(val)) return "";
+      const at = all.indexOf(r), prior = all.slice(at + 1, at + 7).map((x) => num(x[k])).filter((x) => x != null && isFinite(x));
+      const avg = prior.length ? prior.reduce((a, b) => a + b, 0) / prior.length : null;
+      const ref = better === 0 ? (prior.length ? prior[0] : null) : avg;                      /* the stop: against the auction before it */
+      const tone = ref == null || val === ref ? "" : ((val > ref) === (better >= 0) ? "up" : "dn");
+      if (i === seq.length - 1) { lastTone = tone; lastAvg = avg; }
+      return '<i class="' + tone + (i === seq.length - 1 ? " is-now" : "") + '" style="height:' + (4 + Math.round((val - lo) / span * 18)) + 'px" title="' +
+        esc(hm2Md(r.auction_date) + " " + r.auction_date.slice(0, 4) + (r.reopening ? " (reopening)" : "") + " · " + val.toFixed(d) + unit + (avg != null && better !== 0 ? " · the six before it averaged " + avg.toFixed(d) + unit : "")) + '"></i>';
+    }).join("");
+    const now = num(seq[seq.length - 1][k]);
+    return '<div class="hm2-alr"><div class="hm2-alr__t"><b>' + lbl + "</b><span>" + esc(say) + "</span></div>" +
+      '<span class="hm2-alr__s">' + bars + "</span>" +
+      '<span class="hm2-alr__v ' + lastTone + '"><b>' + (now == null ? "—" : now.toFixed(d) + unit) + "</b>" + (lastAvg != null && better !== 0 ? "<i>six before " + lastAvg.toFixed(d) + "</i>" : "") + "</span></div>";
+  }).join("");
+  const first = seq[0].auction_date;
+  return '<div class="hm2-al"><div class="hm2-al__h"><span class="hm2-as__l">HISTORY · ' + esc(term.replace("-Year", "-YEAR")) + " · " + seq.length + " AUCTIONS SINCE " + hm2Md(first) + " " + first.slice(0, 4) +
+    '</span><span class="se-zooms">' + chips + "</span></div>" + rows + "</div>";
+}
 function hm2AucLater(rows, calendar, today) {
   const out = [], seen = {};
   for (const r of calendar || []) {
@@ -17367,8 +17445,10 @@ function hm2AuctionsHTML(rows, later) {
     const c = hm2AucVsSix(done, head), isToday = head.auction_date === today;
     const stat = (lbl, val, avg, better, d, unit, k) => '<div class="hm2-as"><span class="hm2-as__l">' + lbl + "</span><b>" + (val == null ? "—" : (+val).toFixed(d) + unit) + "</b>" +
       hm2AucVs(num(val), avg, better, d, unit) + hm2AucBars(c.prior, head, k, better) + "</div>";
+    const pdf = hm2AucPdf(head.results_pdf);
     html += '<div class="hm2-ah"><div class="hm2-ah__t"><b>' + esc(head.term.replace("-Year", "Y")) + (head.reopening ? " · REOPENING" : "") + "</b><span>" +
-        esc(hm2Bn(num(head.offering_amount))) + " · " + (isToday ? "TODAY" : hm2Md(head.auction_date)) + " " + esc(String(head.closing_time_et || "").replace(/^0/, "")) + ' ET</span></div>' +
+        esc(hm2Bn(num(head.offering_amount))) + " · " + (isToday ? "TODAY" : hm2Md(head.auction_date)) + " " + esc(String(head.closing_time_et || "").replace(/^0/, "")) + ' ET</span>' +
+        (pdf ? '<a class="hm2-src" href="' + esc(pdf) + '" target="_blank" rel="noopener" title="Treasury’s own one-page result for this auction (treasurydirect.gov)">OFFICIAL RESULT ↗</a>' : "") + "</div>" +
       '<div class="hm2-ah__y" title="' + esc("the stop: the highest yield Treasury had to accept to sell it all · the median accepted bid was " + hm2Fix(num(head.median_yield), 3) + "%") + '"><span class="hm2-as__l">STOPPED AT</span><b>' + hm2Fix(num(head.high_yield), 3) + "%</b></div>" +
       '<div class="hm2-ass">' + stat("BID-TO-COVER", num(head.bid_to_cover), c.btc, 1, 2, "×", "bid_to_cover") +
         stat("INDIRECT", num(head.indirect_pct), c.ind, 1, 1, "%", "indirect_pct") +
@@ -17390,15 +17470,18 @@ function hm2AuctionsHTML(rows, later) {
   }).join("") : '<span class="hm2-aup__i">nothing announced yet — Treasury names the size about a week ahead</span>') + "</div>";
   if (later && later.length) html += '<div class="hm2-aup hm2-aup--later" title="' + esc("dated on the calendar; Treasury names the size about a week ahead, so the size shown is that term's last auction") + '"><span class="hm2-as__l">LATER</span>' +
     later.map((l) => '<span class="hm2-aup__i"><b>' + esc(l.term.replace("-Year", "Y")) + "</b> " + hm2Md(l.day) + (l.last != null ? " · last time " + esc(hm2Bn(l.last)) : "") + "</span>").join("") + "</div>";
+  if (head) html += hm2AucLearnHTML(done, HM2_AUC.term && done.some((r) => r.term === HM2_AUC.term) ? HM2_AUC.term : head.term);
   return html;
 }
 async function hm2AuctionsFill() {
   const host = hm2Host("hm2Auctions"); if (!host || !HM2_ON) return;
   try {
-    const rows = await pg("treasury_auctions?select=cusip,auction_date,term,reopening,closing_time_et,offering_amount,high_yield,median_yield,bid_to_cover,indirect_pct,direct_pct,dealer_pct,status&order=auction_date.desc&limit=160", 1);
+    /* 280 newest: thirty auctions of each of the seven terms for the history, and the six before the oldest of them */
+    const rows = await pg("treasury_auctions?select=cusip,auction_date,term,reopening,closing_time_et,offering_amount,high_yield,median_yield,bid_to_cover,indirect_pct,direct_pct,dealer_pct,results_pdf,status&order=auction_date.desc&limit=280", 1);
     if (hm2Host("hm2Auctions") !== host) return;
     HM2_AUC.rows = rows || [];
     host.innerHTML = hm2AuctionsHTML(HM2_AUC.rows, hm2AucLater(HM2_AUC.rows, HM2_TL.rows, ecToday()));
+    try { hm2EventPaint(); } catch (_) {}         /* an auction on the event card can now link its own result */
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">auction results are not stored yet</div>'; }
 }
 
@@ -17474,6 +17557,158 @@ async function hm2StripsFill() {
     host.querySelectorAll(".hm2-st__b").forEach((b) => { b.scrollLeft = b.scrollWidth; });
     const h = hm2Host("hm2StripsSince"); if (h) h.textContent = "since " + HM2_MON[+ecDateKey(first).slice(5, 7) - 1].toUpperCase() + " " + ecDateKey(first).slice(0, 4);
   } catch (_) { host.innerHTML = '<div class="sc-senttxt">the prints could not be read</div>'; }
+}
+
+/* ---- 6 · THE EVENT CARD -----------------------------------------------------------------------------
+   Alan, 7 Oct 14:05, with FOMC MINUTES flashing on the tape: "where do I find this? How am I supposed to track this? …
+   Does FMP give us anything, or just that the item is on the calendar?"
+   The card at the top of the rail answers for ONE release at a time, in three plain lines:
+     FROM THE CALENDAR   what FMP's row really holds — for the minutes, a speech or a statement: the item only (its
+                         name, its time, its importance), no text and no number; for a print: the numbers, no text.
+     OFFICIAL SOURCE     who publishes it and where. It is a LINK from the release minute on, and plain words before
+                         it (there is nothing new there to read yet). An auction links its own one-page result.
+     FROM OUR NEWS FEED  the first three headlines our own feed carried after the release (the news table), with who
+                         and when. One read, only after the release, again at most every 90 seconds for three hours.
+   WHICH RELEASE: the one clicked in the day table; else the one the room is naming (S.econFocus, set by the tape and
+   the rail lists); else, by itself, the US high-importance release that printed in the last three hours, or the next
+   one inside two hours. Nothing to show = no card (the host is empty and takes no room).
+   THE ADDRESSES (29) were opened on 7 Oct 2026: 25 answered. The four bls.gov release pages refuse automated visitors
+   and could not be opened from here; they are BLS's long-standing paths. A release with no rule says so, never a guess. */
+const HM2_SOURCES = [
+  [/^(fomc|fed) (minutes|statement|economic projections|press conference)|^fed interest rate decision|interest rate projection/i, "Federal Reserve", "federalreserve.gov", "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", "statements, minutes and projections, by meeting"],
+  [/beige book/i, "Federal Reserve", "federalreserve.gov", "https://www.federalreserve.gov/monetarypolicy/publications/beige-book-default.htm", "the Beige Book"],
+  [/^fed .*(speech|speaks|testimony)|^fed chair/i, "Federal Reserve", "federalreserve.gov", "https://www.federalreserve.gov/newsevents/speeches.htm", "speeches and testimony"],
+  [/industrial production|capacity utilization|manufacturing production/i, "Federal Reserve", "federalreserve.gov", "https://www.federalreserve.gov/releases/g17/current/default.htm", "the G.17 release"],
+  [/consumer credit/i, "Federal Reserve", "federalreserve.gov", "https://www.federalreserve.gov/releases/g19/current/default.htm", "the G.19 release"],
+  [/non ?farm payrolls|unemployment rate|average hourly earnings|participation rate|average weekly hours|payrolls/i, "Bureau of Labor Statistics", "bls.gov", "https://www.bls.gov/news.release/empsit.nr0.htm", "the Employment Situation release"],
+  [/producer price|\bppi\b/i, "Bureau of Labor Statistics", "bls.gov", "https://www.bls.gov/news.release/ppi.nr0.htm", "the Producer Price Index release"],
+  [/pce price|personal (income|spending)|core pce/i, "Bureau of Economic Analysis", "bea.gov", "https://www.bea.gov/data/income-saving/personal-income", "Personal Income and Outlays"],
+  [/inflation rate|\bcpi\b|consumer price/i, "Bureau of Labor Statistics", "bls.gov", "https://www.bls.gov/news.release/cpi.nr0.htm", "the Consumer Price Index release"],
+  [/jolts/i, "Bureau of Labor Statistics", "bls.gov", "https://www.bls.gov/news.release/jolts.nr0.htm", "the Job Openings and Labor Turnover release"],
+  [/jobless claims/i, "Department of Labor", "dol.gov", "https://www.dol.gov/ui/data.pdf", "the weekly claims report"],
+  [/^gdp |gross domestic product|corporate profits/i, "Bureau of Economic Analysis", "bea.gov", "https://www.bea.gov/data/gdp/gross-domestic-product", "Gross Domestic Product"],
+  [/balance of trade|^imports$|^exports$|goods trade balance/i, "Bureau of Economic Analysis", "bea.gov", "https://www.bea.gov/data/intl-trade-investment/international-trade-goods-and-services", "International Trade in Goods and Services"],
+  [/retail sales/i, "Census Bureau", "census.gov", "https://www.census.gov/retail/sales.html", "Monthly Retail Trade"],
+  [/durable goods|factory orders/i, "Census Bureau", "census.gov", "https://www.census.gov/manufacturing/m3/index.html", "Manufacturers’ Shipments, Inventories and Orders"],
+  [/housing starts|building permits/i, "Census Bureau", "census.gov", "https://www.census.gov/construction/nrc/index.html", "New Residential Construction"],
+  [/new home sales/i, "Census Bureau", "census.gov", "https://www.census.gov/construction/nrs/index.html", "New Residential Sales"],
+  [/(note|bond|bill|tips|frn) auction/i, "U.S. Treasury", "treasurydirect.gov", "https://www.treasurydirect.gov/auctions/announcements-data-results/", "auction announcements and results"],
+  [/budget (balance|statement)/i, "U.S. Treasury", "fiscal.treasury.gov", "https://www.fiscal.treasury.gov/reports-statements/mts/", "the Monthly Treasury Statement"],
+  [/^(eia|api) |crude oil|gasoline|distillate/i, "Energy Information Administration", "eia.gov", "https://www.eia.gov/petroleum/supply/weekly/", "the Weekly Petroleum Status Report"],
+  [/^cftc /i, "CFTC", "cftc.gov", "https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm", "Commitments of Traders"],
+  [/gdpnow/i, "Atlanta Fed", "atlantafed.org", "https://www.atlantafed.org/cqer/research/gdpnow", "GDPNow"],
+  [/^ism /i, "Institute for Supply Management", "ismworld.org", "https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/", "the Report On Business"],
+  [/^michigan /i, "University of Michigan", "umich.edu", "https://data.sca.isr.umich.edu/", "the Surveys of Consumers"],
+  [/cb consumer confidence/i, "The Conference Board", "conference-board.org", "https://www.conference-board.org/topics/consumer-confidence", "Consumer Confidence"],
+  [/existing home sales/i, "National Association of Realtors", "nar.realtor", "https://www.nar.realtor/research-and-statistics/housing-statistics/existing-home-sales", "Existing-Home Sales"],
+  [/^adp /i, "ADP", "adpemploymentreport.com", "https://adpemploymentreport.com/", "the National Employment Report"],
+  [/empire state|ny empire/i, "New York Fed", "newyorkfed.org", "https://www.newyorkfed.org/survey/empire/empiresurvey_overview", "the Empire State Manufacturing Survey"],
+  [/philadelphia fed|philly fed/i, "Philadelphia Fed", "philadelphiafed.org", "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey", "the Manufacturing Business Outlook Survey"],
+];
+function hm2Source(base) { for (const r of HM2_SOURCES) if (r[0].test(base)) return { who: r[1], site: r[2], url: r[3], what: r[4] }; return null; }
+/* the words a headline about this release would carry (PostgREST ilike patterns; * is "anything") */
+const HM2_NEWS_KEYS = [
+  [/^(fomc|fed) minutes/i, ["fed*minutes", "fomc*minutes"]],
+  [/^fed interest rate decision|^fomc statement/i, ["fed*rate", "fomc", "fed holds", "fed cuts", "fed hikes", "fed raises"]],
+  [/non ?farm payrolls|unemployment rate|average hourly earnings/i, ["payrolls", "jobs report", "unemployment rate"]],
+  [/producer price|\bppi\b/i, ["producer prices", "ppi", "wholesale inflation"]],
+  [/pce price|core pce/i, ["pce"]],
+  [/inflation rate|\bcpi\b/i, ["cpi", "consumer prices", "inflation"]],
+  [/jobless claims/i, ["jobless claims"]],
+  [/jolts/i, ["job openings", "jolts"]],
+  [/^gdp |gross domestic product/i, ["gdp"]],
+  [/retail sales/i, ["retail sales"]],
+  [/durable goods/i, ["durable goods"]],
+  [/^ism manufacturing/i, ["ism manufacturing", "manufacturing pmi", "factory activity"]],
+  [/^ism (services|non-manufacturing)/i, ["ism services", "services pmi", "services sector"]],
+  [/^michigan /i, ["consumer sentiment"]],
+  [/consumer confidence/i, ["consumer confidence"]],
+  [/housing starts|building permits/i, ["housing starts", "building permits"]],
+  [/home sales/i, ["home sales"]],
+  [/^(eia|api) |crude oil/i, ["crude inventories", "crude stocks", "oil inventories"]],
+];
+function hm2NewsKeys(base) {
+  for (const r of HM2_NEWS_KEYS) if (r[0].test(base)) return r[1];
+  const auc = /^(\d+)-Year (Note|Bond) Auction$/i.exec(base);
+  if (auc) return [auc[1] + "-year*auction", auc[1] + "-year*sale", "treasury*auction"];
+  const sp = /^fed (\w+) speech$/i.exec(base); if (sp) return ["fed*" + sp[1].toLowerCase(), sp[1].toLowerCase() + "*fed"];
+  const plain = base.toLowerCase().replace(/\b(mom|yoy|qoq|prel|final|adv|2nd est|s\.a)\b/g, "").replace(/[^a-z0-9 -]/g, " ").replace(/\s+/g, " ").trim();
+  return plain.length >= 6 ? [plain] : [];
+}
+let HM2_EV = { pick: null, key: "", news: null, newsKey: "", newsAt: 0, busy: false };
+const HM2_EV_NEWS_MS = 90000, HM2_EV_NEWS_FOR_S = 3 * 3600;
+/* which release the card is about: the clicked row, else the one the room names, else what is happening now */
+function hm2EventPick(nowSec) {
+  const rows = (HM2_TL.rows || []).filter((r) => r.country === "US"), today = ecDateKey(nowSec);
+  const asEv = (r, why) => ({ sub: ecBase(r.event), event: r.event, ets: +r.event_ts, cty: r.country, impact: r.impact, actual: num(r.actual), estimate: num(r.estimate), previous: num(r.previous), has: true, why });
+  if (HM2_EV.pick) {
+    const p = HM2_EV.pick, hit = (HM2_TL.rows || []).find((r) => +r.event_ts === p.ets && r.country === p.cty && ecBase(r.event) === p.sub);
+    return hit ? asEv(hit, "picked") : { sub: p.sub, event: p.sub, ets: p.ets, cty: p.cty, impact: null, actual: null, estimate: null, previous: null, has: false, why: "picked" };
+  }
+  if (typeof S !== "undefined" && S.econFocus && S.econFocus.sub) {
+    const hit = rows.find((r) => ecBase(r.event) === S.econFocus.sub && ecDateKey(+r.event_ts) === S.econFocus.day);
+    if (hit) return asEv(hit, "named");
+  }
+  const high = rows.filter((r) => r.impact === "High" && ecDateKey(+r.event_ts) === today).sort((a, b) => +a.event_ts - +b.event_ts);
+  const done = high.filter((r) => +r.event_ts <= nowSec && nowSec - +r.event_ts <= HM2_EV_NEWS_FOR_S);
+  if (done.length) return asEv(done[done.length - 1], "now");
+  const next = high.find((r) => +r.event_ts > nowSec && +r.event_ts - nowSec <= 2 * 3600);
+  return next ? asEv(next, "next") : null;
+}
+function hm2EventHTML(ev, nowSec, news, auction) {
+  const out = ev.ets <= nowSec, mins = Math.round(Math.abs(nowSec - ev.ets) / 60), src = hm2Source(ev.sub);
+  const ago = mins < 1 ? "just now" : mins < 90 ? mins + " min" : Math.round(mins / 60) + " h";
+  const day = ecDateKey(ev.ets), when = (day === ecDateKey(nowSec) ? "TODAY" : hm2Md(day)) + " " + ecTimeET(ev.ets) + " ET";
+  const bare = ev.actual == null && ev.estimate == null && ev.previous == null;
+  const inv = EC_INVERT.test(ev.sub) ? -1 : 1, tone = ev.actual != null && ev.estimate != null && ev.actual !== ev.estimate ? (((ev.actual - ev.estimate) * inv > 0) ? "up" : "dn") : (ev.actual != null && ev.estimate != null ? "eq" : "");
+  const cal = !ev.has ? "this release is outside the stretch the slider has read" :
+    bare ? "the item only: its name, its time and its importance. No text and no number comes with it." :
+      (ev.actual != null ? 'actual <b class="' + tone + '">' + esc(String(ev.actual)) + "</b>" : "no actual yet") +
+      (ev.estimate != null ? " · expected " + esc(String(ev.estimate)) : " · no consensus") + (ev.previous != null ? " · before " + esc(String(ev.previous)) : "") + ". Numbers only, no text.";
+  const pdf = auction ? hm2AucPdf(auction.results_pdf) : null;
+  let official;
+  if (!src) official = "no official source is on file for this release";
+  else if (!out) official = esc(src.who) + " publishes it at " + esc(ecTimeET(ev.ets)) + " ET on " + esc(src.site) + " (" + esc(src.what) + ")";
+  else official = (pdf ? '<a class="hm2-src" href="' + esc(pdf) + '" target="_blank" rel="noopener">THIS AUCTION’S RESULT ↗</a> ' : "") +
+    '<a class="hm2-src" href="' + esc(src.url) + '" target="_blank" rel="noopener">' + esc(src.site.toUpperCase()) + " ↗</a> " + esc(src.who) + " · " + esc(src.what);
+  let feed;
+  if (!out) feed = "headlines appear here once it is out";
+  else if (news == null) feed = "reading our news feed…";
+  else if (!news.length) feed = "no headline about it in our feed yet";
+  else feed = news.map((n) => '<span class="hm2-evn">' + (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.title) + "</a>" : esc(n.title)) +
+    " <i>" + esc(n.site || "") + " · " + esc(ecTimeET(+n.published_ts)) + " ET</i></span>").join("");
+  return '<h4>' + esc(ev.sub.toUpperCase()) + ' <i class="ec-li-note">' + esc(when) + " · " + (out ? "out " + ago + " ago" : "in " + ago) + (ev.impact === "High" ? " · high importance" : "") + "</i>" +
+      (ev.why === "picked" ? '<span class="se-zm hm2-evx" data-hm2="evclose" title="back to what is happening now">×</span>' : "") + "</h4>" +
+    '<div class="hm2-evr"><span class="hm2-as__l">FROM THE CALENDAR</span><span>' + cal + "</span></div>" +
+    '<div class="hm2-evr"><span class="hm2-as__l">OFFICIAL SOURCE</span><span>' + official + "</span></div>" +
+    '<div class="hm2-evr"><span class="hm2-as__l">FROM OUR NEWS FEED</span><span class="hm2-evf">' + feed + "</span></div>";
+}
+async function hm2EventNews(ev, key) {
+  const keys = hm2NewsKeys(ev.sub);
+  if (!keys.length) { HM2_EV.news = []; HM2_EV.newsKey = key; HM2_EV.newsAt = Date.now(); return; }
+  HM2_EV.busy = true;
+  try {
+    const or = keys.map((k) => "title.ilike." + encodeURIComponent("*" + k.replace(/ /g, "*") + "*")).join(",");
+    const rows = await pg("news?select=title,site,url,published_ts&published_ts=gte." + (ev.ets - 60) + "&published_ts=lte." + (ev.ets + 6 * 3600) + "&or=(" + or + ")&order=published_ts.asc&limit=12", 1);
+    const seen = new Set(), out = [];
+    for (const r of rows || []) { const t = String(r.title || "").replace(/ - [^-]{2,40}$/, "").trim().toLowerCase(); if (!t || seen.has(t)) continue; seen.add(t); out.push(r); if (out.length === 3) break; }
+    HM2_EV.news = out; HM2_EV.newsKey = key;
+  } catch (_) { if (HM2_EV.newsKey !== key) { HM2_EV.news = []; HM2_EV.newsKey = key; } }      /* a failed read leaves the last headlines; a first one says none yet */
+  finally { HM2_EV.busy = false; HM2_EV.newsAt = Date.now(); }
+  hm2EventPaint();
+}
+function hm2EventPaint() {
+  const host = hm2Host("hm2Event"); if (!host || !HM2_ON) return;
+  const nowSec = Math.floor(Date.now() / 1000), ev = hm2EventPick(nowSec);
+  if (!ev) { if (host.innerHTML) host.innerHTML = ""; HM2_EV.key = ""; return; }
+  const key = ev.sub + "|" + ev.ets + "|" + ev.cty, out = ev.ets <= nowSec;
+  const term = /^(\d+)-Year (Note|Bond) Auction$/i.exec(ev.sub), day = ecDateKey(ev.ets);
+  const auction = term && HM2_AUC.rows ? HM2_AUC.rows.find((r) => r.term === term[1] + "-Year" && r.auction_date === day) || null : null;
+  const fresh = HM2_EV.newsKey === key;
+  if (out && !HM2_EV.busy && (!fresh || (Date.now() - HM2_EV.newsAt >= HM2_EV_NEWS_MS && nowSec - ev.ets <= HM2_EV_NEWS_FOR_S))) hm2EventNews(ev, key);
+  const html = hm2EventHTML(ev, nowSec, fresh ? HM2_EV.news : null, auction);
+  if (host.innerHTML !== html) host.innerHTML = html;
+  HM2_EV.key = key;
 }
 
 /* ---- 5 · THE PUT / CALL TAPE ------------------------------------------------------------------------
@@ -17575,12 +17810,15 @@ const HM2_SPECS = '<details class="sc-pagespecs hm2-specs"><summary>PAGE SPECS</
   "<p><b>The slider.</b> One bar is a day, a week or a month of releases that pass the region tab, the category chip and HIGH ONLY. Height is how many; colour is the load (cyan: no high-importance release, orange: one to four, red: five or more, which is about one day in eight — a week is ranked against the busiest week on the slider). A star marks the Fed’s decision, payrolls, CPI, core PCE or GDP. Click a bar to open it below.</p>" +
   "<p><b>Treasury curve.</b> treasury_rates (Treasury’s daily par yields). Today’s line is green when the 10-year closed above the day before and red when below; the week-, month- and year-ago curves are the stored curve nearest to that date. 2s10s = 10-year minus 2-year; 3m10y = 10-year minus 3-month; each with its last 252 sessions.</p>" +
   "<p><b>Treasury auctions.</b> An r beside a term is a reopening: more of a bond that already trades. COMING is what Treasury has announced, with its size; LATER is dated on the calendar and not yet sized, shown with the size of that term’s last auction. TreasuryDirect’s own results, a few minutes after the 1:00 PM New York deadline. STOPPED AT is the highest yield accepted. COVER is dollars bid per dollar sold. INDIRECT, DIRECT and DEALERS are each bidder class’s share of what competitive bidders were awarded. Each is compared with the average of the six auctions of the same term before it: green is more demand than usual, red less (for DEALERS a smaller share is the stronger auction). The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it.</p>" +
+  "<p><b>The event card.</b> At the top of the rail, for the release that is happening or the one you click in the day table. FROM THE CALENDAR is exactly what FMP’s calendar row holds. OFFICIAL SOURCE is who publishes it; it becomes a link at the release minute, and an auction links Treasury’s own one-page result. FROM OUR NEWS FEED is the first three headlines our feed carried after the release. A release with no source on file says so.</p>" +
+  "<p><b>Auction history.</b> Thirty auctions of one term, oldest on the left. A bar is green when it showed more demand than the six auctions before it and red when less; for DEALERS a smaller share is the stronger auction; STOPPED AT is coloured by which way it moved from the auction before.</p>" +
   "<p><b>Macro prints.</b> econ_calendar (FMP’s economic calendar), every US print stored with a consensus, oldest on the left. Up and green is better than expected, down and red is worse; for inflation, unemployment and jobless claims a lower number is the better one. A yellow dot is a print exactly on consensus. Indicators nobody forecasts (money supply, the Fed’s balance sheet, mortgage rates) have no strip.</p>" +
   "</div></details>";
 /* called beside the room's mount and NOT awaited by it: the calendar and the rail are ready exactly when they were */
 function hm2Mount() {
   if (!HM2_ON) return;
   try { hm2EcTapePaint(); } catch (_) {}
+  try { hm2EventPaint(); } catch (_) {}
   Promise.all([hm2CurveFill(), hm2AuctionsFill(), hm2StripsFill()]).catch(() => {});
 }
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
@@ -17594,6 +17832,18 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
     else if (k === "strip") { S.econDay = a.dataset.day; S.econSpan = "DAY"; S.econCty = "US"; S.econCat = "ALL"; S.econOpen = {}; S.econFocus = null;
       document.querySelectorAll('.ec-span .ec-sp[data-act="ecspan"]').forEach((x) => x.classList.toggle("on", x.dataset.s === S.econSpan)); ecLoadWindow(); }
     else if (k === "pc") { if (typeof openCo === "function") openCo(a.dataset.t); }
+    else if (k === "aucterm") { HM2_AUC.term = a.dataset.t; hm2AuctionsPaint(); }
+    else if (k === "evclose") { HM2_EV.pick = null; hm2EventPaint(); }
+  });
+  /* a release in the day table opens on the event card. The row itself had no click; anything inside it that has one
+     (a landed number's history) keeps it. */
+  document.addEventListener("click", (e) => {
+    if (!HM2_ON || !e.target || !e.target.closest || e.target.closest("[data-act], [data-hm2], a")) return;
+    const row = e.target.closest(".ec-row[data-esub][data-ets]");
+    if (!row || !hm2Host("hm2Event")) return;
+    HM2_EV.pick = { sub: row.dataset.esub, ets: +row.dataset.ets, cty: row.dataset.ecty || "US" };
+    hm2EventPaint();
+    const rail = hm2Host("hm2Event").parentNode; if (rail && typeof rail.scrollTo === "function") rail.scrollTo({ top: 0, behavior: "smooth" });
   });
 }
 /* ==== END HM2 ============================================================== */
@@ -18167,6 +18417,7 @@ function econRoomHTML() {
        "Source (live)" card and undated prints list are NOT ported — they predate that review. The ladder keeps
        3d69248's own card; the releases source is named in the same footer. */
     '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>macro rail · <b>stored prints</b></span>' + SECFS_BTN + '</div><div class="rail">' +
+      (typeof HM2_ON !== "undefined" && HM2_ON ? '<div class="card hm2-card hm2-ev" id="hm2Event"></div>' : "") +   /* HM2 — the event card: empty (and taking no room) until a release is happening or is clicked */
       (ECON_ROOM_TAPE_ON ? '<div class="card"><h4>UPCOMING · RELEASES <i class="ec-li-note">US watch list · 7 days</i></h4><div class="ev-upwrap" id="ecRoomUp">—</div></div>' +
         '<div class="card"><h4>PRINTED · THIS WEEK</h4><div class="ev-pastwrap" id="ecRoomPast">—</div></div>' : "") +   /* 29 Sep — the earnings rail's two lists */
       /* HM2 — the curve as a picture, the auctions and the surprise strips stand where the one-line curve and the

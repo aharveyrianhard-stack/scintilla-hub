@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { auctionRow, auctionRows, againstLastSix, TERMS, searchUrl } from "../supabase/functions/treasury-auctions/auctions.mjs";
+import { auctionRow, auctionRows, againstLastSix, TERMS, searchUrl, officialPdfUrl } from "../supabase/functions/treasury-auctions/auctions.mjs";
 import { calendarRows, windows, toSql, FAMILIES, baseOf } from "../scripts/hm2-econ-calendar-backfill.mjs";
 
 const P = (rel) => fileURLToPath(new URL(rel, import.meta.url));
@@ -22,7 +22,7 @@ const cron = read("../supabase/migrations/20261007_hm2_treasury_auctions_cron.sq
 const grab = (re, what) => { const m = page.match(re); assert.ok(m, what + " must exist on the page"); return m[0]; };
 const helpers = [
   grab(/const num = \(x\) => [^\n]*\n/, "num"), grab(/const esc = \(s\) => [\s\S]*?;\n/, "esc"),
-  grab(/const ecDateKey\s+= [^\n]*\n/, "ecDateKey"), grab(/const ecToday\s+= [^\n]*\n/, "ecToday"),
+  grab(/const ecDateKey\s+= [^\n]*\n/, "ecDateKey"), grab(/const ecTimeET\s+= [^;]*;\n/, "ecTimeET"), grab(/const ecToday\s+= [^\n]*\n/, "ecToday"),
   grab(/const ecAnchor\s+= [^\n]*\n/, "ecAnchor"), grab(/const ecShift\s+= [^\n]*\n/, "ecShift"),
   grab(/const EC_G7\s+= [^\n]*\n/, "EC_G7"), grab(/const EC_G20 = [^\n]*\n/, "EC_G20"), grab(/const EC_EM\s+= \[[\s\S]*?\];\n/, "EC_EM"),
   grab(/function ecInRegion\(country, region\) \{[\s\S]*?\n\}\n/, "ecInRegion"), grab(/const ecPassImp = [^\n]*\n/, "ecPassImp"),
@@ -55,13 +55,15 @@ test("the page carries the HM2 block and its stylesheet byte for byte, once", ()
   assert.deepEqual([...new Set([...mod.matchAll(/"([a-z_]+)\?select=/g)].map((m) => m[1]))].sort(), ["econ_calendar", "econ_history", "treasury_rates"], "that module still reads its three tables and no other");
   assert.equal((mod.match(/econ_calendar\?select=/g) || []).length, 2, "and still holds exactly two calendar reads");
 });
-test("seven one-line hooks connect it; switched off, the room draws the two cards it drew before", () => {
+test("eight one-line hooks connect it; switched off, the room draws the two cards it drew before", () => {
   const ON = 'typeof HM2_ON !== "undefined" && HM2_ON';
   assert.ok(page.includes("(" + ON + " ? '<div id=\"hm2EcTape\"></div>' : \"\") +"));
   assert.match(page, /&& HM2_ON \? hm2RailCardsHTML\(\) :\n\s+'<div class="card"><h4>Treasury curve<\/h4><div class="sc-senttxt" id="econCurve">—<\/div><\/div>' \+\n\s+'<div class="card" id="econLadder"><h4>UST ladder<\/h4><div class="sc-senttxt">—<\/div><\/div>'\) \+/,
     "the one-line curve and the UST ladder are still in the page, behind the switch");
   assert.match(page, /  try \{ hm2Mount\(\); \} catch \(_\) \{\}[^\n]*\n  await Promise\.all\(\[ecLoadWindow\(\), fillEconRail\(\)\]\);/, "beside the room's mount and never awaited by it: the room's own line is untouched");
-  assert.equal((page.match(/typeof HM2_ON !== "undefined" && HM2_ON/g) || []).length, 4, "every HTML hook reads the switch so that a context without the block draws the room as before");
+  assert.equal((page.match(/typeof HM2_ON !== "undefined" && HM2_ON/g) || []).length, 5, "every HTML hook reads the switch so that a context without the block draws the room as before");
+  assert.ok(page.includes("(" + ON + " ? '<div class=\"card hm2-card hm2-ev\" id=\"hm2Event\"></div>' : \"\") +"), "the event card's host, first on the rail");
+  assert.match(css, /\.hm2-ev:empty\{ display:none; \}/, "with nothing to say it takes no room");
   assert.match(page, /function renderEconTable\(\) \{\n  try \{ hm2EcTapePaint\(\); \} catch \(_\) \{\}/);
   assert.ok(page.includes("(" + ON + " && HM2_PC_ON ? '<div class=\"sc-scintstrip\" id=\"hm2PcStrip\"></div>' : \"\") +"));
   assert.match(page, /try \{ hm2PcFill\(\); hm2PcArm\(\); \} catch \(_\) \{\}/);
@@ -73,7 +75,7 @@ test("a part paints only into an element its own HTML drew: with a stand-in or n
   const fake = { id: "x", innerHTML: "untouched" };                       /* what the economic tests' harness hands out for ANY id */
   const ctx = { S: { econCty: "US", econCat: "ALL", econImp: "ALL" }, el: () => fake, pg: async () => { reads++; return []; }, console };
   vm.runInNewContext(helpers + "const ecNormalize = (r) => r; const ecCountryFilter = () => ''; const ecKeysetAfter = () => ''; const ecFetchWindow = async () => { throw new Error('must not be asked'); };\n" +
-    block + "\nglobalThis.run = async () => { hm2Mount(); hm2EcTapePaint(); await hm2CurveFill(); await hm2AuctionsFill(); await hm2StripsFill(); await hm2PcFill(); return hm2PcFlash(); };", ctx);
+    block + "\nglobalThis.run = async () => { hm2Mount(); hm2EcTapePaint(); hm2EventPaint(); hm2AuctionsPaint(); await hm2CurveFill(); await hm2AuctionsFill(); await hm2StripsFill(); await hm2PcFill(); return hm2PcFlash(); };", ctx);
   assert.equal(await ctx.run(), 0);
   assert.equal(reads, 0, "not one request"); assert.equal(fake.innerHTML, "untouched");
   assert.match(block, /^function hm2Mount\(\) \{\n  if \(!HM2_ON\) return;/m, "and the mount is a plain call, not a promise the room could be made to wait on");
@@ -81,7 +83,7 @@ test("a part paints only into an element its own HTML drew: with a stand-in or n
 test("nothing explains itself inside a panel: the rules are in PAGE SPECS at the bottom of the rail", () => {
   const { HM2_SPECS, hm2RailCardsHTML } = load();
   assert.match(HM2_SPECS, /^<details class="sc-pagespecs hm2-specs"><summary>PAGE SPECS<\/summary>/);
-  for (const word of ["The slider", "Treasury curve", "Treasury auctions", "Macro prints"]) assert.ok(HM2_SPECS.includes("<b>" + word + ".</b>"), word);
+  for (const word of ["The slider", "Treasury curve", "Treasury auctions", "The event card", "Auction history", "Macro prints"]) assert.ok(HM2_SPECS.includes("<b>" + word + ".</b>"), word);
   assert.doesNotMatch(hm2RailCardsHTML(), /<p>/, "the cards carry labels and numbers only");
   assert.match(HM2_SPECS, /The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it\./);
 });
@@ -336,4 +338,94 @@ test("the history job keeps the strips' own eighteen US families, maps them as t
   assert.doesNotMatch(out, /\b(update|delete)\b/i);
   const job = fs.readFileSync(P("../scripts/hm2-econ-calendar-backfill.mjs"), "utf8");
   assert.match(job, /process\.env\.FMP_API_KEY \|\| process\.env\.FMP_KEY/); assert.doesNotMatch(job, /console\.(log|error)\([^)]*\bK\b/, "the key is never printed");
+});
+
+/* ---- 6 · the event card (added 14:15 ET, 7 Oct) ------------------------------------------------------ */
+const OFFICIAL = /^https:\/\/(www\.federalreserve\.gov|www\.bls\.gov|www\.dol\.gov|www\.bea\.gov|www\.census\.gov|www\.treasurydirect\.gov|www\.fiscal\.treasury\.gov|www\.eia\.gov|www\.cftc\.gov|www\.atlantafed\.org|www\.ismworld\.org|data\.sca\.isr\.umich\.edu|www\.conference-board\.org|www\.nar\.realtor|adpemploymentreport\.com|www\.newyorkfed\.org|www\.philadelphiafed\.org)\//;
+test("every release names its publisher, never a guess: the Fed for the minutes, BLS for payrolls and CPI, Treasury for an auction", () => {
+  const h = vmWith("hm2Source, HM2_SOURCES");
+  const at = (name) => { const x = h.hm2Source(name); return x ? x.site + " " + x.url : null; };
+  assert.equal(at("FOMC Minutes"), "federalreserve.gov https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm");
+  assert.equal(at("Fed Interest Rate Decision"), at("FOMC Minutes")); assert.match(at("Fed Waller Speech"), /newsevents\/speeches\.htm$/);
+  assert.match(at("Non Farm Payrolls"), /^bls\.gov .*empsit\.nr0\.htm$/); assert.match(at("Unemployment Rate"), /empsit/);
+  assert.match(at("Inflation Rate YoY"), /cpi\.nr0\.htm$/); assert.match(at("Core Inflation Rate MoM"), /cpi\.nr0\.htm$/);
+  assert.match(at("Core PCE Price Index MoM"), /^bea\.gov .*personal-income$/, "PCE is BEA's, not the BLS's CPI page"); assert.match(at("Producer Price Index MoM"), /ppi\.nr0\.htm$/);
+  assert.match(at("Initial Jobless Claims"), /^dol\.gov /); assert.match(at("GDP Growth Rate QoQ"), /^bea\.gov .*gross-domestic-product$/);
+  assert.match(at("Retail Sales MoM"), /^census\.gov .*retail/); assert.match(at("10-Year Note Auction"), /^treasurydirect\.gov /); assert.match(at("30-Year Bond Auction"), /^treasurydirect\.gov /);
+  assert.match(at("ISM Services PMI"), /^ismworld\.org /); assert.match(at("Michigan Consumer Sentiment"), /^umich\.edu /); assert.match(at("EIA Crude Oil Stocks Change"), /^eia\.gov /);
+  assert.equal(at("Redbook YoY"), null, "a private survey with no free official page has no source on file");
+  for (const r of h.HM2_SOURCES) assert.match(r[3], OFFICIAL, "an official publisher's own address: " + r[3]);
+  assert.ok(h.HM2_SOURCES.length >= 25);
+});
+test("before the release the source is words; from the release minute it is a link — and the card says plainly what the calendar holds", () => {
+  const h = vmWith("hm2EventHTML"), T = ts("2026-10-07T18:00:00Z");                                   /* 14:00 New York */
+  const minutes = { sub: "FOMC Minutes", event: "FOMC Minutes", ets: T, cty: "US", impact: "High", actual: null, estimate: null, previous: null, has: true, why: "now" };
+  const before = h.hm2EventHTML(minutes, T - 12 * 60, null, null);
+  assert.match(before, /<h4>FOMC MINUTES <i class="ec-li-note">TODAY 14:00 ET · in 12 min · high importance<\/i><\/h4>/);
+  assert.match(before, /FROM THE CALENDAR<\/span><span>the item only: its name, its time and its importance\. No text and no number comes with it\./, "what FMP gives, said plainly");
+  assert.match(before, /OFFICIAL SOURCE<\/span><span>Federal Reserve publishes it at 14:00 ET on federalreserve\.gov/); assert.doesNotMatch(before, /<a /, "nothing to click before it exists");
+  assert.match(before, /headlines appear here once it is out/);
+  const news = [{ title: "Fed minutes show most policymakers see another rate hike by year end", site: "Investing.com", url: "https://www.investing.com/x", published_ts: T + 5 * 60 }];
+  const after = h.hm2EventHTML(minutes, T + 6 * 60, news, null);
+  assert.match(after, /out 6 min ago/);
+  assert.match(after, /<a class="hm2-src" href="https:\/\/www\.federalreserve\.gov\/monetarypolicy\/fomccalendars\.htm" target="_blank" rel="noopener">FEDERALRESERVE\.GOV ↗<\/a>/);
+  assert.match(after, /<a href="https:\/\/www\.investing\.com\/x" target="_blank" rel="noopener">Fed minutes show most policymakers see another rate hike by year end<\/a> <i>Investing\.com · 14:05 ET<\/i>/);
+  assert.match(h.hm2EventHTML(minutes, T + 60, null, null), /reading our news feed…/); assert.match(h.hm2EventHTML(minutes, T + 60, [], null), /no headline about it in our feed yet/);
+  const nfp = h.hm2EventHTML({ sub: "Non Farm Payrolls", event: "Non Farm Payrolls (Sep)", ets: T, cty: "US", impact: "High", actual: 29, estimate: 90, previous: 142, has: true, why: "picked" }, T + 3600, [], null);
+  assert.match(nfp, /actual <b class="dn">29<\/b> · expected 90 · before 142\. Numbers only, no text\./); assert.match(nfp, /data-hm2="evclose"/, "a clicked release can be let go of");
+  const ten = h.hm2EventHTML({ sub: "10-Year Note Auction", event: "10-Year Note Auction", ets: T - 3600, cty: "US", impact: "Low", actual: 5.3, estimate: null, previous: 4.834, has: true, why: "picked" }, T, [], { results_pdf: "R_20261007_2.pdf" });
+  assert.match(ten, /<a class="hm2-src" href="https:\/\/www\.treasurydirect\.gov\/instit\/annceresult\/press\/preanre\/2026\/R_20261007_2\.pdf" target="_blank" rel="noopener">THIS AUCTION’S RESULT ↗<\/a>/, "an auction links its own one-page result");
+  assert.match(ten, /actual <b class="">5\.3<\/b> · no consensus · before 4\.834/, "the one number the calendar had for an auction: the stop, with nothing beside it");
+  assert.match(h.hm2EventHTML({ sub: "Redbook YoY", event: "Redbook YoY", ets: T, cty: "US", impact: "Low", actual: 5, estimate: null, previous: 5, has: true, why: "picked" }, T + 60, [], null), /no official source is on file for this release/);
+});
+test("which release the card is about: the clicked one, else the one the room names, else what is happening now, else nothing", () => {
+  const T = ts("2026-10-07T18:00:00Z"), mk = (event, at, impact = "High", country = "US") => ({ event_ts: at, country, event, impact, actual: null, estimate: null, previous: null });
+  const rows = [mk("MBA Mortgage Applications", T - 7 * 3600, "Low"), mk("FOMC Minutes", T), mk("Fed Waller Speech", T + 14.5 * 3600), mk("Initial Jobless Claims", T + 18.5 * 3600), mk("ECB Minutes", T, "High", "EU")];
+  const run = (nowSec, S = {}, pick = null) => { const ctx = { S: Object.assign({ econCty: "US", econCat: "ALL", econImp: "ALL" }, S), el: () => null, pg: async () => [], console };
+    vm.runInNewContext(helpers + "const ecNormalize = (r) => r; const ecCountryFilter = () => ''; const ecKeysetAfter = () => ''; const ecFetchWindow = async () => [];\n" + block + "\nglobalThis.go = (rows, pick, now) => { HM2_TL.rows = rows; HM2_EV.pick = pick; return hm2EventPick(now); };", ctx);
+    const e = ctx.go(rows, pick, nowSec); return e ? e.sub + " · " + e.why : null; };
+  assert.equal(run(T - 3 * 3600), null, "three hours before: nothing is happening, so no card");
+  assert.equal(run(T - 30 * 60), "FOMC Minutes · next", "inside two hours: the next high-importance US release");
+  assert.equal(run(T + 5 * 60), "FOMC Minutes · now", "five minutes after: it is the one"); assert.equal(run(T + 2.9 * 3600), "FOMC Minutes · now");
+  assert.equal(run(T + 3.2 * 3600), null, "three hours on, the card steps back");
+  assert.equal(run(T + 5 * 60, { econFocus: { sub: "Initial Jobless Claims", day: "2026-10-08" } }), "Initial Jobless Claims · named", "the tape or the rail named a release: that one");
+  assert.equal(run(T + 5 * 60, { econFocus: { sub: "Initial Jobless Claims", day: "2026-10-08" } }, { sub: "MBA Mortgage Applications", ets: T - 7 * 3600, cty: "US" }), "MBA Mortgage Applications · picked", "a click in the day table wins");
+  assert.equal(run(T + 5 * 60, {}, { sub: "Bund Auction", ets: T, cty: "DE" }), "Bund Auction · picked", "a row the slider has not read still opens, from the row's own name and time");
+});
+test("the headlines are asked for by the words a headline would carry, only after the release, and at most every 90 seconds", () => {
+  const h = vmWith("hm2NewsKeys");
+  assert.deepEqual(Array.from(h.hm2NewsKeys("FOMC Minutes")), ["fed*minutes", "fomc*minutes"]);
+  assert.deepEqual(Array.from(h.hm2NewsKeys("10-Year Note Auction")), ["10-year*auction", "10-year*sale", "treasury*auction"]);
+  assert.deepEqual(Array.from(h.hm2NewsKeys("Fed Waller Speech")), ["fed*waller", "waller*fed"]); assert.deepEqual(Array.from(h.hm2NewsKeys("Initial Jobless Claims")), ["jobless claims"]);
+  assert.deepEqual(Array.from(h.hm2NewsKeys("Wholesale Inventories MoM")), ["wholesale inventories"], "no rule: the release's own name, without MoM / YoY"); assert.deepEqual(Array.from(h.hm2NewsKeys("PMI")), [], "too short to search on: no read at all");
+  assert.match(block, /pg\("news\?select=title,site,url,published_ts&published_ts=gte\." \+ \(ev\.ets - 60\) \+ "&published_ts=lte\." \+ \(ev\.ets \+ 6 \* 3600\)/, "our own news table, from the release minute, six hours at most");
+  assert.match(block, /if \(out && !HM2_EV\.busy && \(!fresh \|\| \(Date\.now\(\) - HM2_EV\.newsAt >= HM2_EV_NEWS_MS && nowSec - ev\.ets <= HM2_EV_NEWS_FOR_S\)\)\) hm2EventNews\(ev, key\);/, "never before the release; again at most every 90 s, for three hours");
+  assert.match(block, /const HM2_EV_NEWS_MS = 90000, HM2_EV_NEWS_FOR_S = 3 \* 3600;/);
+  assert.match(block, /e\.target\.closest\("\[data-act\], \[data-hm2\], a"\)\) return;\n    const row = e\.target\.closest\("\.ec-row\[data-esub\]\[data-ets\]"\);/, "a click on a day-table row opens it; anything inside the row with its own click keeps it");
+});
+
+/* ---- 7 · the auction history (the learning view) ----------------------------------------------------- */
+test("the history: one term, its auctions oldest on the left, five numbers each with ONE plain line; dealers lower is stronger", () => {
+  const h = vmWith("hm2AucLearnHTML, hm2AuctionsHTML, hm2AucPdf, HM2_AUC_METRICS, ecToday, ecShift"), today = h.ecToday(), d = (n) => h.ecShift(today, n);
+  const rows = []; for (let i = 0; i < 12; i++) rows.push(auc("10-Year", d(-28 * i), i === 0 ? 2.77 : 2.5 + (i % 3) * 0.03, i === 0 ? 80.3 : 72 + (i % 4), i === 0 ? 2.5 : 8 + (i % 3), { high_yield: 5.3 - i * 0.05, results_pdf: i === 0 ? "R_20261007_2.pdf" : null }));
+  rows.push(auc("2-Year", d(-15), 2.63, 57.8, 13.2), auc("2-Year", d(-45), 2.6, 58, 13));
+  const html = h.hm2AucLearnHTML(rows, "10-Year");
+  assert.match(html, /HISTORY · 10-YEAR · 12 AUCTIONS SINCE [A-Z]{3} \d+ \d{4}/);
+  assert.equal((html.match(/<div class="hm2-alr">/g) || []).length, 5);
+  for (const [lbl, , , , , say] of h.HM2_AUC_METRICS) { assert.ok(html.includes("<b>" + lbl + "</b><span>" + say.replace(/&/g, "&amp;") + "</span>"), lbl + " carries its one line"); assert.ok(say.length <= 100 && !/\n/.test(say), "one line: " + say); }
+  assert.match(html, /<span class="se-zm on" data-hm2="aucterm" data-t="10-Year">10Y<\/span>/); assert.match(html, /data-hm2="aucterm" data-t="2-Year">2Y<\/span>/); assert.doesNotMatch(html, /data-t="30-Year"/, "a term with no auction in hand has no chip");
+  const row = (lbl) => html.slice(html.indexOf("<b>" + lbl + "</b>"), html.indexOf("</div>", html.indexOf('<span class="hm2-alr__v', html.indexOf("<b>" + lbl + "</b>"))));
+  assert.match(row("BID-TO-COVER"), /<i class="up is-now"[^>]*the six before it averaged 2\.5\d×[^>]*><\/i><\/span><span class="hm2-alr__v up"><b>2\.77×<\/b><i>six before 2\.5\d<\/i>/, "more cover than the six before: green");
+  assert.match(row("DEALERS"), /<i class="up is-now"[^>]*><\/i><\/span><span class="hm2-alr__v up"><b>2\.5%<\/b>/, "dealers left with LESS than the six before: also green");
+  assert.match(row("STOPPED AT"), /<span class="hm2-alr__v up"><b>5\.300%<\/b><\/span>/, "the stop has no better or worse: its colour is which way it moved, and it carries no average");
+  assert.equal(h.hm2AucLearnHTML(rows.slice(0, 1), "10-Year"), "", "one auction is not a history");
+  assert.equal(h.hm2AucPdf("R_20261007_2.pdf"), officialPdfUrl("R_20261007_2.pdf"), "the page builds the same address as the writer's module");
+  assert.equal(h.hm2AucPdf("R_20261007_2.pdf"), "https://www.treasurydirect.gov/instit/annceresult/press/preanre/2026/R_20261007_2.pdf");
+  for (const bad of ["../x.pdf", "R_2026.pdf", "javascript:alert(1)", "", null, "R_20261007_2.pdf?x"]) { assert.equal(h.hm2AucPdf(bad), null); assert.equal(officialPdfUrl(bad), null); }
+  const card = h.hm2AuctionsHTML(rows, []);
+  assert.match(card, /<a class="hm2-src" href="https:\/\/www\.treasurydirect\.gov\/instit\/annceresult\/press\/preanre\/2026\/R_20261007_2\.pdf" target="_blank" rel="noopener"[^>]*>OFFICIAL RESULT ↗<\/a>/, "today's card links Treasury's own result");
+  assert.ok(card.indexOf("HISTORY · 10-YEAR") > card.indexOf("hm2-atbl"), "the history sits under the table, opened on the newest auction's term");
+  assert.equal(auctionRow(TD({})).results_pdf, null, "an example row with no file name: none stored");
+  assert.equal(auctionRow(TD({ pdfFilenameCompetitiveResults: "R_20260812_2.pdf", pdfFilenameAnnouncement: "A_20260805_3.pdf" })).results_pdf, "R_20260812_2.pdf");
+  assert.equal(auctionRow(TD({ pdfFilenameCompetitiveResults: "<script>" })).results_pdf, null, "only a well-formed file name is kept");
 });

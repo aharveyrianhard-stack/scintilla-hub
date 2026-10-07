@@ -35,6 +35,8 @@ create table if not exists public.treasury_auctions (
   indirect_pct         numeric,                    -- share of competitive_accepted, 0-100
   direct_pct           numeric,
   dealer_pct           numeric,
+  announcement_pdf     text,                       -- Treasury's own documents for this auction, by file name ('A_20261001_3.pdf');
+  results_pdf          text,                       -- the folder is the year in the name (auctions.mjs officialPdfUrl)
   status               text        not null check (status in ('announced','auctioned')),
   source               text        not null default 'TreasuryDirect TA_WS',
   source_updated_at    timestamp,                  -- Treasury's own updatedTimestamp (New York wall clock)
