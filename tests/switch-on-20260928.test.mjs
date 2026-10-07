@@ -134,7 +134,7 @@ test("SECTORS: MEMBERS reads 'OUR NAMES' with a count per column, the SPDR funds
   assert.match(page, /localStorage\.setItem\("hub\.sector\.family", window\.SECT_FAMILY\)/);
   /* the OUR NAMES column never wears a fund ticker: the sector's name, and how many names it averages */
   assert.match(page, /return \{key:etf, label:name, short:SHORT\[name\]\|\|name, names:vals\.length,/);
-  const strip = fn("cohortCompareStripHTML");
+  const strip = fn("cohStripColsHTML") + fn("cohortCompareStripHTML");   /* HC1 (6 Oct) — the columns are a function of their own: the single strip and every card of the one-screen compare draw through it */
   assert.match(strip, /r\.names \? r\.names \+ " of our names averaged in this column"/);
   assert.match(strip, /the number under each column = how many of our names/);
   assert.match(strip, /readTag \+ tmTag \+ nTag \+/);

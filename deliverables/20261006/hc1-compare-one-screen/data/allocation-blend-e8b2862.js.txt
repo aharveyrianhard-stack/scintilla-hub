@@ -1,0 +1,29 @@
+// The allocation tool's own blend arithmetic, copied WORD FOR WORD from scintilla-allocation main @e8b2862 (index.html), 6 Oct 2026.
+// It is here so tests/hc1-compare-one-screen.test.mjs can run the Hub's scBlendFrom / scBlendSides against it on the same inputs.
+// Not served, not loaded by any page. If the allocation tool changes its method, re-copy this and the Hub's functions together.
+const BLEND_SRC=[
+  ['SPDR','State Street fund','the sector fund\'s own Geiger — the cap-weighted read (the index names)'],
+  ['HUBCMP','Hub sector compare','the fund and its Invesco equal-weight twin, averaged — the Hub\'s compare strip'],
+  ['MKTBOW','market bow tie','every served name in the sector: the cap-weighted read and the equal-weight read, live from the chart API'],
+  ['TREE','tree close tier','the tree\'s close tier (every common stock and ADR with a close) rolled up by sector, equal-weight'],
+  ['RANK','sector ranking','the live sector_rankings row — the constituents\' newest daily Geiger, equal-weight, published by the sector tool']];
+function blendFrom(parts, w){
+  const used=[], missing=[]; let ws=0,sc=0,tt=0,mm=0;
+  for(const [src] of BLEND_SRC){ const p=parts[src]; const wt=+(w[src]||0);
+    if(!p||p.score==null||!isFinite(p.score)){ missing.push(src); continue; }
+    if(!(wt>0)) continue; used.push(src); ws+=wt; sc+=wt*p.score; tt+=wt*(p.trend??p.score); mm+=wt*(p.momentum??p.score); }
+  if(!ws) return {score:null,trend:null,momentum:null,used,missing,weights:{}};
+  const weights={}; for(const src of used) weights[src]=+(100*w[src]/ws).toFixed(1);
+  return {score:sc/ws,trend:tt/ws,momentum:mm/ws,used,missing,weights};
+}
+function bowSides(parts, w){
+  let cw=0,cs=0,ew=0,es=0;
+  const add=(side,v,wt)=>{ if(v==null||!isFinite(v)||!(wt>0)) return; if(side==='cap'){cw+=wt;cs+=wt*v;} else {ew+=wt;es+=wt*v;} };
+  if(parts.SPDR) add(parts.SPDR.side||'cap',parts.SPDR.score,w.SPDR);
+  if(parts.HUBCMP){ add('cap',parts.HUBCMP.cap,w.HUBCMP); add('eq',parts.HUBCMP.eq,w.HUBCMP); }
+  if(parts.MKTBOW){ add('cap',parts.MKTBOW.cap,w.MKTBOW); add('eq',parts.MKTBOW.eq,w.MKTBOW); }
+  if(parts.TREE) add('eq',parts.TREE.score,w.TREE);
+  if(parts.RANK) add('eq',parts.RANK.score,w.RANK);
+  const cap=cw?cs/cw:null, eq=ew?es/ew:null;
+  return {cap, eq, bowtie:(cap!=null&&eq!=null)?eq-cap:null};
+}

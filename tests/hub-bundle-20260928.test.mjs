@@ -35,7 +35,8 @@ test("INDEXES builds one column per fund from the fund's own Geiger, sorted bull
   assert.match(block, /return \{key:p\[0\], label:p\[1\], short:p\[0\],/);
   /* run it: gAt is the rewind-aware Geiger lookup; a missing Geiger sorts last and says so */
   const G = { SPY: 0.33, QQQ: 0.41, IWM: -0.6 };
-  const rows = new Function("INDEX_FUNDS", "gAt", block.replace('if(SECT_FAMILY==="INDEXES"){', "") .replace(/\}\s*$/, "") )(IDX, (t) => (t in G ? G[t] : null));
+  /* HC1 (6 Oct) — a row also says when its reading is the trend alone on a replayed day (trendOnly); live, as here, it never is */
+  const rows = new Function("INDEX_FUNDS", "gAt", "trendOnly", block.replace('if(SECT_FAMILY==="INDEXES"){', "") .replace(/\}\s*$/, "") )(IDX, (t) => (t in G ? G[t] : null), () => false);
   assert.deepEqual(rows.slice(0, 3).map((r) => r.key), ["QQQ", "SPY", "IWM"]);
   assert.equal(rows.length, IDX.length);
   assert.match(rows[rows.length - 1].full, /no Geiger yet/);
