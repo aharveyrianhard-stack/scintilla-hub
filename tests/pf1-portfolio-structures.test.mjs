@@ -130,3 +130,56 @@ test("the look: every colour on the page is a quiet grey, a declared series colo
     assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 24 && Math.max(r, g, b) <= 210, h + " is neither a quiet grey nor a declared chart colour");
   }
 });
+
+// ---- added 7 Oct 2026, when the study was recovered and finished: each test below is a fault that was actually found ----
+
+test("a second, separate re-computation agrees with the files on every headline figure it covers", () => {
+  const V = J("verify_independent.json");
+  assert.ok(V.comparisons.length >= 30, "at least thirty figures compared");
+  assert.equal(V.outside_tolerance, 0); assert.ok(V.comparisons.every((c) => c.ok === true));
+  for (const need of ["hold SPY last2 total", "trend_and_breadth_3day full yearly", "dual momentum full yearly", "ladder last2 total", "ladder + 60% floor last2 total"]) assert.ok(V.comparisons.some((c) => c.what === need), need);
+  const src = fs.readFileSync(new URL("tools/verify_independent.py", dir), "utf8");
+  assert.ok(!/import\s+pf1lib|from\s+pf1lib/.test(src), "it must not borrow the study's own simulator");
+});
+
+test("structure 6's picture: all three measured lines are on one date axis and the put-selling line ends where its growth rate says", () => {
+  const M = J("s6b_cboe_measured.json"); const c = M.chart_same_dates; const put = M.variants.find((v) => v.key === "put_measured");
+  assert.equal(c.from, put.full_from);
+  for (const k of ["SPY", "PUT", "BXM"]) { assert.equal(c[k].length, c.dates.length, k); assert.ok(c[k].every((x) => Number.isFinite(x) && x > 0), k + " has a hole"); assert.equal(c[k][0], 1); }
+  assert.ok(Math.abs(c.PUT.at(-1) - (1 + put.full.total_return_pct / 100)) < 0.01, `put line ends at ${c.PUT.at(-1)}, total return says ${1 + put.full.total_return_pct / 100}`);
+  assert.ok(c.SPY.at(-1) > c.PUT.at(-1) && c.PUT.at(-1) > c.BXM.at(-1), "SPY above put selling above covered calls, as the table says");
+  assert.match(html, /Selling puts \(Cboe PUT\) <tspan class="lbv">[34]\.\d\d×<\/tspan>/, "the label on the picture is not the 1.00× it once showed");
+  assert.match(fs.readFileSync(new URL("tools/viz.py", dir), "utf8"), /most of its points are missing on this date axis/, "the chart helper refuses a line that is mostly holes");
+});
+
+test("every repair made to the study's copy of the data is listed on the page, and no sentence still calls a repaired fault unrepaired", () => {
+  const C = J("corrections.json"); assert.ok(C.length >= 5);
+  const specs = html.slice(html.indexOf('<details class="sc-pagespecs">'));
+  for (const c of C) assert.ok(specs.includes(`<b>${c.symbol}:</b>`), c.symbol + " repair not listed in PAGE SPECS");
+  for (const k of FILES) for (const cav of S[k].caveats) { assert.ok(!/in memory/.test(cav), k + ": " + cav.slice(0, 60)); assert.ok(!/A data blemish/.test(cav), k); }
+  assert.ok(!/corrects it in memory/.test(html));
+  const efa = J("s3_dual_momentum.json").extras.data_patch.efa_split; assert.equal(efa.applied, false, "EFA arrives repaired; the old in-memory patch has nothing left to do");
+});
+
+test("the same rule gives the same numbers on every run, and a bad target stops a run instead of becoming cash", () => {
+  const lib = fs.readFileSync(new URL("tools/pf1lib.py", dir), "utf8");
+  assert.match(lib, /for s in sorted\(set\(list\(val\) \+ list\(t\)\)\)/); assert.match(lib, /max\(sorted\(val\), key=val\.get\)/);
+  assert.match(lib, /is not something this study can hold/); assert.match(lib, /bad share for/);
+});
+
+test("the page reads as words: no working labels, no None, nine alternatives each with a case for and a case against", () => {
+  for (const bad of ["None%", "CORRECTED WORDING", "MODEL CHECK", ">-0.0%<", "steady 15% risk level", "{CORRECTIONS}", "{S7_TABLE}"]) assert.ok(!html.includes(bad), "page still prints " + bad);
+  const i = html.indexOf(">Alternatives you did not name</h2>"), j = html.indexOf(">The last two years, episode by episode</h2>");
+  assert.ok(i > 0 && j > i, "the alternatives come before the episode tables, straight after the read");
+  const sec = html.slice(i, j); const boxes = sec.split('<div class="pick">').slice(1);
+  assert.equal(boxes.length, 9); for (const b of boxes) { assert.ok(b.includes("<b>For:</b>"), "a box has no case for"); assert.ok(b.includes("<b>Against:</b>"), "a box has no case against"); }
+  assert.ok(html.indexOf(">My read, and the two that fit best</h2>") < i);
+  assert.match(html, /<details class="nums"><summary>THE NUMBERS<\/summary>/);
+});
+
+test("the daily trend rule is shown with what one day's timing does to it", () => {
+  const f = J("s2_trend_core.json").extras.fill_one_session_later; const h = S.s2_trend_core.variants[0];
+  assert.ok(Number.isFinite(f.full_cagr_pct) && Number.isFinite(f.last2_total_return_pct));
+  assert.ok(Math.abs(f.last2_total_return_pct - h.last2.total_return_pct) > 2, "one session's difference in the fill moves the two-year result by points, which is why the page calls the figure rough");
+  assert.ok(S.s2_trend_core.caveats.some((c) => /hangs on which close/.test(c)));
+});

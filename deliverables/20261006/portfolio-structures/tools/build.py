@@ -221,4 +221,12 @@ page = f"""<!doctype html>
 </body>
 </html>
 """
+# The Hub's BACK / CLOSE pair. scripts/inject-scnav.py places it on every sub-page, but it also rewrites pages that are not
+# this study's (lab.html among them), so the same block is placed here, on this page only, exactly as that script would.
+import re
+SNIP = os.path.join(HERE, "..", "..", "..", "..", "scripts", "scnav-snippet.html")
+if os.path.exists(SNIP):
+    page = re.sub(r"\n?<!-- scnav · .*?<!-- /scnav -->\n?", "\n", page, flags=re.S)
+    assert page.count("</body>") == 1 and "data-scnav-slot" in page
+    page = page.replace("</body>", open(SNIP, encoding="utf8").read().strip() + "\n</body>", 1)
 open(OUT, "w", encoding="utf8").write(page); print("wrote", OUT, len(page), "bytes")

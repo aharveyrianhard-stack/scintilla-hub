@@ -165,8 +165,13 @@ def checks(S0, S, LIT):
         p = var(M, "put_measured")["years"]; out.append("<li>Cboe PUT index calendar years as read from Cboe's file: " + " · ".join(f"{y} {pct(p[y])}" for y in ["2008", "2009", "2018", "2020", "2021", "2022", "2023"] if y in p) + ".</li>")
     C = J("s7_combined.json")
     if C: out.append(f'<li>A second, from-scratch core + satellite (in s7_combined.py) against structure 1\'s headline: {"agrees on every number" if C["extras"]["check_against_structure_1"]["agree"] else "DISAGREES"}.</li>')
-    lit = LIT.get("literature", []); n = sum(len((x.get("check") or {}).get("findings") or []) for x in lit); ok = sum(1 for x in lit for f in ((x.get("check") or {}).get("findings") or []) if f["status"] in ("verified", "corrected"))
-    if n: out.append(f"<li>Public literature: {n} findings from the researchers went to an independent fact-checker who re-opened the sources; {ok} survived (verified, or corrected to what the source says) and are the only ones printed. {n - ok} were dropped as unverifiable or wrong.</li>")
+    lit = LIT.get("literature", []); fs = [f for x in lit for f in ((x.get("check") or {}).get("findings") or [])]
+    nv = sum(1 for f in fs if f["status"] == "verified"); nc = sum(1 for f in fs if f["status"] == "corrected"); nm = sum(len((x.get("check") or {}).get("missing") or []) for x in lit)
+    if fs: out.append(f"<li>Public literature: a separate fact-checking agent re-opened the researchers' sources and returned {len(fs)} findings — {nv} confirmed as written and {nc} corrected to what the source actually says. Only those {nv + nc} are printed, in their corrected wording. "
+                      f"The {nm} points it could not confirm are not stated as findings; they are listed, as open points, at the end of each “more from the record” fold (for the nine alternatives, under “what the fact-check could not confirm”).</li>")
+    if Vf and Vf.get("literature_spot_check"):
+        sc = Vf["literature_spot_check"]
+        out.append(f'<li><b>Literature spot check, {esc(sc["when"])}:</b> {esc(sc["what"])}.<ul>' + "".join(f'<li>{esc(c["claim"])} — {esc(c["source"])}: {esc(c["result"])}.</li>' for c in sc["checks"]) + "</ul></li>")
     out.append("</ul>"); return "".join(out)
 
 

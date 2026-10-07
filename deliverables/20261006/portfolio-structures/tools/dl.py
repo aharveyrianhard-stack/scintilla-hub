@@ -107,7 +107,7 @@ for sym in list(divs):
 json.dump(divs, open(os.path.join(DATA, "dividends.json"), "w")); json.dump(corr, open(os.path.join(DATA, "corrections.json"), "w"), indent=1)
 for x in corr: print("CORRECTED", x["symbol"], "|", x["what"], "|", x["repair"], flush=True)
 
-for k, df in panel.items(): df.round(4).to_csv(os.path.join(DATA, f"bars_{k}.csv.gz"), compression="gzip")
+for k, df in panel.items(): df.round(4).to_csv(os.path.join(DATA, f"bars_{k}.csv.gz"), compression={"method": "gzip", "mtime": 1})   # a fixed stamp inside the gzip, so the same bars give the same file
 meta = {"end": END, "api": API, "symbols": {"index": INDEX, "sectors": SECTORS, "bonds": BONDS, "other": OTHER, "leaders": LEADERS, "macro": MACRO},
         "first_bar": {s: frames[s].index[0] for s in SYMS}, "last_bar": {s: frames[s].index[-1] for s in SYMS}, "basis": {s: raw[s]["basis"] for s in SYMS},
         "provider": {s: raw[s]["provider"] for s in SYMS}, "sessions": len(cal), "built_utc": datetime.datetime.utcnow().isoformat() + "Z",
