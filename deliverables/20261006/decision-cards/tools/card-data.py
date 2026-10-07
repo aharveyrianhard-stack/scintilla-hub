@@ -6,6 +6,8 @@
 # Run from the scratch folder after comps-run.mjs:  python3 <this file>
 import json,urllib.request,urllib.parse,os,time,datetime as d,sys
 import numpy as np
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))   # fiscal_year.py sits beside this file, wherever it is run from
+from fiscal_year import copies_of_fiscal_year
 A="https://scintilla-massive-chart-api.fly.dev"; SB="https://wadinxqplrggagkvrdag.supabase.co"; KEY=open('.anon').read().strip()
 TODAY=d.date.fromisoformat(os.environ.get('CP1_TODAY','2026-10-06'))
 LB1=os.environ.get('CP1_LB1',"/Users/alanharvey/SCINTILLA 0.5/_worktrees/provider-lb1-reviewed-lines-20261006/evidence/lb1-reviewed-lines-20261006/")
@@ -121,8 +123,11 @@ for r in pg(f"analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg,est
 for r in pg(f"fundamentals_history?select=ticker,period,fiscal_year,fiscal_date,revenue,eps_diluted,net_income&ticker={inq(NAMES)}&fiscal_date=gte.2024-06-01&order=ticker.asc,fiscal_date.desc"):
     (hist if r['period']=='FY' else qhist).setdefault(r['ticker'],[]).append(r)
 RAT={r['ticker']:r for r in pg(f"analyst_ratings?select=*&ticker={inq(NAMES)}")}
-SNAP={}   # (ticker, fiscal_date) -> [(as_of_date, eps, revenue, analysts)] : the stored daily copies of the analysts' estimates
-for r in pg(f"analyst_estimates_daily?select=ticker,fiscal_date,as_of_date,eps_avg,revenue_avg,analysts_eps&period=eq.annual&ticker={inq(NAMES)}&fiscal_date=gte.2026-06-01&order=ticker.asc,fiscal_date.asc,as_of_date.asc"): SNAP.setdefault((r['ticker'],r['fiscal_date']),[]).append(r)
+SNAP={}   # ticker -> every stored daily copy of the analysts' annual estimates (any fiscal year, any copy date)
+# FD1 (7 Oct): keyed by the company, not by (company, fiscal date). FMP moved Micron's fiscal-2027 date from 28 Aug to 3 Sep
+# after its 30 Sep report, so the date key dropped the 11 Aug copy and the card read "+1.7% since 2 Oct, three copies" where
+# the database holds four and the change since 11 Aug is +12.4%. The copies of one fiscal year are found by fiscal_year.py.
+for r in pg(f"analyst_estimates_daily?select=ticker,fiscal_date,as_of_date,eps_avg,revenue_avg,analysts_eps&period=eq.annual&ticker={inq(NAMES)}&fiscal_date=gte.2026-06-01&order=ticker.asc,fiscal_date.asc,as_of_date.asc"): SNAP.setdefault(r['ticker'],[]).append(r)
 TGT={}
 for r in pg(f"analyst_target_news?select=ticker,published_utc,kind,firm,target,adj_target_checked,action,price_when_posted,quality&kind=eq.TARGET&ticker={inq(NAMES)}&published_utc=gte.{TODAY-d.timedelta(days=30)}&order=ticker.asc,published_utc.desc"): TGT.setdefault(r['ticker'],[]).append(r)
 PTS={}
@@ -156,10 +161,10 @@ def fundamentals(t,price):
     # ---- revisions: the same fiscal year's estimate, the oldest stored copy against the newest (analyst_estimates_daily)
     rev={}
     for k,f in (('fy1',f1),('fy2',f2)):
-        ss=[x for x in SNAP.get((t,f['fiscal_date']),[]) if x.get('eps_avg') is not None]
+        cp,keys=copies_of_fiscal_year(SNAP.get(t,[]),f['fiscal_date']); ss=[x for x in cp if x.get('eps_avg') is not None]
         if len(ss)>=2 and ss[0]['as_of_date']!=ss[-1]['as_of_date']:
             a,b=ss[0],ss[-1]; rev[k]={'from':a['as_of_date'],'to':b['as_of_date'],'days':(P(b['as_of_date'])-P(a['as_of_date'])).days,'eps_then':a['eps_avg'],'eps_now':b['eps_avg'],'eps_pct':g(b['eps_avg'],a['eps_avg']) if a['eps_avg']>0 else None,
-                    'rev_then':a.get('revenue_avg'),'rev_now':b.get('revenue_avg'),'rev_pct':g(b.get('revenue_avg'),a.get('revenue_avg')),'copies':len(ss)}
+                    'rev_then':a.get('revenue_avg'),'rev_now':b.get('revenue_avg'),'rev_pct':g(b.get('revenue_avg'),a.get('revenue_avg')),'copies':len(ss),'keys':keys,'key_moved':len(keys)>1}
     o['revision']=rev or {'why':'fewer than two stored copies of the estimates'}
     tg=TGT.get(t,[]); cnt={}
     for x in tg: cnt[x.get('action') or 'other']=cnt.get(x.get('action') or 'other',0)+1
