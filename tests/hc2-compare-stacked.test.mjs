@@ -173,7 +173,7 @@ test("PAGE SPECS says how the panel is laid out, under the list — never inside
 /* ── the page as measured in a headless browser (deliverables/20261007/hc2-compare-stacked/data, written by tools/capture.mjs):
       what the report says, held to what was read off the page ─────────────────────────────────────────────────────────── */
 const cap = (which, tag) => JSON.parse(fs.readFileSync(new URL("../deliverables/20261007/hc2-compare-stacked/data/capture-" + which + "-" + tag + ".json", import.meta.url), "utf8"));
-const laidOut = (j) => Object.entries(j.steps).filter(([, v]) => v && v.sideways);
+const laidOut = (j) => Object.entries(j.steps).filter(([, v]) => v && v.sideways && typeof v.sideways === "object");   // the states read whole
 
 test("measured at 1680, 1440, 1280 and 390: no sideways scroll at any level, in any state; nothing cut; three cards to the list", () => {
   for (const tag of ["1680", "1440", "1280", "390"]) {
@@ -210,6 +210,31 @@ test("measured at 1680, 1440, 1280 and 390: no sideways scroll at any level, in 
     /* the ⤢: the word and the pair under each bar, none cut */
     assert.equal(j.steps.unfolded.stateStreet.words.length, 11); assert.deepEqual(j.steps.unfolded.stateStreet.cutWords, []);
     assert.equal(j.steps.cohortsUnfolded.rowsOfBars, 2); assert.deepEqual(j.steps.cohortsUnfolded.cut, []); assert.deepEqual(j.steps.fullScreenUnfolded.cutWords, []);
+    /* OUR NAMES unfolded wears the longest names on the screen: each has its whole column, and none is cut */
+    const on = j.steps.ourNamesUnfolded;
+    assert.deepEqual(on.cut, [], tag + ": OUR NAMES unfolded"); assert.ok(on.names.includes("INDUSTRY")); assert.equal(on.rowsOfBars, phone ? 2 : 1);
+    assert.ok(on.longestNameCssPx <= on.columnCssPx, tag + ": " + on.longestName + " (" + on.longestNameCssPx + " px) fits its column (" + on.columnCssPx + ")");
+  }
+});
+
+test("measured at the widths in between — where the zoom steps, where the rows switch, where the dashboard stacks, a small phone", () => {
+  const E = JSON.parse(fs.readFileSync(new URL("../deliverables/20261007/hc2-compare-stacked/data/edge-widths.json", import.meta.url), "utf8"));
+  assert.deepEqual(E.runs.map((r) => r.width), [1920, 1400, 1279, 1100, 901, 821, 360]);
+  for (const r of E.runs) {
+    assert.equal(r.error, undefined, r.width + ": the run finished"); assert.equal(r.requests.stoppedNonGet, 0); assert.equal(r.consoleErrors.length, 0);
+    assert.equal(r.states.length, 4);
+    for (const s of r.states) {
+      assert.equal(s.sidewaysPx, 0, r.width + " · " + s.state + ": nothing to scroll sideways");
+      assert.deepEqual(s.cut, [], r.width + " · " + s.state + ": no name, number or word is cut");
+      assert.deepEqual(s.cardsRunningOverTheirBox, [], r.width + " · " + s.state + ": no card runs over its box");
+      assert.equal(s.cards.length, 9);
+      /* one card to a line everywhere but full screen from 1280 px, which is three */
+      assert.equal(s.cardsToALine, /^full screen/.test(s.state) && r.width >= 1280 ? 3 : 1, r.width + " · " + s.state);
+    }
+    /* the bars-to-a-row rule, read off the page: from 1280 px one row (unfolded COHORTS two); under it, more than eleven columns or unfolded takes two */
+    const rows = (st, id) => r.states[st].cards.find((c) => c.id === id).rowsOfBars;
+    assert.equal(rows(0, "SPDR"), 1); assert.equal(rows(0, "BOWTIE"), r.width >= 1280 ? 1 : 2); assert.equal(rows(0, "COHORTS"), r.width >= 1280 ? 1 : 2);
+    assert.equal(rows(1, "SPDR"), r.width >= 1280 ? 1 : 2); assert.equal(rows(1, "COHORTS"), 2); assert.equal(rows(1, "MEMBERS"), r.width >= 1280 ? 1 : 2);
   }
 });
 

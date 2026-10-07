@@ -121,6 +121,14 @@ try {
         cut: Array.from(c.querySelectorAll(".sc-cohstrip__lbl, .sc-cohstrip__val, .sc-cohstrip__read, .sc-cohstrip__tm, .sc-cohstrip__n")).filter(vis).filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent) }; });
     S.cohortsUnfolded.shot = await shot("4b-cohorts-unfolded");
     await page.click('[data-act="cmpxexp"][data-v="COHORTS"]'); await sleep(500);
+    /* …and OUR NAMES unfolded: it wears its full names then (INDUSTRY, MATERIAL, REAL EST), the longest on the screen */
+    await page.click('[data-act="cmpxexp"][data-v="MEMBERS"]'); await sleep(700);
+    S.ourNamesUnfolded = await page.evaluate(() => { const c = document.querySelector('.sc-cmpx__card[data-cmpx="MEMBERS"]'), vis = (e) => e.offsetParent !== null, zoom = +getComputedStyle(document.body).zoom || 1, r = document.createRange();
+      const wide = Array.from(c.querySelectorAll(".sc-cohstrip__lbl")).map((e) => { r.selectNodeContents(e); return [e.textContent, +(r.getBoundingClientRect().width / zoom).toFixed(1)]; }).sort((a, b) => b[1] - a[1])[0];
+      return { unfolded: c.classList.contains("is-exp"), rowsOfBars: new Set(Array.from(c.querySelectorAll(".sc-vmini")).map((v) => Math.round(v.getBoundingClientRect().top))).size, sideways: Math.max(0, c.scrollWidth - c.clientWidth),
+        names: Array.from(c.querySelectorAll(".sc-cohstrip__lbl")).map((e) => e.textContent), longestName: wide[0], longestNameCssPx: wide[1], columnCssPx: +(c.querySelector(".sc-cohstrip__col").getBoundingClientRect().width / zoom).toFixed(1),
+        cut: Array.from(c.querySelectorAll(".sc-cohstrip__lbl, .sc-cohstrip__val, .sc-cohstrip__read, .sc-cohstrip__tm, .sc-cohstrip__n")).filter(vis).filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent) }; });
+    await page.click('[data-act="cmpxexp"][data-v="MEMBERS"]'); await sleep(500);
     await page.evaluate(() => { document.getElementById("cmpxScroll").scrollTop = 0; }); await sleep(300);
     /* 4 · REPLAY from the pinned handle: scrub back about four weeks, look, scroll the list, play three seconds, pause, back to live */
     S.replayBefore = await page.evaluate(() => cmpxBarState());
