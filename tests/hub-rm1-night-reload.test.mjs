@@ -17,9 +17,9 @@ const constLine = (name) => page.match(new RegExp("^const " + name + " = [^\\n]*
 const fn = (name) => { const s = page.search(new RegExp("^function " + name + "\\b", "m")); assert.ok(s >= 0, name + " is declared with `function` at column 0"); return page.slice(s, page.indexOf("\n}\n", s) + 3); };
 const src = constLine("HUB_SELF_UPDATE_IDLE_MS") + constLine("HUB_SELF_UPDATE_EVERY_MS") + constLine("HUB_NIGHT_RELOAD_DEFAULT_ON") +
   constLine("HUB_NIGHT_RELOAD_RULE") + constLine("HUB_KEEP_PLACE_MAX_MS") +
-  fn("hubSelfUpdatePlan") + fn("hubNightReloadDue") + fn("hubNightReloadSwitch") + fn("hubPlaceKept") +
-  "return { hubSelfUpdatePlan, hubNightReloadDue, hubNightReloadSwitch, hubPlaceKept, HUB_NIGHT_RELOAD_RULE, HUB_NIGHT_RELOAD_DEFAULT_ON, HUB_KEEP_PLACE_MAX_MS, HUB_SELF_UPDATE_IDLE_MS, HUB_SELF_UPDATE_EVERY_MS };";
-const { hubSelfUpdatePlan, hubNightReloadDue, hubNightReloadSwitch, hubPlaceKept, HUB_NIGHT_RELOAD_RULE: RULE, HUB_NIGHT_RELOAD_DEFAULT_ON,
+  fn("hubSelfUpdatePlan") + fn("hubNightReloadDue") + fn("hubNightReloadSwitch") + fn("hubPlaceKept") + fn("hubNightHold") +
+  "return { hubSelfUpdatePlan, hubNightReloadDue, hubNightReloadSwitch, hubPlaceKept, hubNightHold, HUB_NIGHT_RELOAD_RULE, HUB_NIGHT_RELOAD_DEFAULT_ON, HUB_KEEP_PLACE_MAX_MS, HUB_SELF_UPDATE_IDLE_MS, HUB_SELF_UPDATE_EVERY_MS };";
+const { hubSelfUpdatePlan, hubNightReloadDue, hubNightReloadSwitch, hubPlaceKept, hubNightHold, HUB_NIGHT_RELOAD_RULE: RULE, HUB_NIGHT_RELOAD_DEFAULT_ON,
   HUB_KEEP_PLACE_MAX_MS, HUB_SELF_UPDATE_IDLE_MS, HUB_SELF_UPDATE_EVERY_MS } = new Function(src)();
 const H = 3600000;
 
@@ -60,11 +60,12 @@ test("the switch: the address says it once and the browser remembers; nothing sa
 
 /* ---- with its neighbours ------------------------------------------------------------------ */
 /* What the page does on each of K3's three-minute checks, written out as the page writes it. */
-const decide = ({ seen, etag, ok, idleMs, video, typing, on, openMs, hour }) => {
+const CLEAR = { playerOpen: false, playerState: -1, sectionFull: false, browserFull: false, overlay: false };
+const decide = ({ seen, etag, ok, idleMs, video, typing, on, openMs, hour, up = CLEAR }) => {
   const plan = hubSelfUpdatePlan(seen, etag, idleMs, video, typing);
   if (plan.adopt) return "adopt";
   if (plan.reload) return "reload: new build";
-  if (ok && hubNightReloadDue(on, openMs, hour, RULE).due && hubSelfUpdatePlan("open", "night", idleMs, video, typing).reload) return "reload: night";
+  if (ok && hubNightReloadDue(on, openMs, hour, RULE).due && hubSelfUpdatePlan("open", "night", idleMs, video, typing).reload && !hubNightHold(up)) return "reload: night";
   return "nothing";
 };
 const quiet = { seen: "v1", etag: "v1", ok: true, idleMs: 10 * 60000, video: false, typing: false, on: true, openMs: 8 * H, hour: 3 };
@@ -73,8 +74,8 @@ test("the page's own wiring is the decision tested here", () => {
   const k3 = page.slice(page.indexOf("/* K3 — QUIET-TIME SELF-UPDATE."));
   assert.match(k3, /const plan = hubSelfUpdatePlan\(SC_ETAG_SEEN, etag, Date\.now\(\) - lastActive, videoPlaying, typing\);\n\s+if \(plan\.adopt\) SC_ETAG_SEEN = etag;\n\s+else if \(plan\.reload\) location\.reload\(\);/,
     "K3's own three lines are exactly as they were");
-  assert.match(k3, /else if \(r\.ok && hubNightReloadDue\(HUB_NIGHT_RELOAD_ON, Date\.now\(\) - HUB_LOADED_AT, new Date\(\)\.getHours\(\), HUB_NIGHT_RELOAD_RULE\)\.due &&\s+hubSelfUpdatePlan\("open", "night", Date\.now\(\) - lastActive, videoPlaying, typing\)\.reload\) \{\s+hubKeepPlace\(\); location\.reload\(\);/,
-    "the night reload: server answered, due, and K3's rule allows it; the place is kept first");
+  assert.match(k3, /else if \(r\.ok && hubNightReloadDue\(HUB_NIGHT_RELOAD_ON, Date\.now\(\) - HUB_LOADED_AT, new Date\(\)\.getHours\(\), HUB_NIGHT_RELOAD_RULE\)\.due &&\s+hubSelfUpdatePlan\("open", "night", Date\.now\(\) - lastActive, videoPlaying, typing\)\.reload && !hubNightHoldNow\(\)\) \{\s+hubKeepPlace\(\); location\.reload\(\);/,
+    "the night reload: server answered, due, K3's rule allows it, and nothing is open over the page; the place is kept first");
   assert.equal((page.match(/setInterval\(\(\) => \{\s+try \{\s+fetch\("\/", \{ method: "HEAD", cache: "no-store" \}\)/g) || []).length, 1, "no second poll was added: it rides K3's");
 });
 
@@ -121,6 +122,29 @@ test("a MacBook asleep every night from 23:00 to 08:00 reloads once it is thirty
   }
   assert.ok(reloads.length >= 2 && reloads.length <= 3, "about one every day and a quarter");
   for (const open of reloads) assert.ok(open >= 30 * H && open < 30 * H + 10 * H, "never before thirty hours");
+});
+
+test("it waits for what K3 cannot see: the Hub's own video player, a full-screen section, anything open over the page", () => {
+  assert.equal(hubNightHold(CLEAR), "", "nothing up: no hold");
+  assert.match(hubNightHold({ ...CLEAR, playerOpen: true }), /video player/, "the player is open, even paused");
+  assert.match(hubNightHold({ ...CLEAR, playerState: 1 }), /video player/, "playing");
+  assert.match(hubNightHold({ ...CLEAR, playerState: 3 }), /video player/, "buffering");
+  assert.equal(hubNightHold({ ...CLEAR, playerState: 2 }), "", "a player that was closed while paused holds nothing");
+  assert.equal(hubNightHold({ ...CLEAR, playerState: 0 }), "", "nor one that ended");
+  assert.match(hubNightHold({ ...CLEAR, sectionFull: true }), /full screen/);
+  assert.match(hubNightHold({ ...CLEAR, browserFull: true }), /full screen/, "a browser cannot be put back in full screen without a hand");
+  assert.match(hubNightHold({ ...CLEAR, overlay: true }), /open over the page/);
+  for (const up of [{ playerOpen: true }, { playerState: 1 }, { sectionFull: true }, { browserFull: true }, { overlay: true }])
+    assert.equal(decide({ ...quiet, up: { ...CLEAR, ...up } }), "nothing", JSON.stringify(up) + ": the night reload waits");
+  assert.equal(decide({ ...quiet, etag: "v2", up: { ...CLEAR, overlay: true } }), "reload: new build", "K3 itself is not changed by the hold");
+});
+
+test("the hold reads the page's own state: the player, the full-screen section, the open panels", () => {
+  const now = fn("hubNightHoldNow");
+  for (const piece of ["YT_PLYR.getPlayerState()", "YT_IDX >= 0", "!!SECFS", "document.fullscreenElement", '"tvmodal-open"', "GPOP_T", '"trFullHost"', '"ernSumHost"', 'open("chatPop", "open")',
+    'open("alertPanel", "is-open")', 'open("fViewer", "on")', 'el("tvModal")', ".sc-cohwrap.is-open"])
+    assert.ok(now.includes(piece), piece + " is looked at");
+  assert.doesNotMatch(now, /fetch\(|localStorage|sessionStorage/, "it only looks; it keeps and sends nothing");
 });
 
 /* ---- the place that is kept --------------------------------------------------------------- */
