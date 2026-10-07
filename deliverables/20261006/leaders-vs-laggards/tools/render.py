@@ -301,6 +301,7 @@ T_RSUM = tbl(["WHAT WAS RE-READ", "RESULT"], [
     ["Guidance, against the company's own release", tick(RS["guidance"])],
     ["A test on names the finding was not built from (section 11g)", tick(RS["out_of_sample"])],
     ["Market value and share count, against the public page", tick(RS["market_value"])],
+    ["Six figures on each of 12 statistics pages: six leaders and six laggards drawn by a fixed seed (section 11e)", tick(RS["statistics_pages"])],
     ["Cerebras, fact by fact, against the filing, the release and the article", "● " + esc(RS["cbrs_facts"])]])
 T_RPAIR = tbl(["NAME", "GROUP", "FISCAL YEAR", "90 DAYS AGO", "NOW", "CHANGE", "CALLED", "THE FIRST RUN HAD", "RESULT"],
     [[f'<b>{e["ticker"]}</b>', grp_of(e["ticker"]), esc(e["year"]), f'{e["then"]:,.2f}', f'{e["now"]:,.2f}', pct(e["pct"], 1, frac=False), arrow(e["direction"]), esc(e["saved"]), ok(e["verdict"]) + (f'<br><span class="dimmer">{esc(e["note"])}</span>' if e.get("note") else "")] for e in RK["estimate_pairs"]], "re")
@@ -327,6 +328,13 @@ OOS = RK.get("out_of_sample") or {"rows": [], "result": {}, "not_loaded": []}
 T_ROOS = tbl(["ENTERED THE TOP 25 ON " + NOW_L.upper(), "FISCAL YEAR", "90 DAYS AGO", "NOW", "CHANGE", "ESTIMATE", "GUIDANCE", "WHAT THE LAST REPORT SAID"],
     [[f'<b>{r["ticker"]}</b> <span class="dimmer">{esc(r["name"])}</span>', esc(r["year"]), f'{r["then"]:,.2f}', f'{r["now"]:,.2f}', pct(r["pct"], 1, frac=False), arrow(r["estimate"]), guide(r["guidance"], r.get("guidance_kind")), esc(r["guidance_read"])] for r in OOS["rows"]] +
     [[f'<b>{t}</b>', '<span class="na">page would not load</span>', "", "", "", '<span class="na">–</span>', '<span class="na">–</span>', ""] for t in OOS["not_loaded"]], "re")
+SP = RK.get("statistics_pages") or {"rows": [], "differences": [], "by_field": {}}
+def spcell(c):
+    f = lambda v: '<span class="na">none</span>' if v is None else f"{v:,.2f}"
+    return (f'<span class="up">✓</span> {f(c["read"])}' if c["match"] else f'● {f(c["saved"])} <span class="dimmer">saved ·</span> {f(c["read"])} <span class="dimmer">page</span>')
+T_RSTAT = tbl(["NAME", "GROUP", "MARKET VALUE $B", "SHARE COUNT, 1 YEAR %", "FORWARD P/E", "EV / SALES", "CASH LESS DEBT $B", "FREE CASH FLOW $B"],
+    [[f'<b>{r["ticker"]}</b>', grp_of(r["ticker"])] + [spcell(c) for c in r["cells"]] for r in SP["rows"]] +
+    [["<b>match within 5%</b>", ""] + [f'<b>{esc(v)}</b>' for v in SP["by_field"].values()]], "caps")
 STOR = S.get("storage_note") or {"items": []}
 T_RSTOR = tbl(["STORAGE", "READ", "RESULT", "SOURCE"], [[f'<b>{esc(e["fact"])}</b>', esc(e["read"]), "● " + esc(e["verdict"]), link(e["source"])] for e in STOR["items"]], "story")
 changed = "".join(f'<li><b>{t}</b>: {esc("; ".join(n["changes"])[:900])}</li>' for t, n in N.items() if n["changes"])
@@ -439,8 +447,9 @@ details.sc-pagespecs p,details.sc-pagespecs li{{max-width:980px}}details.sc-page
 <div class="wrap">{T_RPAIR}</div>
 <h3>11d · GUIDANCE, AGAINST THE COMPANY'S OWN RELEASE</h3>
 <div class="wrap">{T_RGUIDE}</div>
-<h3>11e · MARKET VALUE AND SHARE COUNT</h3>
+<h3>11e · MARKET VALUE, SHARE COUNT AND THE CASH FIGURES</h3>
 <div class="wrap">{T_RCAP}</div>
+<div class="wrap" style="margin-top:12px">{T_RSTAT}</div>
 <h3>11f · THE HARD-DISK MAKERS</h3>
 <div class="wrap">{T_RSTOR}</div>
 <h3>11g · A TEST ON NAMES THE FINDING WAS NOT BUILT FROM: THE SIX THAT ENTER THE TOP 25 ONE DAY LATER</h3>
@@ -471,7 +480,7 @@ details.sc-pagespecs p,details.sc-pagespecs li{{max-width:980px}}details.sc-page
 </ul>
 <h3>WHAT COULD BE WRONG</h3>
 <ul>
-<li>The company figures were transcribed from web pages by AI readers. Two passes caught errors and the re-check found none in what it re-read, but it re-read a part, not the whole: {len(RK["estimate_pairs"])} of 52 earnings estimates, 5 of 52 guidance calls, 4 of 52 market values, and Cerebras in full. The counts are the finding; a single cell is not.</li>
+<li>The company figures were transcribed from web pages by AI readers. Two passes caught errors and the re-check found none in what it re-read, but it re-read a part, not the whole: {len(RK["estimate_pairs"])} of 52 earnings estimates, 5 of 52 guidance calls, the statistics page of 12 of the 52 (plus 3 more for market value), and Cerebras in full. On those 12 pages {SP["figures_matching"][0]} of {SP["figures_matching"][1]} figures matched within 5% and every yes/no reading they decide (profit, cash in, share count up, cash against debt) came out the same; the six that differed are three forward P/Es, which move with the source and the day, and Energy Fuels' share figures, which the first run's checker had taken from the filing. The counts are the finding; a single cell is not.</li>
 <li>{len(RK["pages_not_loaded"])} estimate pages would not load on 7 Oct after three tries ({esc(" ".join(RK["pages_not_loaded"]))}), so those readings stand on the first run alone. No reading at all for: {esc(" ".join(Q["eps_revision_unknown"]) or "none")}.</li>
 <li>The count "its comps' median is also up over the last month" moved from 3 of 22 laggards on the {RANK_L} close to {C["comps_up_1m"]["laggards_yes"]} of {C["comps_up_1m"]["laggards_n"]} on the {NOW_L} close. It turns on whether a median near zero is just above or just below it. The check in 10a moved the same way: on {RANK_L} profit did not separate names that beat their comps from names that trailed; on {NOW_L} it does. Read both loosely.</li>
 <li>The first build added Alphabet's two share lines as two companies, which overstated the field's value by about $4.2 trillion. Fixed here. The leaders' and laggards' totals were not affected.</li>

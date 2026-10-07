@@ -385,7 +385,7 @@ quality = {"studied": len(names), "with_record": sum(n["has_record"] for n in na
            "comps_rule_vs_live_5oct": cs["check_against_live_5oct"]}
 
 recheck = {"summary": AUD["summary"], "prices": AUD["prices"], "pages_not_loaded": AUD["estimate_pages_that_would_not_load"], "estimate_pairs": AUD["estimate_pairs"], "guidance": AUD["guidance"],
-           "guidance_kind": GK, "market_value": AUD["market_value"], "cbrs": AUD["cbrs"], "out_of_sample": AUD.get("out_of_sample"),
+           "guidance_kind": GK, "market_value": AUD["market_value"], "cbrs": AUD["cbrs"], "out_of_sample": AUD.get("out_of_sample"), "statistics_pages": AUD.get("statistics_pages"),
            "rerank": {k: RERANK[k] for k in ("what", "leaders_kept", "leaders_left", "leaders_entered", "laggards_kept", "laggards_left", "laggards_entered", "named")}}
 # the Cerebras picture: its closes since the listing, and the shares freed from lock-up (first-hand, data/audit-firsthand.json)
 cbx = (RC.get("CBRS") or {}).get("closes") or {}
