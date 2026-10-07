@@ -70,7 +70,7 @@ export const CP1_OUT_OFF = Object.freeze({ cellRule: false, consistency: false, 
 export const CP1_OUT_ON = Object.freeze({ cellRule: true, consistency: true, influence: true, selfOutlier: true, priceOnBusiness: true });
 export const CUT2 = 2.5, CONSIST_MIN = 4, CONSIST_SHARE = 0.75, CONSIST_SHARE_MIN = 3, INFLUENCE = 0.10, INFLUENCE_MIN_N = 6, PRICE_ON_BUSINESS_MIN = 2;
 export const PRICE_ON_LINES = ["memory & storage", "data-centre reit"];
-export const EVERY_LINE_MIN = 3;   // CP3 priceOnEveryLine: a line prices its own when the set holds at least this many same-business peers
+export const EVERY_LINE_MIN = 4;   // CP3 priceOnEveryLine: a line prices its own when the set holds at least this many same-business peers — four, so the rule never trades a sound centre for a thin one (measured 7 Oct: at three, 50 of 451 companies came out thin; at four, see the page)
 export const NO_PEER_SET = "no peer set — valued on growth (PEG) and estimates";
 export const COLUMNS = TABLE.map((c) => ({ key: c.key, label: c.label, short: SHORT[c.key] || c.label, fmt: c.fmt, log: ROWS.includes(c.key) }));
 /* C6b · the votes: the valuation multiples only, trailing and forward P/E as one */

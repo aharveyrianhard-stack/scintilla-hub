@@ -15,6 +15,31 @@
 # ROUND 3  TIMING. Never eliminates a company: it says now or wait. Above the 70th percentile of its own year = wait.
 # FINALISTS the top three of a branch among those that passed round 2; within 0.02 of each other the one more washed out
 #          for itself goes first (the knockout's own tie rule).
+#
+# CP3 (7 Oct) · DEBT AT THE DEBATE LEVEL. Alan: "are you considering debt levels in your comps eliminations? Once you reach
+#          a level when you're debating things, debt should matter." Debt never decides who PASSES round 2. Among the
+#          names that passed — the ones being debated for the three finalist places — leverage takes points off the score
+#          they are ranked on, and the 0.02 tie rule is then read on that score. The reading is net debt ÷ EBITDA of the
+#          last twelve months (the comps table's own figure): up to 2.5× nothing, 2.5–4× 0.03, 4–6× 0.06, above 6× 0.10;
+#          net debt with no positive EBITDA to carry it 0.10; net cash nothing. A bank, insurer or asset manager is not
+#          read (its debt is its raw material). The scale is absolute, but a name is only ever ranked inside its own
+#          branch, so a branch where everyone borrows (landlords, utilities) is reordered only by who borrows MORE.
+#          Interest cover is not in the rule yet: the statements on file carry no interest line (see debt_penalty).
+#          Off unless asked (score_branch(…, debt=True)): the knockout as first published is reproduced without it.
+DEBT_STEPS = ((2.5, 0.0), (4.0, 0.03), (6.0, 0.06)); DEBT_TOP = 0.10
+def debt_penalty(nd_ebitda=None, net_debt=None, ebitda=None, exempt=False, interest_cover=None):
+    """Points off a debated name's score for leverage, and the words for its row. Returns (points, words)."""
+    if exempt: return 0.0, "a financial company: its debt is its raw material, not read"
+    if net_debt is not None and net_debt <= 0: return 0.0, "net cash"
+    if nd_ebitda is None:
+        if net_debt is not None and net_debt > 0 and ebitda is not None and ebitda <= 0: return DEBT_TOP, "net debt with no positive EBITDA to carry it"
+        return 0.0, "no debt reading on file"
+    if nd_ebitda <= 0: return 0.0, "net cash"
+    pts = DEBT_TOP
+    for top, p in DEBT_STEPS:
+        if nd_ebitda <= top: pts = p; break
+    if interest_cover is not None and interest_cover < 2: pts = max(pts, DEBT_TOP if interest_cover < 1 else 0.06)   # used the day the statements carry interest
+    return pts, f"net debt {nd_ebitda:.1f}× EBITDA" + ("" if pts == 0 else f": {pts:.2f} off in the debate")
 WEIGHTS = {"growth_next": 25, "growth_after": 15, "comps": 30, "revisions": 15, "cash": 15}          # percent of the vote
 TURN = {"improve": 1.35, "go": 1.0, "buy": 0.85, "avoid": 0.6, "none": 1.0}                            # the allocation tool's own
 COLD_FLOOR = 0.05; EVEN = 0.02; HOT = 70.0; COLD = 30.0; TOP = 3
@@ -47,7 +72,7 @@ def comps_use(a):
     if thin: return 0.5, f"thin: {a.get('n_behind')} peers with figures"
     if fragile: return 0.5, f"fragile: the centre moves more than 10% when one of {a['fragile']['n']} peers is taken out"
     return 1, ""
-def score_branch(members):
+def score_branch(members, debt=False):
     """members: [{t, g1_rev, g1_eps, g2_rev, g2_eps, comps, comps_strength, revisions, cash, pctl}]. Returns the same rows with
     `parts` (each reading's 0…1), `score`, `n` readings, `judged`, `rank`, `passes` (upper half), and the branch's fields."""
     cols = ["g1_rev", "g1_eps", "g2_rev", "g2_eps", "revisions", "cash"]
@@ -76,9 +101,24 @@ def score_branch(members):
         i += 1
     half = (len(order) + 1) // 2                                                                            # the upper half, the middle name included
     for k, r in enumerate(order): r["rank"] = k + 1; r["passes"] = k < half
+    debt_moved = []
+    if debt:                                                                                                # CP3: the debate among those that passed
+        passed = [r for r in order if r["passes"]]; was = [r["t"] for r in passed]
+        for r in passed:
+            pts, words = debt_penalty(r.get("nd_ebitda"), r.get("net_debt"), r.get("ebitda_ttm"), bool(r.get("financial")))
+            r["debt_penalty"] = pts; r["debt_words"] = words; r["debate"] = r["score"] - pts
+        passed.sort(key=lambda r: (-r["debate"], r["t"]))
+        i = 0
+        while i < len(passed) - 1:                                                                          # the same tie rule, on the debated score
+            a, b = passed[i], passed[i + 1]
+            if a["debate"] - b["debate"] < EVEN and a.get("pctl") is not None and b.get("pctl") is not None and b["pctl"] < a["pctl"]: passed[i], passed[i + 1] = b, a
+            i += 1
+        order = passed + [r for r in order if not r["passes"]]
+        for k, r in enumerate(order): r["rank_before_debt"] = r["rank"]; r["rank"] = k + 1
+        debt_moved = [r["t"] for k, r in enumerate(passed) if was[k] != r["t"]]
     for r in out:
         if not r["judged"]: r["rank"] = None; r["passes"] = False
-    return {"rows": out, "order": [r["t"] for r in order], "cut": cut, "field": field, "judged": len(judged), "finalists": [r["t"] for r in order if r["passes"]][:TOP]}
+    return {"rows": out, "order": [r["t"] for r in order], "cut": cut, "field": field, "judged": len(judged), "finalists": [r["t"] for r in order if r["passes"]][:TOP], "debt_moved": debt_moved}
 def round1_rank(branches):
     """branches: [{id, pctl (own-year percentile of its heat, or None), kind (the allocation tool's read of trend × momentum)}].
     Adds coldness, turn, raw and rank (1 = where the money should look first). A branch with no percentile is ranked last

@@ -6,7 +6,8 @@ import json, os, sys, pickle, collections, datetime as dtm
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import rounds as R
-TODAY = os.environ.get("KO1_TODAY", "2026-10-06"); SNAP = os.environ.get("KO1_SNAP", "snap"); OUT = os.path.join(HERE, "..", "data", "knockout.json")
+TODAY = os.environ.get("KO1_TODAY", "2026-10-06"); SNAP = os.environ.get("KO1_SNAP", "snap"); OUT = os.environ.get("KO1_KNOCKOUT_OUT") or os.path.join(HERE, "..", "data", "knockout.json")
+DEBT = os.environ.get("KO1_DEBT") == "1"   # CP3: leverage in the debate among the names that passed round 2 (rounds.py); off = the knockout as first published
 L = lambda n: json.load(open(f"{SNAP}/{n}.json"))
 r1 = lambda v: None if v is None or not np.isfinite(v) else round(float(v), 1)
 r2 = lambda v: None if v is None or not np.isfinite(v) else round(float(v), 2)
@@ -53,7 +54,10 @@ def name_row(t):
            "revisions": r1(rv.get("reading")), "revisions_on": rv.get("on"), "revisions_days": rv.get("days"), "cash": r2(f.get("fcf_yield")), "cash_why": f.get("fcf_why"), "next_report": f.get("next_report"),
            "geiger": r2(g.get("live")), "pctl": None if g.get("pctl") is None else round(g["pctl"]), "pctl_n": g.get("n"), "p50": r2(g.get("p50")), "p70": r2(g.get("p70")), "read": (g.get("read") or {}).get("words"), "kind": (g.get("read") or {}).get("kind"),
            "trend": r2(g.get("trend")), "momentum": r2(g.get("momentum")), "from_high": (tm.get("tech") or {}).get("from_high_pct"), "lo_52w": (tm.get("tech") or {}).get("lo_52w"), "usual_day": (tm.get("tech") or {}).get("usual_day_60"),
-           "reviewed": bool(tm.get("reviewed")), "lists": on_lists(t), "cohorts": mine.get(t, [])}
+           "reviewed": bool(tm.get("reviewed")), "lists": on_lists(t), "cohorts": mine.get(t, []),
+           # CP3: the debt reading (the comps table's own figures) and the forward basis the comps number was read on
+           "nd_ebitda": (a.get("own") or {}).get("nd_ebitda"), "net_debt": a.get("net_debt"), "ebitda_ttm": a.get("ebitda_ttm"), "financial": (c.get("sector") or "") == "Financial Services",
+           "pe_fwd": ((a.get("rows") or {}).get("pe_fwd") or {}).get("own"), "peg": ((a.get("rows") or {}).get("peg") or {}).get("own"), "fwd_label": a.get("fwd_label"), "fwd_growth": (a.get("own") or {}).get("eps_g_fy")}
     row["timing"] = R.timing_word(row["pctl"]); row["hot"] = row["pctl"] is not None and row["pctl"] > R.HOT
     # the level where it would be bought: the nearest zone at or under price, else the nearest single level under price
     px = row["price"]; below = tm.get("below") or []; zones = [z for z in (tm.get("zones") or []) if z["side"] in ("below", "at")]
@@ -110,10 +114,10 @@ for group in (BR, SR):                                                       # t
     for k, b in enumerate(rows): b["rank_tool"] = k + 1
 # ---------------------------------------------------------------- ROUND 2 · inside each branch
 for c in cohorts:
-    rows = [{k: NAMES[t][k] for k in ("t", "g1_rev", "g1_eps", "g2_rev", "g2_eps", "comps", "comps_strength", "revisions", "cash", "pctl", "venture")} for t in BR[c]["run"]]
-    S = R.score_branch(rows); BR[c]["order"] = S["order"]; BR[c]["cut"] = r2(S["cut"]) if S["cut"] is not None else None; BR[c]["finalists"] = S["finalists"]; BR[c]["champion"] = S["finalists"][0] if S["finalists"] else None
+    rows = [{k: NAMES[t].get(k) for k in ("t", "g1_rev", "g1_eps", "g2_rev", "g2_eps", "comps", "comps_strength", "revisions", "cash", "pctl", "venture", "nd_ebitda", "net_debt", "ebitda_ttm", "financial")} for t in BR[c]["run"]]
+    S = R.score_branch(rows, debt=DEBT); BR[c]["debt_moved"] = S.get("debt_moved") or []; BR[c]["order"] = S["order"]; BR[c]["cut"] = r2(S["cut"]) if S["cut"] is not None else None; BR[c]["finalists"] = S["finalists"]; BR[c]["champion"] = S["finalists"][0] if S["finalists"] else None
     BR[c]["field"] = {k: (None if v is None else {"n": v["n"], "q1": r1(v["q1"]), "med": r1(v["med"]), "q3": r1(v["q3"])}) for k, v in S["field"].items()}
-    BR[c]["scores"] = {r["t"]: {"score": round(r["score"], 3), "rank": r["rank"], "passes": bool(r["passes"]), "n": r["n"], "judged": r["judged"], "parts": {k: (None if v is None else round(v, 2)) for k, v in r["parts"].items()}} for r in S["rows"]}
+    BR[c]["scores"] = {r["t"]: {"score": round(r["score"], 3), "rank": r["rank"], "passes": bool(r["passes"]), "n": r["n"], "judged": r["judged"], **({"debt_penalty": r["debt_penalty"], "debt_words": r["debt_words"], "debate": round(r["debate"], 3), "rank_before_debt": r.get("rank_before_debt")} if "debt_penalty" in r else {}), "parts": {k: (None if v is None else round(v, 2)) for k, v in r["parts"].items()}} for r in S["rows"]}
 business = lambda t: [c for c in mine.get(t, []) if c not in R.REGION_OR_SIZE and c in BR and t in BR[c].get("scores", {})]
 anyc = lambda t: [c for c in mine.get(t, []) if c in BR and t in BR[c].get("scores", {})]
 WORDS = {"growth_next": "growth next year", "growth_after": "growth the year after", "comps": "comps", "revisions": "estimate revisions", "cash": "cash yield"}
