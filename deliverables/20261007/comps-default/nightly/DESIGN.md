@@ -32,8 +32,9 @@ It never deploys. A person fast-forwards the deploy folder and runs the usual de
 
 ## The schedule (the file `com.scintilla.comps-rebuild.plist.NOT-INSTALLED`)
 Market days at 18:30 and 21:00 New York time, and 07:30 the next morning as a catch-up. Each start is a no-op once the night is
-built. Measured on 7 Oct: at 16:07 ET, seven minutes after the bell, the chart API did not yet report a completed close, so a
-start right at the bell would build nothing; the settle check makes the time of day safe to choose loosely.
+built. Measured on 7 Oct with the step's own check: 11 minutes after the bell 312 of 613 stocks reported a completed close (it built
+nothing); 37 minutes after the bell 588 of 613 did (96%, enough to go on). A start right at the bell builds nothing, and the
+settle check makes the time of day safe to choose loosely.
 
 Why this Mac and launchd: the step needs no secret key (only the Hub's public read key), it needs git and node, and this Mac
 already runs the estate's other local agents (`com.scintilla.capture-box`, `com.scintilla.ibkr-putcall`). launchd starts a
@@ -60,7 +61,7 @@ when they are younger than eight days. Refreshing that folder once a week is a s
 |---|---|---|
 | The Hub's COMPS tab | reads the engine's file first; shows the new night as soon as the files are deployed | the tab prints the file's own date ("session close …") |
 | The night reload (pages open 03:00–05:00 reload once) | a page left open picks up the new files the same night | the 07:30 catch-up is after it; a deploy after 05:00 is picked up the next night |
-| The allocation tool | reads the Hub's cards file first, its own copy second | its own copy goes stale; the drawer and each card print their date. Refreshing the tool's copy is a separate push of the tool and is not in this step |
+| The allocation tool | keeps the cards file with the newest card date among those it can reach (then the newest re-priced stamp, then its list's order) | from the first night the engine's cards win there by date alone. Found 7 Oct: until this round the tool had kept this morning's cards (the engine's file carried no stamp), and nine of its older tests were pinned to that file by name. The cards now carry the stamp and the fields the tool's card screens read, and those tests read the engine's cards. The tool's own copy goes stale; each card prints its date. Refreshing that copy is a separate push of the tool and is not in this step |
 | The tool's rule "a stored price older than four days is not used" | stops tripping, because the card's price is last night's | — |
 | The knockout page | static; reads `knockout-comps.json` only when the knockout is re-run | this step rewrites its input, not the page |
 | Tests that pin the 6 Oct numbers | `tests/cp4-one-engine.test.mjs` and `tests/cp5-expensive-only.test.mjs` read the same data folder | the tests that name a 6 Oct figure skip themselves when the files are from another close; the rule tests always run |

@@ -1,13 +1,14 @@
 /* CP5 · the nightly step's rehearsal, written down as facts for the page: reads the rehearsal's own run log and the settle check's
    own line, compares the per-company files the rehearsal built with the ones on this branch, and writes data/nightly-rehearsal.json.
-     node record-rehearsal.mjs <run.log> <built data dir> <settle-check output file> */
+     node record-rehearsal.mjs <run.log> <built data dir> <settle-check output file> [<another> …] */
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, ".."), ENG = path.resolve(ROOT, "../comps-engine/data");
-const [logF, builtDir, settleF] = process.argv.slice(2), log = fs.readFileSync(logF, "utf8"), settleTxt = fs.readFileSync(settleF, "utf8");
+const [logF, builtDir, ...settleFs] = process.argv.slice(2), log = fs.readFileSync(logF, "utf8");
 const done = /DONE (\{.*?\}) → .* · (\d+)s/.exec(log), counts = done ? JSON.parse(done[1]) : null, differ = /(\d+) data files differ from the live line/.exec(log), ended = /ended with code (\d+)/.exec(log), mode = /mode (\w+)/.exec(log), start = /\[(\d\d:\d\d:\d\d) ET\] comps rebuild for (\S+)/.exec(log);
 let nameDiff = 0, nameN = 0; for (const f of fs.readdirSync(path.join(builtDir, "names"))) { nameN++; if (fs.readFileSync(path.join(builtDir, "names", f), "utf8") !== fs.readFileSync(path.join(ENG, "names", f), "utf8")) nameDiff++; }
-const sj = JSON.parse(settleTxt.split("\n").find((l) => l.startsWith("{"))), at = /AT (\d\d:\d\d)/.exec(settleTxt), mins = at ? (Number(at[1].slice(0, 2)) - 16) * 60 + Number(at[1].slice(3)) : null;
-const out = { what: "The nightly comps rebuild, rehearsed on 7 Oct 2026 — measured, not installed. `rehearsal`: the whole step run dry on the saved 6 Oct inputs. `settle_check`: the step's first check run live, read-only, shortly after the bell.",
+const settle = settleFs.map((f) => { const txt = fs.readFileSync(f, "utf8"), sj = JSON.parse(txt.split("\n").find((l) => l.startsWith("{"))), at = /AT (\d\d:\d\d)/.exec(txt), mins = at ? (Number(at[1].slice(0, 2)) - 16) * 60 + Number(at[1].slice(3)) : null;
+  return { day: sj.day, at_et: at ? at[1] : null, minutes_after_the_bell: mins, stocks: sj.stocks, closed_today: sj.closed_today, share: sj.share, needed: sj.needed, read_utc: sj.generated_utc, result: /NOT SETTLED/.test(txt) ? "not settled: nothing built" : "settled: the step would go on" }; }).sort((a, b) => a.minutes_after_the_bell - b.minutes_after_the_bell);
+const out = { what: "The nightly comps rebuild, rehearsed on 7 Oct 2026 — measured, not installed. `rehearsal`: the whole step run dry on the saved 6 Oct inputs. `settle_checks`: the step's first check run live, read-only, twice after the bell.",
   rehearsal: { day: start ? start[2] : null, started_et: start ? start[1] : null, mode: mode ? mode[1] : null, names: counts ? counts.run : null, priced: counts ? counts.priced : null, seconds: done ? Number(done[2]) : null, data_files_differing_from_the_branch: differ ? Number(differ[1]) : null, name_files: nameN, name_files_differing: nameDiff, gate_passed: !/"fails": \[\s*"/.test(log) && ended && ended[1] === "0", exit_code: ended ? Number(ended[1]) : null, committed_or_sent: /dry run: nothing committed, nothing sent/.test(log) ? "nothing" : "see the log" },
-  settle_check: { day: sj.day, at_et: at ? at[1] : null, after_the_bell: mins != null ? `${mins} minutes` : null, stocks: sj.stocks, closed_today: sj.closed_today, share: sj.share, needed: sj.needed, result: /NOT SETTLED/.test(settleTxt) ? "not settled: nothing built" : "settled" } };
+  settle_checks: settle };
 fs.writeFileSync(ROOT + "/data/nightly-rehearsal.json", JSON.stringify(out, null, 1)); console.log(JSON.stringify(out));
