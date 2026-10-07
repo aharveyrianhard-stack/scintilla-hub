@@ -280,7 +280,7 @@ def specs(path, p, fil, mod, meta, checks):
          'Where it gives a range for a period, the analysts\' figure for that period is set against it — only for a company whose fiscal year is the calendar year, and only when the sentence names the year. '
          f'For {EX} the company guides "core" sales, which leave out the warrants it charges against reported sales; the analysts\' figures follow the same measure, so sales growth and the EV ÷ sales multiple on this page are on core sales, and reported sales run lower.'),
         ("Revisions.", f'The Hub compares the newest stored copy of the estimates with the copy nearest 30 and 90 days back, within 12 days. Nightly copies only began on 2 Oct 2026; before that there are copies from 23–24 Jul and 11 Aug. '
-         f'So for {EX} the 30- and 90-day cells are N/A, and the page shows the change since {meta["first_copy_label"]}, saying how many days that really is. The columns fill in as nights accumulate.'),
+         f'So for {EX} the 30- and 90-day cells are N/A, and the page shows the change since {meta["first_copy_label"]}, saying how many days that really is. In the list, "estimate moved" is the same thing for every name: {meta["moved"]}. The columns fill in as nights accumulate.'),
         ("The two models.", f'Short text: {mod["models"]["short_text"]} reads each sentence ({took["finbert_sentences"]:,} for {EX}, {took["finbert_sections_s"]:.0f} seconds). '
          f'Long text: {mod["models"]["long_text"]} reads each passage of about 450 words ({took["qwen_passages"]} passages for {EX}, {took["qwen_s"]:.0f} seconds) and says its tone, its topic and its point, then writes the drivers and risks from those points. '
          f'Both ran on this MacBook\'s graphics chip, one company after another: {meta["n_models"]} companies, {meta["tot"][2]:,} passages, {meta["tot"][4] / 60:.0f} minutes in all. No paid model was called. ' + checked),
@@ -297,12 +297,12 @@ def specs(path, p, fil, mod, meta, checks):
          '(5) The long-text model was measured on news and video only (81% and 67% right, SM1); on filings it is unmeasured, and it does make mistakes — see the struck lines. It also files some plain facts under "risk". '
          '(6) The filing reader finds sections by their headings. A merger prospectus prints one management discussion per company and they are read as one (SHAZ); POET\'s annual report gave no risk-factors section; a foreign filer has no quarterly report and no tagged US figures. '
          '(7) Calls: FMP holds none for CRML and POET, its newest for LAC is May 2024 (named, not read) and for UUUU a quarter behind. '
-         f'(8) Our first-daily-bar table covers 349 of the tree\'s names; for the rest "listed under 2 years" rests on the vendor\'s IPO date. '
+         f'(8) Our first-daily-bar table covers {meta["first_bar"]} of the {path["universe"]["companies"]} companies; for the rest "listed under 2 years" rests on the vendor\'s IPO date alone. '
          '(9) The trailing cut also catches settled companies in a depressed year (ABBV, MRK): true by the rule, but a comps reading on forward numbers still works for them. '
          f'(10) {len(path["other_currency"])} companies report in another currency ({other}); no price-based multiple is computed for them here. '
          '(11) The guidance reader works by wording; a company that guides in other words is not caught, and it found ranges with a named year for few companies besides this one. '
          '(12) Cash burn counts one tagged line, "purchases of property and equipment". A company that pays for its build-out under another line looks lighter than it is: for SHAZ that line is $12.5M in the quarter while the vendor\'s table counts $283.8M, so no count of cash-quarters is printed for it.'),
-        ("What was not done.", f'No table was created or written; the three tables are a proposal. Nothing was deployed and the live Hub is untouched. The filings and the models were run for {meta["n_read"]} names; '
+        ("What was not done.", f'No table was created or written; the four tables are a proposal. Nothing was deployed and the live Hub is untouched. The filings and the models were run for {meta["n_read"]} names; '
          f'the other {path["universe"]["on_path"] - meta["n_read"]} names on the list have the estimates panel as numbers in the table and nothing more. '
          'There is no consensus for capital spending, so "is the spending covered by cash" uses the last quarter\'s rate times four. Nothing was timed on Fly. The model\'s lines were checked for one company only.'),
         ("For the coordinator.", f'Share count: for a new listing the count on the company\'s own 10-Q cover is the right one ({EX}: {cs["total"] / 1e6:,.1f}M across three classes against {p["shares"] / 1e6:,.1f}M by the Hub rule and {p["shares_profile"] / 1e6:,.1f}M in the vendor\'s field). '
@@ -341,6 +341,7 @@ def build():
         "customer_names": CUSTOMER_NAMES, "no_prospectus": NO_PROSPECTUS,
         "other_day": sorted(r["ticker"] for r in path["path"] if r["price"]["d"] and r["price"]["d"] != path["as_of"]),
         "n_read": len([r for r in path["path"] if "NEW_LISTING" in r["reasons"] or r["rung"] == "MODELS_AND_QUARTERLIES"]),
+        "first_bar": path["universe"].get("with_first_bar", "most"),
         "junk": (lambda j: f'{j["not_news"]:,} of the newest {j["titles"]:,} titles across the {j["names"]} names, {j["worst"]["not_news"]} of {j["worst"]["ticker"]}\'s {j["worst"]["titles"]}')(load("headline-window.json")) if have("headline-window.json") else "not measured",
         "fly_label": (f'{len(leg["names"])} names, {sum(len(n["errors"]) for n in leg["names"])} errors, {leg["fetched_utc"][11:16]} UTC on {day(leg["fetched_utc"][:10], year=False)}, machine removed after') if leg else "not run",
     }
@@ -404,13 +405,15 @@ def build():
              + rev_row(fy[1]["label"] + "e", rv["fy1"]) + rev_row(fy[2]["label"] + "e", rv["fy2"]) + '</table></div></div></div>')
 
     if callf and callf.get("against_consensus"):
-        g_rows = "".join(f'<tr><td class="nw">{e(x["period"])}</td><td>{e(x["guided_as"])}</td><td class="r">{money(x["low"], 0)} – {money(x["high"], 0)}</td>'
-                         f'<td class="r">{money(x["value"])}</td><td class="r">{count(x["analysts"])}</td><td class="nw in">{e(x["consensus_is"])}</td></tr>' for x in callf["against_consensus"])
+        # four narrow columns, so the verdict is on screen on a phone too
+        g_rows = "".join(f'<tr><td>{e(x["period"])}<br><span class="small">{e(x["guided_as"])}</span></td><td class="r">{money(x["low"], 0)} – {money(x["high"], 0)}</td>'
+                         f'<td class="r">{money(x["value"])}<br><span class="small">{count(x["analysts"])} analysts</span></td><td class="in">{e(x["consensus_is"])}</td></tr>'
+                         for x in sorted(callf["against_consensus"], key=lambda x: (x["period"].startswith("FY"), x["period"])))
         said_ = [s_ for s_ in callf["sentences"] if re.search(r"revenue|margin|sales", s_, re.I) and re.search(r"range of|\b\d+(\.\d+)?x\b|triple|double", s_)][:5]
         step = (f'<dl class="facts" style="margin-top:12px"><dt>analysts\' {fy[2]["label"]} sales against {fy[1]["label"]}</dt><dd>{fy[2]["rev"] / fy[1]["rev"]:.1f} times</dd></dl>'
                 if len(fy) > 2 and fy[1]["rev"] and fy[2]["rev"] else "")
-        o.append(f'<div class="grid"><div class="blk"><h3>WHAT THE COMPANY GUIDES · AGAINST THE ANALYSTS</h3><div class="wrap"><table><tr><th>period</th><th>measure</th><th class="r">company\'s range</th>'
-                 '<th class="r">analysts</th><th class="r" title="analysts behind the figure">n</th><th>the analysts are</th></tr>' + g_rows + '</table></div>' + step + '</div>'
+        o.append(f'<div class="grid"><div class="blk"><h3>WHAT THE COMPANY GUIDES · AGAINST THE ANALYSTS</h3><div class="wrap"><table class="wide"><tr><th>period</th><th class="r">company\'s range</th>'
+                 '<th class="r">analysts</th><th>the analysts are</th></tr>' + g_rows + '</table></div>' + step + '</div>'
                  f'<div class="blk"><h3>IN THE COMPANY\'S WORDS · {e(callf["quarter"])} CALL, {e(day(callf["call_date"]))}</h3>' + "".join(f'<p class="q">{e(x)}</p>' for x in said_) + '</div></div>')
 
     m = p["mult"]
@@ -474,13 +477,21 @@ def build():
     o.append('<div class="blk"><h3>GROWTH DRIVERS AND RISKS, IN THE MODEL\'S WORDS</h3><div class="key"><span><i class="u"></i>growth driver</span><span><i class="d"></i>risk</span></div><div class="grid">'
              + "".join(said(s, checks) for s in mod["sections"]) + '</div></div>')
 
+    def moved(r):
+        x = ((r.get("revisions") or {}).get("fy1") or {}).get("earliest")
+        if not x or x.get("rev_pct") is None or x["days"] < 30: return ""
+        v = x["rev_pct"]
+        return ("up " if v > 0.0005 else "") + (pct(v, 1) if abs(v) < 0.0995 else pct(v)) + f' · {x["days"]} d'
+
     # ---- the list
     lst = sorted(path["path"], key=lambda r: ("NEW_LISTING" not in r["reasons"], r["rung"] != "MODELS_AND_QUARTERLIES", -len(r["reasons"]), r["ticker"]))
     chips = [("ALL", "all", path["universe"]["on_path"])] + [(k, WHY[k], path["reasons"][k]) for k in WHY] + [("WEAK", "estimates too thin", path["rungs"]["MODELS_AND_QUARTERLIES"])]
     o.append(f'<h2>THE LIST · {path["universe"]["on_path"]} NAMES</h2><div class="chips" id="chips">'
              + "".join(f'<button type="button" data-k="{k}" aria-pressed="{"true" if k == "ALL" else "false"}">{e(l.replace("the cut", mult(cut_t if k == "TINY_EARNINGS" else cut_f, 0)))}<b>{n}</b></button>' for k, l, n in chips) + '</div>')
     o.append('<div class="scroll"><table id="list"><thead><tr><th>ticker</th><th>company</th><th>why</th><th class="r">listed</th><th class="r">sales growth</th>'
-             '<th class="r">EV ÷ sales</th><th class="r">÷ growth</th><th class="r">fwd P/E</th><th class="r">analysts</th><th class="r">target</th><th>read</th></tr></thead><tbody>')
+             '<th class="r">EV ÷ sales</th><th class="r">÷ growth</th><th class="r">fwd P/E</th><th class="r">analysts</th>'
+             '<th class="r" title="change in this fiscal year\'s sales estimate since the oldest stored copy, and the days that spans; empty when the oldest copy is under 30 days old">estimate moved</th>'
+             '<th class="r">target</th><th>read</th></tr></thead><tbody>')
     for r in lst:
         why = " · ".join(SHORT[c] for c in r["reasons"] if c != "IPO_18M" or "NEW_LISTING" not in r["reasons"])
         if r["currency"]: why += f' · reports in {r["currency"]}'
@@ -489,8 +500,10 @@ def build():
         o.append(f'<tr data-r="{codes}"{" class=ex" if r["ticker"] == EX else ""}><td class="tk">{e(r["ticker"])}</td><td class="nw">{e(short_name(r["name"]))}</td><td>{e(why)}</td>'
                  f'<td class="r">{e(day(r["listed"]["on"], short=True)[-6:]) if "NEW_LISTING" in r["reasons"] else ""}</td><td class="r">{growth_word(r["growth"]["rev_next_fy"])}</td>'
                  f'<td class="r">{mult(mm["fwd_ev_sales"])}</td><td class="r">{num(mm["ev_sales_per_growth"])}</td><td class="r">{mult(mm["fwd_pe"], 0)}</td>'
-                 f'<td class="r">{count(r["analysts"]["fy1_rev"])}</td><td class="r">{pct(r["target"]["upside"]) if r["target"] else ""}</td><td class="nw">{e(RUNG[r["rung"]])}</td></tr>')
+                 f'<td class="r">{count(r["analysts"]["fy1_rev"])}</td><td class="r">{moved(r)}</td><td class="r">{pct(r["target"]["upside"]) if r["target"] else ""}</td><td class="nw">{e(RUNG[r["rung"]])}</td></tr>')
     o.append('</tbody></table></div>')
+    held = [r for r in lst if moved(r)]
+    meta["moved"] = f'{len(held)} of the {len(lst)} names have a sales estimate in a stored copy at least 30 days old (none has a copy near 30 or 90 days: the copies are 4, 56 and 74–75 days old)'
     o.append(f'<p class="small">Middle of the {path["ai"]["tickers"]} AI names: EV ÷ sales {mult(ai["fwd_ev_sales"]["median"])} · sales growth {pct(ai["rev_growth_next_fy"]["median"])} · '
              f'per point of growth {num(ai["ev_sales_per_growth"]["median"])} · forward P/E {mult(ai["fwd_pe"]["median"], 0)} · PEG {num(ai["peg"]["median"])}</p>')
 

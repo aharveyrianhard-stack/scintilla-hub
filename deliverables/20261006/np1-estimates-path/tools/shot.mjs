@@ -1,5 +1,6 @@
 // NP1 — headless pictures of the page at 1680 and 390 wide. Never a visible window. Every non-GET request is blocked and counted.
 //   node tools/shot.mjs            writes shots/np1-{1680,390}-{top,full}.png and prints what it measured
+//   NP1_OPEN_DIR=<folder> node tools/shot.mjs   also writes np1-{1680,390}-open.png there: the page with every fold-out open
 import { createRequire } from "node:module"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { dirname, join } from "node:path"
@@ -20,9 +21,11 @@ try {
     await p.goto(page, { waitUntil: "load" }); await p.waitForTimeout(500)
     await p.screenshot({ path: join(root, "shots", `np1-${name}-top.png`) })
     await p.screenshot({ path: join(root, "shots", `np1-${name}-full.png`), fullPage: true })
-    await p.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true }))
-    await p.screenshot({ path: join(root, "shots", `np1-${name}-open.png`), fullPage: true })
-    await p.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = false }))
+    if (process.env.NP1_OPEN_DIR) {   // the same page with every fold-out open, for looking inside them: large, so it goes to a folder outside the repository
+      await p.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = true }))
+      await p.screenshot({ path: join(process.env.NP1_OPEN_DIR, `np1-${name}-open.png`), fullPage: true })
+      await p.evaluate(() => document.querySelectorAll("details").forEach((d) => { d.open = false }))
+    }
     const m = await p.evaluate(() => {
       const de = document.documentElement
       const small = [...document.querySelectorAll("body *")].filter((el) => el.children.length === 0 && el.textContent.trim() && parseFloat(getComputedStyle(el).fontSize) < 11).length
