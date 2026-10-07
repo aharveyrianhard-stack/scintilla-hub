@@ -9,6 +9,13 @@
 //     quarters are on file; a foreign reporter's EPS put in dollars at the supplier's own paired rate, or the cell is
 //     blank; a multiple under 2.5× is a wrong-basis estimate and is blank.
 //   Every other column is v6's, unchanged, and so is the header. The v6 file is kept as feed.mjs.ROLLBACK-v6-20261007.
+//
+// WHAT IS LIVE AS THIS IS WRITTEN (checked 7 Oct 11:46 ET): the coordinator's own change of 11:04 (hub/fd1-feed-fix-20261007
+// @db0edbe, still answering "comps-feed-v6") — the same next-four-quarters rule, written here as forwardEps(). It is merged
+// into this file. v7 differs from it in four places, each the dashboard's own behaviour: a foreign reporter's EPS takes the
+// supplier's PAIRED rate, not the stored one (TSMC ≈23.1× as on the dashboard; the 11:04 feed answers 23.2×, and would print
+// a multiple for NIO where the dashboard withholds one); the fourth quarter must end within fifteen months; a multiple
+// under 2.5× is blank; and "today" is the New York date. The JSON answer also carries growth and the bad-row flags.
 // Shared by ./index.ts (the edge function) and deliverables/20261007/feed-fix/tools/fixed-feed.mjs (the rehearsal),
 // tested by tests/fd1-comps-feed.test.mjs.
 //
@@ -65,7 +72,7 @@
 //   · Every read names its period, carries a total order and is paged, so the answer does not depend on how many
 //     names are asked for or on the order the database happens to return ties in.
 
-import { forwardRead, estFxPair } from "./forward-basis.mjs";
+import { forwardRead, forwardBasis, estFxPair } from "./forward-basis.mjs";
 export const VERSION = "comps-feed-v7";
 export const HEAD = "sym,mktcap,pe,fwd_pe,ps,pb,gross_m,net_m,de,div_yld,rev_growth,updated";
 export const MAX_SYMS = 60;          // as v5: the pages ask in batches of 60
@@ -108,7 +115,7 @@ export function queries(syms, today) {
     history: `fundamentals_history?select=ticker,period,fiscal_year,fiscal_date,revenue,gross_profit,net_income&ticker=${inq}&fiscal_date=gte.${since}&order=ticker.asc,fiscal_date.desc,period.asc`,
     ratios: `ratios_history?select=ticker,period,fiscal_date,pe,pb,debt_to_equity,dividend_yield&ticker=${inq}&fiscal_date=gte.${since}&order=ticker.asc,fiscal_date.desc,period.asc`,
     /* v7: both periods (the next four quarters, and the years for the fallback and the bad-row check), in a total order */
-    estimates: `analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg,est_revenue_avg,num_analysts_eps,updated_ts&period=in.(annual,quarter)&ticker=${inq}&fiscal_date=gte.${today}&order=ticker.asc,period.asc,fiscal_date.asc`,
+    estimates: `analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg,est_revenue_avg,num_analysts_eps,updated_ts&period=in.(annual,quarter)&ticker=${inq}&fiscal_date=gte.${today}&order=ticker.asc,fiscal_date.asc,period.asc`,
     /* v7: the supplier's dollar estimates beside its local ones, for the foreign reporters asked for (the paired rate) */
     events: foreign.length ? `earnings_events?select=ticker,date,eps_estimate,revenue_estimate&ticker=${inF}&date=gte.${daysBefore(today, 400)}&order=ticker.asc,date.desc` : null,
     pairQuarters: foreign.length ? `analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg,est_revenue_avg&period=eq.quarter&ticker=${inF}&fiscal_date=gte.${daysBefore(today, 400)}&order=ticker.asc,fiscal_date.desc` : null,
@@ -179,6 +186,18 @@ export function forwardYear(estimates, today) {
   return e.length ? { eps: num(e[0].est_eps_avg), fiscal_date: iso(e[0].fiscal_date) } : null;
 }
 
+/** 7 Oct 2026 — ONE FORWARD P/E EVERYWHERE (Alan: "it has to be the same source of truth"). The coordinator's 11:04 hot fix
+    put the dashboard's rule here as forwardEps(); CP3 moved the rule itself into ./forward-basis.mjs (the one shared file) and
+    this function now answers from it, with the name and the shape the hot fix gave it: the next four quarterly consensus EPS
+    from today, summed; when fewer than four future quarters are on file, the nearest fiscal year. A quarter with no EPS is
+    skipped. One difference from the hot fix, on purpose: the fourth quarter must end within fifteen months of today, as on
+    the dashboard (its read stops there). */
+export function forwardEps(estimates, today) {
+  const b = forwardBasis(estimates, today);
+  if (!b || b.eps == null) return null;
+  return { eps: b.eps, fiscal_date: b.through, basis: b.basis === "next four quarters" ? "next four quarters" : "nearest fiscal year (fewer than four quarters on file)" };
+}
+
 /** A margin over the very twelve months of its sales: flow ÷ sales when both rest on the same months, else on the last
     fiscal year both carry. Never a quarter's profit over a year's sales. */
 export function margin(rows, key) {
@@ -231,7 +250,7 @@ export function feedRow(sym, t, today, rates = []) {
     rev_growth: g.value,
     updated: num(f.updated_ts) != null ? new Date(num(f.updated_ts) * 1000).toISOString() : null,
     basis: { currency: ccy, rate: fx && !dollars ? fx : null, withheld: !dollars && usd == null, price_from: price == null ? null : today$ ? "company_profile (today's price and market value together)" : "fundamentals row", market_value_from: mcap == null ? null : today$ ? "company_profile (today's price × shares)" : "fundamentals row (the last fiscal period end's)",
-      price_at: today$ ? pDay : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, balance: ratNew ? iso(ratNew.fiscal_date) : null,
+      price_at: today$ ? pDay : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fwd.through || (fy1 ? fy1.fiscal_date : null), forward_basis: fwd.basis ? (fwd.basis === "next four quarters" ? "next four quarters" : "nearest fiscal year (fewer than four quarters on file)") : null, balance: ratNew ? iso(ratNew.fiscal_date) : null,
       forward: fwd.basis, forward_label: fwd.label, forward_through: fwd.through, forward_eps: fwd.eps, forward_eps_usd: fwd.eps_usd, forward_why: fwd.pe == null ? fwd.why : null, forward_rate: fwd.rate, forward_growth_pct: fwd.growth_pct, forward_growth_basis: fwd.growth_basis, forward_flags: (fwd.flags || []).map((f) => f.code) },
   };
 }

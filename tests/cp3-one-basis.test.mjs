@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import * as FB from "../lib/forward-basis.mjs";
 import { debtReading, DEBT_STEPS, DEBT_TOP } from "../lib/debt-reading.mjs";
 import { dashboardPrints } from "../deliverables/20261007/one-basis/tools/dashboard-code.mjs";
-import { buildFeed, VERSION } from "../supabase/functions/comps-feed/feed.mjs";
+import { buildFeed, VERSION, forwardEps as feedForwardEps } from "../supabase/functions/comps-feed/feed.mjs";
 import { readCohort, snapshotFromCohort, FORWARD_DEFAULT } from "../deliverables/20261001/comps-template/cohort.mjs";
 import { localPg } from "../deliverables/20261007/knockout/tools/local-pg.mjs";
 import { CP3_STATED, CP3_LINES_ON } from "../deliverables/20261003/comps-c5/lines.mjs";
@@ -114,7 +114,10 @@ test("the feed is version 7, its forward column is this rule, and the copy besid
   assert.equal(VERSION, "comps-feed-v7");
   assert.equal(fs.readFileSync(R("../supabase/functions/comps-feed/forward-basis.mjs"), "utf8"), fs.readFileSync(R("../lib/forward-basis.mjs"), "utf8"));
   assert.ok(fs.existsSync(R("../supabase/functions/comps-feed/feed.mjs.ROLLBACK-v6-20261007")), "the way back is kept");
-  const src = fs.readFileSync(R("../supabase/functions/comps-feed/feed.mjs"), "utf8"); assert.match(src, /import \{ forwardRead, estFxPair \} from "\.\/forward-basis\.mjs";/); assert.match(src, /fwd_pe: fwd\.pe,/);
+  const src = fs.readFileSync(R("../supabase/functions/comps-feed/feed.mjs"), "utf8"); assert.match(src, /import \{ forwardRead, forwardBasis, estFxPair \} from "\.\/forward-basis\.mjs";/); assert.match(src, /fwd_pe: fwd\.pe,/);
+  /* the coordinator's 11:04 hot fix named the rule forwardEps() in the feed; merged here, that name answers from the shared rule */
+  const g = T.analyst_estimates.filter((r) => r.ticker === "GOOGL"), viaName = feedForwardEps(g, TODAY), shared = FB.forwardBasis(g, TODAY);
+  assert.equal(viaName.eps, shared.eps); assert.equal(viaName.fiscal_date, "2027-09-30"); assert.equal(viaName.basis, "next four quarters"); assert.ok(Math.abs(FX.closes.GOOGL / viaName.eps - 24.21) < 0.01);
   assert.match(fs.readFileSync(R("../supabase/functions/comps-feed/index.ts"), "utf8"), /timeZone: "America\/New_York"/, "the feed's today is the dashboard's today");
 });
 

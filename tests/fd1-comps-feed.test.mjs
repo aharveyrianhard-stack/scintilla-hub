@@ -101,14 +101,25 @@ test("the answer does not depend on the order the rows arrive in, nor on which o
 /* CP3 (7 Oct, later the same day) changed this rule on purpose: v6 took the nearest FISCAL YEAR (the comps tab's FY1 at the
    time); v7 takes the NEXT FOUR QUARTERS, the dashboard's forward P/E, so the feed, the comps tab, the cards and the
    dashboard print one multiple (tests/cp3-one-basis.test.mjs). One quarter alone is still never the forward EPS (v5's fault). */
-test("the forward P/E is the next FOUR quarters (the dashboard's rule); one quarter alone never is; with fewer than four on file the nearest fiscal year stands in", () => {
+test("7 Oct — ONE forward P/E everywhere: the next four quarterly consensus EPS (the dashboard's rule); the nearest fiscal year only when fewer than four quarters exist", () => {
+  /* the feed's own row, on Micron's real rows (CP3) */
   const withQuarters = { ...T, estimates: [...FX.v5.micron_estimates_as_v5_read_them.filter((r) => r.fiscal_date >= TODAY), ...T.estimates.filter((r) => r.ticker !== "MU")] };
-  const q4 = withQuarters.estimates.filter((r) => r.ticker === "MU" && r.period === "quarter").sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date)).slice(0, 4);
-  assert.equal(q4.length, 4); const ntm = q4.reduce((s, r) => s + r.est_eps_avg, 0);
+  const mu4 = withQuarters.estimates.filter((r) => r.ticker === "MU" && r.period === "quarter").sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date)).slice(0, 4);
+  assert.equal(mu4.length, 4); const ntm = mu4.reduce((s, r) => s + r.est_eps_avg, 0);
   const four = rowOf("MU", withQuarters);
-  near(four.fwd_pe, 1045.56 / ntm, 1e-9, "price over the next four quarters, summed"); assert.equal(four.basis.forward, "next four quarters"); assert.equal(four.basis.forward_through, q4[3].fiscal_date);
-  assert.ok(Math.abs(four.fwd_pe - 1045.56 / q4[0].est_eps_avg) > 15, "never one quarter's EPS under a full price (v5 read 27.8×)");
+  near(four.fwd_pe, 1045.56 / ntm, 1e-9, "price over the next four quarters, summed"); assert.equal(four.basis.forward, "next four quarters"); assert.equal(four.basis.forward_through, mu4[3].fiscal_date);
+  assert.ok(Math.abs(four.fwd_pe - 1045.56 / mu4[0].est_eps_avg) > 15, "never one quarter's EPS under a full price (v5 read 27.8×)");
   near(rowOf("MU").fwd_pe, 1045.56 / 173.77169, 1e-9, "no quarterly rows read: the nearest fiscal year, and the basis says so"); assert.equal(rowOf("MU").basis.forward, "fiscal year");
+  /* forwardEps by itself, on made-up rows (the coordinator's 11:04 hot fix; it now answers from the shared rule) */
+  const q4 = [{ period: "quarter", fiscal_date: "2026-12-31", est_eps_avg: 3 }, { period: "quarter", fiscal_date: "2027-03-31", est_eps_avg: 3.5 },
+    { period: "quarter", fiscal_date: "2027-06-30", est_eps_avg: 4 }, { period: "quarter", fiscal_date: "2027-09-30", est_eps_avg: 4.5 },
+    { period: "quarter", fiscal_date: "2027-12-31", est_eps_avg: 9 }, { period: "annual", fiscal_date: "2026-12-31", est_eps_avg: 20 }];
+  assert.deepEqual(F.forwardEps(q4, "2026-10-07"), { eps: 15, fiscal_date: "2027-09-30", basis: "next four quarters" }, "the next four quarters, summed; the fifth never enters");
+  const three = q4.filter((r) => r.fiscal_date !== "2027-09-30" && r.fiscal_date !== "2027-12-31");
+  assert.equal(F.forwardEps(three, "2026-10-07").eps, 20, "fewer than four quarters: the nearest fiscal year stands in");
+  assert.match(F.forwardEps(three, "2026-10-07").basis, /nearest fiscal year/);
+  const skipNull = [...q4.slice(0, 2), { period: "quarter", fiscal_date: "2027-05-15", est_eps_avg: null }, ...q4.slice(2)];
+  assert.equal(F.forwardEps(skipNull, "2026-10-07").eps, 15, "a quarter with no EPS is skipped, as on the dashboard");
   const e = [{ period: "annual", fiscal_date: "2026-12-31", est_eps_avg: 10 }, { period: "annual", fiscal_date: "2027-12-31", est_eps_avg: 12 }, { period: "quarter", fiscal_date: "2026-10-31", est_eps_avg: 2 }];
   assert.deepEqual(F.forwardYear(e, "2026-12-31"), { eps: 10, fiscal_date: "2026-12-31" }, "a year ending today is still the year in progress");
   assert.deepEqual(F.forwardYear(e, "2027-01-01"), { eps: 12, fiscal_date: "2027-12-31" });
@@ -207,7 +218,7 @@ test("the request: sixty symbols at most, upper case, no repeats, nothing that i
 });
 test("every read names its period, carries a total order and is paged to its end", async () => {
   const q = F.queries(["MU", "BRK.B"], TODAY);
-  assert.match(q.estimates, /period=in\.\(annual,quarter\)/, "CP3: both periods, named"); assert.match(q.estimates, /fiscal_date=gte\.2026-10-07/); assert.match(q.estimates, /order=ticker\.asc,period\.asc,fiscal_date\.asc$/);
+  assert.match(q.estimates, /period=in\.\(annual,quarter\)/, "CP3: both periods, named"); assert.match(q.estimates, /fiscal_date=gte\.2026-10-07/); assert.match(q.estimates, /order=ticker\.asc,fiscal_date\.asc,period\.asc$/);
   assert.equal(q.events, null, "no foreign reporter asked for: no paired-rate read"); assert.match(F.queries(["TSM", "MU"], TODAY).events, /^earnings_events\?select=ticker,date,eps_estimate,revenue_estimate&ticker=in\.\(%22TSM%22\)/);
   assert.match(q.history, /order=ticker\.asc,fiscal_date\.desc,period\.asc$/); assert.match(q.ratios, /order=ticker\.asc,fiscal_date\.desc,period\.asc$/);
   assert.match(q.history, /fiscal_date=gte\.2023-10-0[0-9]/, "three years: eight quarters and two fiscal years with room");
