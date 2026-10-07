@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 780a3cb) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from e02530d) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -28271,7 +28271,8 @@ function hubSelfUpdatePlan(seenEtag, nowEtag, idleMs, videoPlaying, typing) {
    ITS NEIGHBOURS, kept exactly: it rides K3's own three-minute check and happens only when K3 would be allowed to
    reload for a new build at that moment (hubSelfUpdatePlan: two minutes without a hand on the page, no video
    playing, nobody typing), and only when the server has just answered that check - so the page is never reloaded
-   into an error page. R19 and K3 themselves are untouched.
+   into an error page. It also waits while the Hub's own video player, a full-screen section or anything open over
+   the page is up (hubNightHold). R19 and K3 themselves are untouched.
    WHAT IS KEPT: the lists and stars live on the server; the company tab and the compare tab are remembered on this
    browser already; the room, its sub-tab, the board's list, the company that was open (and EXPAND), and where each
    panel was scrolled to are carried over the one reload in this window's session store (hubKeepPlace, two minutes).
@@ -28304,6 +28305,30 @@ function hubPlaceKept(saved, now) {
   return { sec: word(saved.sec), coh: word(saved.coh), pinned: word(saved.pinned), expanded: saved.expanded === true,
     socTab: word(saved.socTab), sentiTab: word(saved.sentiTab), econView: word(saved.econView),
     pageY: Math.max(0, Number(saved.pageY) || 0), scroll };
+}
+/* WHAT THE NIGHT RELOAD WAITS FOR, BEYOND K3'S RULE. K3 looks for a playing <video> in this page, and the Hub's own
+   video player is another page inside this one, so K3 cannot see it; and nothing in K3 knows about a section opened
+   full screen or a panel open over the page. A new build may still load under those by K3's rule, as before - Alan is
+   usually there to see it. At 3 in the morning nobody is, so the night reload simply waits for them to be closed. */
+function hubNightHold(s) {
+  if (s.playerOpen || s.playerState === 1 || s.playerState === 3) return "the video player is open";
+  if (s.sectionFull || s.browserFull) return "something is full screen";
+  if (s.overlay) return "something is open over the page";
+  return "";
+}
+function hubNightHoldNow() {
+  let playerState = -1, overlay = false;
+  try { if (YT_PLYR && typeof YT_PLYR.getPlayerState === "function") playerState = YT_PLYR.getPlayerState(); } catch (_) {}
+  try {
+    const open = (id, c) => { const n = el(id); return !!(n && (c ? n.classList.contains(c) : n.firstChild)); };
+    overlay = document.body.classList.contains("focus") || document.body.classList.contains("tvmodal-open") ||
+      (typeof GPOP_T !== "undefined" && !!GPOP_T) || open("trFullHost") || open("ernSumHost") || open("chatPop", "open") ||
+      open("alertPanel", "is-open") || open("fViewer", "on") || !!el("tvModal") || !!document.querySelector(".sc-cohwrap.is-open");
+  } catch (_) {}
+  let playerOpen = false, sectionFull = false;
+  try { playerOpen = YT_IDX >= 0; } catch (_) {}
+  try { sectionFull = !!SECFS; } catch (_) {}
+  return hubNightHold({ playerOpen, playerState, sectionFull, browserFull: !!document.fullscreenElement, overlay });
 }
 const HUB_LOADED_AT = Date.now();
 const HUB_KEEP_PLACE_KEY = "hub.nightreload.place";
@@ -28432,7 +28457,7 @@ try { setTimeout(hubRestorePlace, 1200); } catch (_) {}
           /* RM1 — the night reload: due by the clock, the server just answered, and K3's own rule would let a new
              build reload this page at this moment. Then, and only then; nothing is remembered for a later round. */
           else if (r.ok && hubNightReloadDue(HUB_NIGHT_RELOAD_ON, Date.now() - HUB_LOADED_AT, new Date().getHours(), HUB_NIGHT_RELOAD_RULE).due &&
-                   hubSelfUpdatePlan("open", "night", Date.now() - lastActive, videoPlaying, typing).reload) {
+                   hubSelfUpdatePlan("open", "night", Date.now() - lastActive, videoPlaying, typing).reload && !hubNightHoldNow()) {
             hubKeepPlace(); location.reload();
           }
         } catch (err) {}
