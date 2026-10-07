@@ -201,7 +201,7 @@ def risk_block(r, big):
 def plan_block(r, big):
     g = r["plan"]["given"] or {}; blank = '<i class="blank">—</i>'
     rows = [("CORE OR CONVICTION", blank), ("ENTRY LEVELS", E(g["entries"]) if g else blank), ("SIZE BY RISK", blank), ("EXIT / TRIM RULE", blank)]
-    if g: rows[1:1] = [("BUY ZONE", E(g["buy_zone"])), ("STOP", E(g["stop"])), ("MAGNET", E(g["magnet"]))]
+    if g: rows[1:1] = [("BUY ZONE", E(g["buy_zone"])), ("STOP", E(g["stop"])), ("MAGNET", E(g["magnet"])), ("BETWEEN PRICE AND THE 100-DAY", E(g["between"]))]
     return '<div class="plan"><div class="plh">THE PLAN — ALAN\'S' + (f' · AS GIVEN, {E(g["said"]).upper()}' if g else "") + "</div>" + "".join(f'<div class="plr"><span class="lab">{a}</span><span>{b}</span></div>' for a, b in rows) + "</div>"
 def head_block(t, big):
     r = REC[t]; day = (r["price"] / r["previous_close"] - 1) * 100 if r.get("previous_close") else None

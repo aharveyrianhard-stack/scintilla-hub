@@ -39,8 +39,10 @@
                     runs out — and then the set says how many the universe holds. Never beyond N_MAX.
      reference      Comps-only reference peers (REFERENCE_PEERS): leaders of a line that the Hub does not serve
                     (SK hynix, Samsung Electronics, Kioxia). They join a set only through `complement`, only for a
-                    company whose main line is the one they are listed for, are never ranked on the board, and are priced only when the dated facts
-                    file carries their figures (comps-c5/reference.mjs). */
+                    company whose main line is the one they are listed for, are never ranked on the board, and are
+                    priced only when the dated facts file carries their figures (comps-c5/reference.mjs). A caller
+                    that reads figures for a set leaves out a reference row without them (`reference && !has_figures`),
+                    as decision-cards/tools/comps-run.mjs does: it has no row in any table. */
 
 export const SIM_MIN = 0.15, LINE_MIN = 0.15, SIZE_WEIGHT = 0.06, NAMED_BONUS = 0.03, N_DEFAULT = 12, NS = [8, 10, 12, 15, 20], SEATS_PER_LINE = 2;
 export const DUAL = { GOOG: "GOOGL", "BRK.A": "BRK-B" };   // the class dropped → the class kept
