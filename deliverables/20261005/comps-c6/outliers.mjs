@@ -150,6 +150,31 @@ export function businessOf(set, peers) {
   return { n: rows.length, same, line, mostlyDifferent: same.length < rows.length / 2 };
 }
 
+/** CP3 (7 Oct) · THE SET, CHECKED — every set, automatically. Alan: "fix the methodology that picked the wrong peers, so we
+    don't have to maintain peer sets by hand — but always check them." Two readings, each a flag in words when it trips:
+      BUSINESS  fewer than half of the peers the four sources and the line method KEPT share the company's business line
+                (the test that would have caught Micron among chip designers and Vistra among regulated utilities);
+      SIZE      among the peers that PRICE the company, the middle one is less than a tenth or more than ten times its
+                size (SIZE_OFF), or the largest is more than a hundred times the smallest (SIZE_SPREAD).
+    set: buildSet()'s answer (kept rows carry `ratio` = peer market value ÷ the company's, and `same_business` / `stated` /
+    `exact`); priced: the tickers that set the price. Returns { business: { same, of, mostly_different }, size: { n, min,
+    median, max, spread }, flags: [words] }. Pure: it reads the set, it changes nothing — a flagged set is still priced. */
+export const SIZE_OFF = 10, SIZE_SPREAD = 100;
+export function setCheck(set, priced = null) {
+  if (!set || !Array.isArray(set.kept)) return null;
+  const kept = set.kept.filter((r) => !r.reference || r.has_figures), isSame = (r) => (set.stated ? !!r.stated : r.same_business != null ? !!r.same_business : r.exact >= SIM_MIN);
+  const same = kept.filter(isSame).length, flags = [];
+  const business = { same, of: kept.length, mostly_different: kept.length > 0 && same < kept.length / 2 };
+  if (business.mostly_different) flags.push(`set check: only ${same} of its ${kept.length} peers share its business`);
+  const pr = (priced && priced.length ? kept.filter((r) => priced.includes(r.ticker)) : kept).map((r) => Number(r.ratio)).filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  const med = pr.length ? (pr.length % 2 ? pr[(pr.length - 1) / 2] : (pr[pr.length / 2 - 1] + pr[pr.length / 2]) / 2) : null;
+  const size = { n: pr.length, min: pr.length ? pr[0] : null, median: med, max: pr.length ? pr[pr.length - 1] : null, spread: pr.length > 1 ? pr[pr.length - 1] / pr[0] : null };
+  const times = (x) => (x >= 1 ? (x >= 10 ? Math.round(x) : x.toFixed(1)) + " times its size" : "1/" + (1 / x >= 10 ? Math.round(1 / x) : (1 / x).toFixed(1)) + " of its size");
+  if (med != null && (med < 1 / SIZE_OFF || med > SIZE_OFF)) flags.push(`set check: the peers that price it are far from its size — the middle one is ${times(med)}`);
+  else if (size.spread != null && size.spread > SIZE_SPREAD) flags.push(`set check: the peers that price it run from ${times(size.min)} to ${times(size.max)}`);
+  return { business, size, flags };
+}
+
 /** The peers the operator KEPT against the rule: latest decision on PEER|ALL is off = false with a reason starting "keep". */
 export function keptPeers(decisions, company) {
   const s = new Set();

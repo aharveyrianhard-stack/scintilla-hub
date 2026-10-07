@@ -18,7 +18,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url)), WT = path.resolve(HER
 const { localPg } = await import(WT + "/deliverables/20261007/knockout/tools/local-pg.mjs");
 const { inputs: c4inputs, readSet, snapshotFromCohort } = await import(WT + "/deliverables/20261001/comps-mechanic/read.mjs");
 const { buildSet, votesFor, lineWords, CP1_LINES_OFF, CP1_LINES_ON, CP3_LINES_ON, CP3_STATED, REFERENCE_PEERS, SIM_MIN } = await import(WT + "/deliverables/20261003/comps-c5/lines.mjs");
-const { conclusion6, CP1_ALL, CP1_NONE, CP3_ALL } = await import(WT + "/deliverables/20261005/comps-c6/outliers.mjs");
+const { conclusion6, CP1_ALL, CP1_NONE, CP3_ALL, setCheck } = await import(WT + "/deliverables/20261005/comps-c6/outliers.mjs");
 const { isValuation } = await import(WT + "/deliverables/20261003/comps-c5/field.mjs");
 const { referenceOf, withReference, withReferenceQuotes } = await import(WT + "/deliverables/20261003/comps-c5/reference.mjs");
 const { forwardRead, estFxPair, multipleText } = await import(WT + "/lib/forward-basis.mjs");
@@ -98,6 +98,9 @@ function rowOf(t, T, X, bal) {
   const annual = own ? snap.pe_fwd_annual : snap.pe_fwd_annual_peers[t];
   return { ticker: t, name: nameOf(t), price: r2(i.price), mcap: i.mcap || null,
     pe_ttm: r2(m("pe_ttm")), pe_fwd: r2(m("pe_fwd")), pe_fwd_text: multipleText(m("pe_fwd"), !!(note && note.rate)), pe_fwd_fiscal_year: r2(annual), ev_ebitda: r2(m("ev_ebitda")), ev_sales: r2(m("ev_sales")), ps: r2(m("ps")), peg: r2(m("peg")), p_ffo: r2(tb.p_ffo),
+    /* GROWTH, TWO WAYS (Alan, 7 Oct: "+22% growth doesn't make sense" for Micron): earnings of the last twelve months as reported → the
+       next four quarters; and the next four quarters → the four after. Both are on the card, labelled in words. */
+    growth_reported_to_next: i.eps_ttm > 0 && i.eps_fy1 != null ? r1((i.eps_fy1 / i.eps_ttm - 1) * 100) : null, eps_ttm: r2(i.eps_ttm), eps_next_four: r2(i.eps_fy1),
     growth_eps: r1(tb.eps_g_fy), growth_rev: r1(tb.rev_g_fy), rev_g_ttm: r1(tb.rev_g_ttm), eps_g_2y: r1(tb.eps_g_2y), gm: r1(tb.gm), om: r1(tb.om), fcfm: r1(tb.fcfm),
     forward: note ? { basis: note.basis, label: note.label, growth_basis: note.growth_basis, growth_from: note.growth_from, flags: (note.flags || []).map((f) => ({ code: f.code, words: f.words })), rate: note.rate || null, quarters: note.quarters || [], years: note.years || null, withheld: note.withheld_why || null } : null,
     currency: fxn && fxn.currency && fxn.currency !== "USD" ? fxn.currency : "USD",
@@ -119,6 +122,12 @@ for (const T of NAMES) {
       return { ...row, stated: !!r.stated, same_business: !!(r.same_business ?? (r.exact >= SIM_MIN)), in_old_set: set0.kept.some((k) => k.ticker === r.ticker), added: !!r.added, reference: !!r.reference, has_figures: has,
         priced: has && pricedSet.has(r.ticker) && !outl.has(r.ticker), outlier: outl.has(r.ticker), votes: { fmp: !!v.fmp, massive: !!v.massive, industry: !!v.industry, fund: !!v.fund, n: v.n, words: v.words || null }, why: r.why || null }; });
     const own = rowOf(T, T, cp3, bal), pricedRows = peers.filter((p) => p.priced);
+    /* the automatic check on the set (outliers.mjs setCheck): on the set as it was kept before any statement, and on the peers that price it now */
+    const checkOld = setCheck(set0, null), checkNow = setCheck(set3, [...pricedSet].filter((t) => !outl.has(t)));
+    /* Micron and its line, three ways (the coordinator, 7 Oct 10:35): US-listed peers only, plus SK hynix, plus all three foreign makers */
+    const refs = set3.kept.filter((r) => r.reference && r.has_figures).map((r) => r.ticker), refVariant = (keep) => ({ ...set3, kept: set3.kept.map((r) => (r.reference && !keep.includes(r.ticker) ? { ...r, has_figures: false } : r)) });
+    const way = async (keep) => { const x = await price(T, refVariant(keep), CP3_ALL, "next-four-quarters"); return { peers: (x.business_peers || x.behind || []).slice(), upside_pct: x.upside_pct ?? null, band: x.band || null, pe_fwd_median: x.rows && x.rows.pe_fwd ? x.rows.pe_fwd.median : null, fragile: !!x.fragile, thin: !!x.thin }; };
+    const threeWays = refs.length ? { us_listed_only: await way([]), plus_sk_hynix: refs.includes("000660.KS") ? await way(["000660.KS"]) : null, all_three: await way(refs) } : null;
     const sits = Object.fromEntries(["pe_fwd", "pe_ttm", "ev_ebitda", "peg", "ps", "p_ffo"].map((k) => [k, sitsOf(own[k], pricedRows, k)]));
     const gPeers = pricedRows.map((p) => p.growth_eps).filter((v) => v != null);
     sits.growth_eps = own.growth_eps != null && gPeers.length ? { place: gPeers.filter((v) => v > own.growth_eps).length + 1, of: gPeers.length + 1, median: r1(median(gPeers)) } : null;
@@ -139,7 +148,11 @@ for (const T of NAMES) {
         fiscal_year: { pe: r2(cp3.snap.pe_fwd_annual), eps: r2(cp3.snap.eps_fy1_annual), year: cp3.snap.fy1_annual_date } },
       sets: { old: set0.kept.map((r) => r.ticker), cp1: set1.kept.map((r) => r.ticker), now: set3.kept.map((r) => r.ticker), stated: st ? { line: st.line, peers: st.peers, why: st.why, from: st.from, not_served: st.not_served, added: st.added, legs: st.legs } : null,
         added: set3.kept.filter((r) => !set0.kept.some((k) => k.ticker === r.ticker)).map((r) => r.ticker), priced: [...pricedSet].filter((t) => !outl.has(t)), shown_not_priced: cp3.not_priced || [], rule: cp3.priced_on === "business" ? (st ? "stated same-business peers" : "same-business peers (the line holds four or more, or it is one of the two lines named on 6 Oct)") : "the whole set (too few same-business peers to price on)" },
-      runs: { live: slim(live), cp1: slim(cp1), one: slim(one), cp3: slim(cp3) }, own, peers, sits, legs };
+      runs: { live: slim(live), cp1: slim(cp1), one: slim(one), cp3: slim(cp3) }, own, peers, sits, legs,
+      /* the check in words, for the card: what the sources' own set looked like, what was done about it, and the size of the peers that price it */
+      set_check: { as_kept: checkOld, now: checkNow, words: [
+        ...(checkOld.business.mostly_different ? [`set check: only ${checkOld.business.same} of the ${checkOld.business.of} peers the sources kept share its business — ${cp3.priced_on === "business" ? "it is priced on the " + pricedSet.size + " that do" : "and the whole set still prices it"}`] : []),
+        ...checkNow.flags.filter((f) => !/share its business/.test(f)) ] }, three_ways: threeWays };
     const f = (x) => (x && x.band ? `${x.upside_pct >= 0 ? "+" : ""}${x.upside_pct}%${x.priced_on === "business" ? "*" : ""}` : x && x.no_peer_set ? "no set" : "—");
     console.log(`${T.padEnd(5)} ${String(cp3.price).padStart(8)} · fwd ${fw.text.padStart(7)} (fiscal year ${r1(cp3.snap.pe_fwd_annual) ?? "—"}×) growth ${r1(fw.growth_pct) ?? "—"}% PEG ${r2(fw.peg) ?? "—"} · live ${f(live)} · cp1 ${f(cp1)} · one basis ${f(one)} · CP3 ${f(cp3)} on ${[...pricedSet].join(" ")} · debt ${own.debt.word}${own.debt.net_debt_ebitda != null ? " " + own.debt.net_debt_ebitda + "×" : ""}`);
   } catch (e) { out.names[T] = { ok: false, error: String((e && e.stack) || e).slice(0, 700) }; console.log(`${T.padEnd(5)} FAILED ${out.names[T].error}`); }

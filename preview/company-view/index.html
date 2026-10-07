@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 24e3e00) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8c8dd6a) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -5741,6 +5741,13 @@ function applyEstimates(fpeEst) {
 /* every F P/E cell on screen, from the latest known price — the late estimates and a pull that ran before a price
    was in both end here (the price tick alone never repaints a name that is not trading, e.g. after hours) */
 function fpeRepaint() {
+  /* CP3 — the same late answer fills the foreign reporters' REVENUE cells (revUsd): the paired rate arrives after the first paint */
+  for (const r of (S.rows || [])) {
+    if (!r.revCcy) continue;
+    const usd = revUsd(r.t, null, r.revCcy, r.revLocal); if (usd == null) continue;
+    r.rev = usd; const cell = el("lrv_" + r.t);
+    if (cell && cell.parentNode) { const box = document.createElement("span"); box.innerHTML = revCellHTML(r.t, r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero); cell.parentNode.replaceChild(box.firstChild, cell); }
+  }
   for (const r of (S.rows || [])) {
     const p = r.price != null ? r.price : (PRICES[r.t] != null ? PRICES[r.t] : null);
     r.fpe = fpeVal(r.t, p);
@@ -6132,7 +6139,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         /* THE VALUE CARRIES ITS SOURCE TIME: company_profile.updated_ts, epoch SECONDS, written by fmp-backfill job=profile
            together with market_cap. null = the store has no source time for this row (said so on screen, never guessed). */
         mcAsOf: (function () { const ts = num(pf[m.ticker] && pf[m.ticker].updated_ts); return (ts != null && ts > 0) ? ts : null; })(),
-        rev:    REVTTM[m.ticker] ? REVTTM[m.ticker].v : null,     // H-FRONT — fundamentals.revenue_ttm in USD; null = blank (and sorts lowest)
+        rev:    REVTTM[m.ticker] ? (REVTTM[m.ticker].v != null ? REVTTM[m.ticker].v : revUsd(m.ticker, null, REVTTM[m.ticker].ccy, REVTTM[m.ticker].local)) : null,     // H-FRONT — fundamentals.revenue_ttm in USD; CP3: a foreign reporter's, converted at the paired rate when there is one; null = blank (and sorts lowest)
         revAsOf: REVTTM[m.ticker] ? REVTTM[m.ticker].at : null,
         revCcy: REVTTM[m.ticker] ? REVTTM[m.ticker].ccy : null,   // non-USD reporter: withheld from the dollar column, currency named
         revLocal: REVTTM[m.ticker] ? REVTTM[m.ticker].local : null,
@@ -7569,9 +7576,23 @@ function revTitle(v, asOf, ccy, local, zero) {
   if (num(v) == null || !(num(v) > 0)) return "revenue not on file (fundamentals.revenue_ttm)";
   return "trailing-twelve-month revenue · fundamentals.revenue_ttm" + when;
 }
+/* CP3 (7 Oct) — "RATIOS ARE RATIOS, DO THE CURRENCY" (Alan, on TSMC's "in TWD"). A foreign reporter's revenue is put in dollars
+   at THE SAME RATE ITS FORWARD P/E USES: the supplier's own paired rate (EST_FX — its dollar estimate over its local one for the same
+   quarter, confirmed by revenue). The cell then reads "≈$140.3B" and its title says the rate and the local figure. With no agreeing
+   pair it stays as it was — "in TWD", withheld and named — never a local figure under a dollar sign. revUsd() is the one place
+   that answers the dollar figure (the cell, the sort value and the repaint all ask it). */
+function revUsd(t, v, ccy, local) {
+  if (!ccy) return num(v);
+  const fx = (typeof estFx === "function") ? estFx(t) : null, n = num(local);
+  return (fx && num(fx.f) > 0 && n != null && n > 0) ? n * num(fx.f) : null;
+}
 function revCellHTML(t, v, asOf, ccy, local, zero) {
-  const text = ccy ? "in " + ccy : fmtRevCell(v);
-  return '<span class="sc-rev' + (ccy ? " is-ccy" : "") + '" id="lrv_' + esc(t) + '" title="' + esc(revTitle(v, asOf, ccy, local, zero)) + '">' + esc(text) + "</span>";
+  const usd = (ccy && typeof revUsd === "function") ? revUsd(t, v, ccy, local) : null, fx = (ccy && usd != null && typeof estFx === "function") ? estFx(t) : null;   // self-contained: the tests cut this function out alone
+  const text = ccy ? (usd != null ? "≈" + fmtRevCell(usd) : "in " + ccy) : fmtRevCell(v);
+  const title = (ccy && usd != null) ? "≈ trailing-twelve-month revenue, converted · " + fmtRevLocal(local, ccy) + " × " + num(fx.f).toPrecision(4) + " = " + fmtRevCell(usd) +
+    " · the rate is the supplier's own for the quarter to " + fx.q + " (its USD estimate ÷ its " + ccy + " one, confirmed by revenue) — the rate the forward P/E uses · fundamentals.revenue_ttm"
+    : revTitle(v, asOf, ccy, local, zero);
+  return '<span class="sc-rev' + (ccy && usd == null ? " is-ccy" : "") + '" id="lrv_' + esc(t) + '" title="' + esc(title) + '">' + esc(text) + "</span>";
 }
 /* A STORED MARKET CAP IS SHOWN WITH ITS SOURCE DATE, NEVER ERASED. company_profile.market_cap is the provider's profile
    figure (its own shares x its own price at write time), stored by fmp-backfill job=profile with updated_ts in epoch

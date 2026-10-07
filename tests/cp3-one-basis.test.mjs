@@ -19,7 +19,7 @@ import { buildFeed, VERSION, forwardEps as feedForwardEps } from "../supabase/fu
 import { readCohort, snapshotFromCohort, FORWARD_DEFAULT } from "../deliverables/20261001/comps-template/cohort.mjs";
 import { localPg } from "../deliverables/20261007/knockout/tools/local-pg.mjs";
 import { CP3_STATED, CP3_LINES_ON } from "../deliverables/20261003/comps-c5/lines.mjs";
-import { CP3_ALL, EVERY_LINE_MIN, businessOf } from "../deliverables/20261005/comps-c6/outliers.mjs";
+import { CP3_ALL, EVERY_LINE_MIN, businessOf, setCheck, SIZE_OFF, SIZE_SPREAD } from "../deliverables/20261005/comps-c6/outliers.mjs";
 
 const R = (p) => new URL(p, import.meta.url), J = (p) => JSON.parse(fs.readFileSync(R(p), "utf8"));
 const PAGE = fs.readFileSync(R("../index.html"), "utf8"), FX = J("./fixtures/cp3-one-basis-20261007.json"), T = FX.tables, TODAY = FX.today;
@@ -210,7 +210,7 @@ print(json.dumps({"a":{"order":a["order"],"pass":sorted(r["t"] for r in a["rows"
 /* ---- the cards and the page -------------------------------------------------------------------------------------------- */
 test("the cards keep what they carried (technicals, risk, the plan) and take the new forward figures, comps, peers and debt", () => {
   const OLD = J("../deliverables/20261006/decision-cards/data/cards.json");
-  for (const [t, o] of Object.entries(OLD.cards)) { const c = CARDS.cards[t]; assert.deepEqual(c.technicals, o.technicals, t); assert.deepEqual(c.risk, o.risk, t); assert.deepEqual(c.plan, o.plan, t); assert.equal(c.price, o.price); assert.equal(c.fundamentals.rev_g_ntm, o.fundamentals.rev_g_ntm);
+  for (const [t, o] of Object.entries(OLD.cards)) { const c = CARDS.cards[t]; { const { long_term_channel, ...kept } = c.technicals; assert.deepEqual(kept, o.technicals, t + ": what the card carried is untouched; the long-term channel is added beside it"); } assert.deepEqual(c.risk, o.risk, t); assert.deepEqual(c.plan, o.plan, t); assert.equal(c.price, o.price); assert.equal(c.fundamentals.rev_g_ntm, o.fundamentals.rev_g_ntm);
     assert.equal(c.fundamentals.fwd_pe_was.card_blend, o.fundamentals.fwd_pe ?? null); assert.ok(Array.isArray(c.peers) && c.peers.length >= 2, t + " carries its peers"); }
   assert.ok(CARDS.cards.TSM, "TSMC, on the radar, has a card"); assert.equal(CARDS.cards.TSM.fundamentals.fwd_pe_text, "≈23.1×"); assert.equal(CARDS.as_of.card_date, "2026-10-06"); assert.equal(CARDS.as_of.repriced, "2026-10-07");
   const g = CARDS.cards.GOOGL; assert.equal(g.fundamentals.fwd_pe_text, "24.2×"); assert.ok(Math.abs(g.fundamentals.fwd_pe_was.on_the_fiscal_year - 16.87) < 0.01); assert.ok(Math.abs(g.fundamentals.fwd_pe_was.card_blend - 21.15) < 0.01);
@@ -230,4 +230,60 @@ test("the page: pictures first, the thirty rows with no cell that differs, ten c
   for (const w of ["1680", "390"]) { const f = facts[w]; assert.equal(f.sideways, false, w + " does not scroll sideways"); assert.ok(f.smallest_font_px >= 11, w + " smallest text " + f.smallest_font_px); assert.equal(f.scnav, true); assert.deepEqual(f.colours_off_grey, []); assert.deepEqual(f.internal_codes, []);
     assert.deepEqual(f.page_errors, []); assert.equal(f.non_get_blocked, 0); assert.equal(f.requests_off_file, 0); assert.equal(f.rows30, 30); assert.equal(f.cells_that_differ, 0); assert.equal(f.core_panels, 10); assert.ok(f.images.length >= 6 && f.images.every((i) => i.ok), "the tool's pictures load"); }
   for (const f of ["1680-00-first-screen.png", "390-00-first-screen.png", "1680-04-core-GOOGL.png", "390-10-core-MU.png", "1680-18-tool.png"]) assert.ok(fs.statSync(R("../deliverables/20261007/one-basis/shots/" + f)).size > 20000, f);
+});
+
+/* ---- the coordinator's steering of 11:20 ET, 7 Oct (Alan's further points) --------------------------------------------- */
+test("Micron three ways: US-listed peers only, plus SK hynix, plus all three foreign makers — and the same for the rest of its line", () => {
+  const w = CARDS.cards.MU.comps.three_ways;
+  assert.deepEqual(w.us_listed_only.peers.slice().sort(), ["SNDK", "STX", "WDC"]); assert.deepEqual(w.plus_sk_hynix.peers.slice().sort(), ["000660.KS", "SNDK", "STX", "WDC"]); assert.equal(w.all_three.peers.length, 6);
+  assert.ok(w.us_listed_only.upside_pct > 80 && w.us_listed_only.upside_pct < 100, "US-listed only: " + w.us_listed_only.upside_pct);
+  assert.ok(w.plus_sk_hynix.upside_pct > 40 && w.plus_sk_hynix.upside_pct < 60, "+ SK hynix: " + w.plus_sk_hynix.upside_pct);
+  assert.ok(w.all_three.upside_pct > 5 && w.all_three.upside_pct < 20, "+ all three: " + w.all_three.upside_pct); assert.equal(w.all_three.upside_pct, CARDS.cards.MU.comps.upside_pct);
+  assert.ok(w.us_listed_only.pe_fwd_median > w.plus_sk_hynix.pe_fwd_median && w.plus_sk_hynix.pe_fwd_median > w.all_three.pe_fwd_median, "each foreign maker pulls the peers' forward P/E down");
+  for (const t of ["SNDK", "WDC", "STX"]) assert.ok(CARDS.cards[t].comps.three_ways && CARDS.cards[t].comps.three_ways.all_three.peers.length === 6, t);
+  assert.equal(CARDS.cards.GOOGL.comps.three_ways, null, "a name with no foreign reference peer has one reading");
+});
+test("\"ratios are ratios — do the currency\": the Chinese names price Amazon, converted; TSMC's revenue on the dashboard is in dollars at the rate its forward P/E uses", () => {
+  const amzn = DATA.core.AMZN; for (const t of ["BABA", "JD", "PDD"]) { assert.ok(amzn.sets.priced.includes(t), t + " prices Amazon"); const p = amzn.peers.find((x) => x.ticker === t); assert.ok(p.priced && p.pe_fwd_text.startsWith("≈") && p.pe_fwd > 5 && p.pe_fwd < 15, t + " " + p.pe_fwd_text); assert.equal(p.currency, "CNY"); }
+  assert.ok(amzn.legs["retail and e-commerce"].peers.includes("BABA")); assert.ok(amzn.runs.cp3.upside_pct > 10 && amzn.runs.cp3.upside_pct < 40, "Amazon with them in: " + amzn.runs.cp3.upside_pct);
+  /* the dashboard's revenue cell, cut out of the page as it stands */
+  const fn = (name) => { const i = PAGE.search(new RegExp("^function " + name + "\\b", "m")); assert.ok(i >= 0, name); return PAGE.slice(i, PAGE.indexOf("\n}\n", i) + 3); };
+  const fmtCap = (n) => "$" + (n >= 1e12 ? (n / 1e12).toFixed(1) + "T" : (n / 1e9).toFixed(1) + "B"), num = (x) => (x == null ? null : Number(x)), esc = (x) => String(x);
+  const kit = (estFx) => new Function("num", "esc", "fmtCap", "estFx", fn("fmtRevCell") + fn("fmtRevLocal") + fn("revTitle") + fn("revUsd") + fn("revCellHTML") + "return { revUsd, revCellHTML };")(num, esc, fmtCap, estFx);
+  const withRate = kit((t) => (t === "TSM" ? { f: 0.0315, ccy: "TWD", q: "2026-09-30" } : null)), cell = withRate.revCellHTML("TSM", null, 1791000000, "TWD", 4450400000000, false);
+  assert.ok(Math.abs(withRate.revUsd("TSM", null, "TWD", 4450400000000) - 4450400000000 * 0.0315) < 1); assert.match(cell, />≈\$140\.2B<\/span>/); assert.ok(!/is-ccy/.test(cell)); assert.match(cell, /TWD 4\.5T × 0\.03150 = \$140\.2B/); assert.match(cell, /the rate the forward P\/E uses/);
+  const noRate = kit(() => null).revCellHTML("TSM", null, 1791000000, "TWD", 4450400000000, false); assert.match(noRate, /class="sc-rev is-ccy"[^>]*>in TWD<\/span>/, "no agreeing rate: withheld and named, as before");
+  assert.equal(withRate.revUsd("MU", 133188000000, null, null), 133188000000, "a dollar reporter is untouched"); assert.match(withRate.revCellHTML("MU", 133188000000, 1791000000, null, null, false), />\$133\.2B</);
+  assert.match(PAGE, /rev:\s+REVTTM\[m\.ticker\] \? \(REVTTM\[m\.ticker\]\.v != null \? REVTTM\[m\.ticker\]\.v : revUsd\(/, "the board sorts on the dollar figure"); assert.match(fn("fpeRepaint"), /revUsd\(r\.t, null, r\.revCcy, r\.revLocal\)/, "the late rate fills the cell where it stands");
+  assert.equal(fs.readFileSync(R("../preview/company-view/index.html"), "utf8").includes("function revUsd(t, v, ccy, local)"), true, "the trial copy was rebuilt from the page");
+});
+test("every set is checked automatically: fewer than half of the kept peers in the same business, or pricing peers far from its size, is said on the card", () => {
+  const mk = (ratio, same) => ({ ticker: "P" + Math.random().toString(36).slice(2, 7), ratio, same_business: same });
+  const bad = setCheck({ kept: [mk(1, true), mk(1, true), mk(1, false), mk(1, false), mk(1, false), mk(1, false)] }); assert.equal(bad.business.mostly_different, true); assert.match(bad.flags[0], /only 2 of its 6 peers share its business/);
+  assert.deepEqual(setCheck({ kept: [mk(1, true), mk(2, true), mk(0.5, true), mk(1, false)] }).flags, [], "three of four share it and they are its own size: no flag");
+  const small = setCheck({ kept: [mk(0.01, true), mk(0.02, true), mk(0.05, true)] }); assert.match(small.flags[0], /the middle one is 1\/50 of its size/); assert.equal(SIZE_OFF, 10);
+  const wide = setCheck({ kept: [mk(0.02, true), mk(0.5, true), mk(1, true), mk(4, true)] }); assert.match(wide.flags[0], /run from 1\/50 of its size to 4\.0 times its size/); assert.equal(SIZE_SPREAD, 100);
+  assert.equal(setCheck(null), null);
+  /* on the real sets: the check would have caught each wrong one, and it says what was done about it */
+  for (const [t, same, of, n] of [["MU", 2, 12, 6], ["VST", 4, 12, 3], ["NVDA", 3, 12, 5], ["ORCL", 2, 12, 8]]) { const c = CARDS.cards[t].comps; assert.deepEqual([c.set_check.as_kept.same, c.set_check.as_kept.of], [same, of], t); assert.ok(c.set_check.words.some((w) => w === `set check: only ${same} of the ${of} peers the sources kept share its business — it is priced on the ${n} that do`), t + ": " + c.set_check.words.join(" | ")); assert.ok(c.flags.some((f) => f.startsWith("set check:")), t + " shows it on the card"); }
+  assert.ok(CARDS.cards.GOOGL.comps.set_check.words.some((w) => /far from its size — the middle one is 1\/\d+ of its size/.test(w)), "Alphabet's ad-platform peers are a fraction of its size: " + CARDS.cards.GOOGL.comps.set_check.words.join(" | "));
+});
+test("growth is shown two ways on every card, in words; the growth credit is said whether it applies or not; the blend leads", () => {
+  const mu = CARDS.cards.MU.fundamentals; assert.ok(mu.eps_g_reported_to_next_four > 125 && mu.eps_g_reported_to_next_four < 140, "Micron, reported → next four: " + mu.eps_g_reported_to_next_four); assert.ok(mu.eps_g_following_year > 21 && mu.eps_g_following_year < 24);
+  assert.ok(Math.abs(mu.eps_g_reported_to_next_four - (mu.eps_next_four_quarters / mu.eps_reported_last_twelve_months - 1) * 100) < 0.2); assert.match(mu.growth_words.reported_to_next, /last twelve months, as reported → the next four quarters/); assert.match(mu.growth_words.next_to_following, /next four quarters → the four after/);
+  for (const [t, c] of Object.entries(CARDS.cards)) { assert.ok("eps_g_reported_to_next_four" in c.fundamentals && "eps_g_following_year" in c.fundamentals && c.fundamentals.growth_words, t); assert.ok(c.comps.growth_credit_words == null || /^growth credit/.test(c.comps.growth_credit_words), t); }
+  assert.match(CARDS.cards.GOOGL.fundamentals.reported_base_note, /one-off/, "Alphabet's reported year carries paper gains, and the card says so beside the growth from it"); assert.ok(CARDS.cards.GOOGL.fundamentals.eps_g_reported_to_next_four < 0);
+  assert.match(CARDS.cards.VST.comps.growth_credit_words, /^growth credit: none — it grows 20% into the following year against its peers' 27%$/, "Vistra against independent power producers: " + CARDS.cards.VST.comps.growth_credit_words);
+  assert.match(CARDS.cards.MU.comps.growth_credit_words, /^growth credit ×1\.\d+: it grows 22% into the following year against its peers' 19%/); assert.ok(CARDS.cards.VST.comps.rows.peg.own > 0.7 && CARDS.cards.VST.comps.rows.peg.median < 0.6, "P/E ÷ growth, Vistra against its peers");
+  /* every yardstick of the blend is on the card with its weight, and the weights add up */
+  for (const t of ["GOOGL", "MU", "VST", "AVGO"]) { const rows = CARDS.cards[t].comps.rows, w = Object.values(rows).reduce((a, r) => a + (r.weight || 0), 0); assert.ok(Object.keys(rows).length >= 6, t); assert.ok(Math.abs(w - 1) < 0.03, t + " weights add to " + w); assert.ok(Object.values(rows).filter((r) => r.weight > 0).length >= 3, t + " is priced on several yardsticks, not one"); }
+  const html = fs.readFileSync(R("../deliverables/20261007/one-basis/ONE-BASIS.html"), "utf8"); assert.ok(html.indexOf("EVERY YARDSTICK TOGETHER") > 0 && html.indexOf("EVERY YARDSTICK TOGETHER") < html.indexOf("WHERE IT SITS · FORWARD P/E"), "each panel leads with the blended range"); assert.match(html, /THREE WAYS · WHO PRICES IT/); assert.match(html, /WEIGHT IN THE BLEND/);
+});
+
+test("the long-term channel is on the card only where the reviewed lines carry all three of its rails; the place in it is the channels study's measure", () => {
+  const ch = (t) => CARDS.cards[t].technicals.long_term_channel, mu = ch("MU");
+  assert.ok(mu, "Micron has one"); assert.deepEqual([mu.upper.label, mu.mid.label, mu.lower.label], ["3D B2", "3D B4", "3D B6"]); assert.ok(mu.upper.level > mu.mid.level && mu.mid.level > mu.lower.level);
+  assert.ok(Math.abs(mu.position_pct - ((1045.56 - mu.lower.level) / (mu.upper.level - mu.lower.level)) * 100) < 0.06); assert.ok(mu.position_pct > 25 && mu.position_pct < 40, "Micron sits in the lower third: " + mu.position_pct); assert.match(mu.words, /^31% of the way up its long-term channel \(3D B6 880\.3 → 3D B2 1410\.79\)$/);
+  const have = Object.keys(CARDS.cards).filter((t) => ch(t)); assert.deepEqual(have.sort(), ["AMZN", "MU", "WDC"], "the three names whose three rails are on file");
+  for (const t of ["NVDA", "GOOGL", "AVGO", "VST", "TSM"]) assert.equal(ch(t), null, t + ": no complete channel on file, so none is shown");
 });
