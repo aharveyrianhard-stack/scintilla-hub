@@ -70,6 +70,7 @@ export const CP1_OUT_OFF = Object.freeze({ cellRule: false, consistency: false, 
 export const CP1_OUT_ON = Object.freeze({ cellRule: true, consistency: true, influence: true, selfOutlier: true, priceOnBusiness: true });
 export const CUT2 = 2.5, CONSIST_MIN = 4, CONSIST_SHARE = 0.75, CONSIST_SHARE_MIN = 3, INFLUENCE = 0.10, INFLUENCE_MIN_N = 6, PRICE_ON_BUSINESS_MIN = 2;
 export const PRICE_ON_LINES = ["memory & storage", "data-centre reit"];
+export const EVERY_LINE_MIN = 3;   // CP3 priceOnEveryLine: a line prices its own when the set holds at least this many same-business peers
 export const NO_PEER_SET = "no peer set — valued on growth (PEG) and estimates";
 export const COLUMNS = TABLE.map((c) => ({ key: c.key, label: c.label, short: SHORT[c.key] || c.label, fmt: c.fmt, log: ROWS.includes(c.key) }));
 /* C6b · the votes: the valuation multiples only, trailing and forward P/E as one */
@@ -142,6 +143,8 @@ export function businessOf(set, peers) {
   if (!set || !Array.isArray(set.kept)) return null;
   const rows = peers.map((t) => set.kept.find((r) => r.ticker === t)).filter((r) => r && Number.isFinite(r.exact));
   if (!rows.length) return null;
+  /* CP3: a set with STATED same-business peers (lines.mjs CP3_STATED) answers from the statement, not from the line vectors */
+  if (set.stated) { const same = rows.filter((r) => r.stated).map((r) => r.ticker); return { n: rows.length, same, line: set.stated.line, mostlyDifferent: same.length < rows.length / 2, stated: true }; }
   const same = rows.filter((r) => r.exact >= SIM_MIN).map((r) => r.ticker), lines = (set.own_lines && set.own_lines.lines) || {};
   const line = Object.entries(lines).sort((a, b) => b[1] - a[1]).map(([l]) => l)[0] || set.own_industry || null;
   return { n: rows.length, same, line, mostlyDifferent: same.length < rows.length / 2 };
@@ -161,7 +164,11 @@ export function conclusion6(snap, decisions, estimates, today, way = "C", { only
   const T = snap.ticker, dec = decisions || [], sel = selectionOf(dec, T), kept = keptPeers(dec, T), X = fx || CP1_OUT_OFF;
   if (X.priceOnBusiness) {   /* CP1: a mostly-different-business set is priced on the peers that share the business */
     const inner = { ...X, priceOnBusiness: false }, whole = conclusion6(snap, dec, estimates, today, way, { only, set, rule, fx: inner }), b = whole.c6.business;
-    if (!(b && b.mostlyDifferent && b.same.length >= PRICE_ON_BUSINESS_MIN && PRICE_ON_LINES.includes(b.line))) return { ...whole, c6: { ...whole.c6, pricedOn: "set" } };
+    /* CP1: the two lines Alan named, when the set is mostly another business. CP3: a STATED set always; and with
+       priceOnEveryLine, any line whose set holds at least EVERY_LINE_MIN same-business peers beside others. */
+    const cp1 = b && b.mostlyDifferent && b.same.length >= PRICE_ON_BUSINESS_MIN && PRICE_ON_LINES.includes(b.line);
+    const stated = b && b.stated && b.same.length >= PRICE_ON_BUSINESS_MIN, everyLine = b && !!X.priceOnEveryLine && !b.stated && b.same.length >= EVERY_LINE_MIN && b.same.length < b.n;
+    if (!(cp1 || stated || everyLine)) return { ...whole, c6: { ...whole.c6, pricedOn: "set" } };
     const others = whole.c6.peers.filter((t) => !b.same.includes(t) && !kept.has(t));
     const C2 = conclusion6(snap, [...dec, ...others.map((t) => ({ company: T, peer: t, measure: "ALL", off: true, reason: "different business: shown, not priced", set_by: "rule-business", set_at: RULE_AT }))], estimates, today, way, { only, set, rule, fx: inner });
     return { ...C2, sel: { ...C2.sel, userPeers: sel.peers }, off: sel.list.length, c6: { ...C2.c6, pricedOn: "business", business: b, businessPeers: b.same, notPriced: others, wholeSet: { band: whole.band, upside: whole.upside, bandFromPeers: whole.c6.bandFromPeers, noPeerSet: whole.c6.noPeerSet, self: whole.c6.self, outliers: whole.c6.outliers, fragile: whole.c6.fragile || null } } };
@@ -213,6 +220,9 @@ export const CP1_ALL = Object.freeze({ ...CP1_LINES_ON, ...CP1_FIELD_ON, ...CP1_
 export const CP1_NONE = Object.freeze({ ...CP1_LINES_OFF, ...CP1_FIELD_OFF, ...CP1_OUT_OFF });
 /** FD1 (7 Oct): CP1's twelve switches plus growth measured from one forecast year to the next (field.mjs growthForward). */
 export const FD1_ALL = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_ON, ...CP1_OUT_ON });
+/* CP3 (7 Oct): CP1's twelve switches, the stated same-business sets, and the price from the same-business peers on every
+   line. The forward basis is not a switch here: it is how the snapshot was read (cohort.mjs `forward`). */
+export const CP3_ALL = Object.freeze({ ...CP1_LINES_ON, stated: true, ...CP1_FIELD_ON, ...CP1_OUT_ON, priceOnEveryLine: true });
 /** The proposal beside it: growth from the fiscal year just reported, on the analysts' basis (field.mjs growthFromLastYear). */
 export const FD1_ALL_LAST = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_LAST, ...CP1_OUT_ON });
 export const isFlagged = (c6, peer, key) => !!(c6 && c6.cols[key] && c6.cols[key].cells[peer] && c6.cols[key].cells[peer].flag);

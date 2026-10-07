@@ -50,6 +50,34 @@ export const DUAL = { GOOG: "GOOGL", "BRK.A": "BRK-B" };   // the class dropped 
 export const SAME_MIN = 6, N_MAX = 20;
 export const CP1_LINES_OFF = Object.freeze({ memoryStorage: false, dcReit: false, complement: false, reference: false });
 export const CP1_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true });
+/* CP3 (7 Oct) · STATED SAME-BUSINESS SETS — `stated`, one more switch of the same kind (off = CP1 exactly).
+   Alan, 7 Oct: "I need to see Google, Amazon and Broadcom — what the comps would look like … full treatment, comps,
+   everything measured against the other leaders, critiquing our comps processes." The four sources still vote and the
+   kept set is still shown whole, but for the names below THE PRICE COMES FROM THE PEERS THAT DO THE SAME BUSINESS, stated
+   here by name and dated. A stated peer that is not in the kept set is added to it (never one removed); a kept peer that
+   is not stated is shown and not priced. The line vectors could not say these by themselves: every chip company files as
+   "Semiconductors" (designers, equipment makers and foundries alike), a utility's industry does not say whether its
+   prices are regulated, and Alphabet and Amazon are each two businesses.
+   `from` says whose words the set is: the coordinator's brief of 7 Oct quoting Alan, or this lane's own proposal. */
+export const CP3_STATED = {
+  GOOGL: { line: "search and advertising, with a cloud", peers: ["META", "MSFT", "AMZN", "PINS", "RDDT", "SNAP", "APP"], not_served: ["TTD"], from: "the 7 Oct brief: search/ads + cloud — Meta, Microsoft, Amazon and the ad platforms",
+    why: "Meta is the other advertising giant, Microsoft and Amazon the other two clouds; Pinterest, Reddit, Snap and AppLovin are the ad platforms we serve. Out: Netflix, Spotify and Baidu, which shared its FMP industry and not its business" },
+  AMZN: { line: "retail and e-commerce, with a cloud", peers: ["WMT", "COST", "TGT", "MELI", "SHOP", "MSFT", "GOOGL", "ORCL"], legs: { "retail and e-commerce": ["WMT", "COST", "TGT", "MELI", "SHOP"], cloud: ["MSFT", "GOOGL", "ORCL"] }, from: "the 7 Oct brief: retail + cloud, as a split view",
+    why: "two businesses, so two legs: Walmart, Costco, Target, MercadoLibre and Shopify for the store, Microsoft, Alphabet and Oracle for the cloud. Out of the price: Alibaba, JD and PDD — their estimates are in yuan and they trade at a country discount; shown beside the set, converted, never mixed in" },
+  AVGO: { line: "chip designers", peers: ["NVDA", "AMD", "MRVL", "QCOM", "ARM"], from: "the 7 Oct brief: chip designers — Nvidia, AMD, Marvell, Qualcomm, Arm; equipment makers out",
+    why: "companies that design chips and have them made by a foundry. Out: the equipment makers (Lam, Applied, KLA, ASML), which sell to the fabs and are priced on a different cycle" },
+  NVDA: { line: "chip designers", peers: ["AVGO", "AMD", "MRVL", "QCOM", "ARM"], from: "the 7 Oct brief: chip designers — Broadcom, AMD, Marvell, Qualcomm, Arm; equipment makers out",
+    why: "companies that design chips and have them made by a foundry. Out: the equipment makers, and Palantir, which the kept set carried on 120 times earnings" },
+  TSM: { line: "foundry, and the customers it makes chips for", peers: ["GFS", "TSEM", "NVDA", "AMD", "AVGO", "QCOM", "MRVL", "AAPL"], legs: { foundries: ["GFS", "TSEM"], "its customers": ["NVDA", "AMD", "AVGO", "QCOM", "MRVL", "AAPL"] }, not_served: ["UMC", "SMIC"], from: "the 7 Oct brief: foundry and its customers' multiples",
+    why: "only two other foundries are served (GlobalFoundries, Tower) and neither is at the leading edge, so its customers' multiples stand beside them: TSMC's earnings are the other side of theirs" },
+  VST: { line: "independent power", peers: ["CEG", "TLN", "NRG"], from: "the 7 Oct brief: independent power — Constellation, Talen, NRG; regulated utilities out",
+    why: "they sell power at market prices, as Vistra does. Out: the regulated utilities, whose prices and returns are set by a regulator and which grow in single digits" },
+  MU: { line: "memory & storage", peers: ["SNDK", "WDC", "STX", "000660.KS", "005930.KS", "285A.T"], from: "Alan, 6 Oct: memory companies — SanDisk, SK hynix; the 7 Oct brief adds Samsung and Kioxia",
+    why: "memory and storage makers, with the three foreign memory leaders as comps-only reference peers" },
+  ORCL: { line: "cloud and enterprise software", peers: ["MSFT", "GOOGL", "AMZN", "IBM", "CRM", "NOW", "SNOW", "MDB"], not_served: ["SAP", "WDAY"], from: "this lane's proposal (the brief names no set for Oracle)",
+    why: "the three clouds it now competes with for AI capacity, and the enterprise software and database companies it has always sold beside" },
+};
+export const CP3_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true, stated: true });
 export const CP1_DEFAULT = CP1_LINES_OFF;   // ← change to CP1_LINES_ON to take the four line fixes live (Hub comps + the allocation knockout read this file)
 /** memoryStorage: the lines that count as one. */
 export const ONE_LINE = { memory: "memory & storage", storage: "memory & storage" };
@@ -236,9 +264,17 @@ export function complementSet(ticker, inp, { n = N_DEFAULT, fx = CP1_LINES_ON } 
       why: sm.shared.slice(0, 2).map((s) => `${s.line} (${T} ${Math.round(s.own * 100)}% · ${ref.name} ${Math.round(s.peer * 100)}%)`).join(", ") + " · comps-only reference peer, not served on the Hub" });
     have++;
   }
+  /* CP3 stated: the stated peers that the set lacks are added; every row then says whether it is stated (and so priced) */
+  const st = fx.stated && CP3_STATED[T] ? CP3_STATED[T] : null, statedAdded = [];
+  if (st) {
+    const inSet = new Set([...kept, ...added, ...reference].map((r) => r.ticker));
+    for (const S of st.peers) { const r = rowOf[S]; if (inSet.has(S) || !r) continue; statedAdded.push({ ...r, rank: kept.length + added.length + reference.length + statedAdded.length + 1, seat: st.line, same_business: true, added: true, reference: false, why: `${st.line} — a stated peer${r.shared && r.shared.length ? " · " + r.shared.slice(0, 1).map((x) => `${x.line} (${T} ${Math.round(x.own * 100)}% · ${S} ${Math.round(x.peer * 100)}%)`).join("") : ""}` }); }
+  }
+  const stMark = (r) => (st ? { ...r, stated: st.peers.includes(r.ticker), same_business_by_lines: !!r.same_business, same_business: st.peers.includes(r.ticker) } : r);
   const served = pool.length, short = have < SAME_MIN ? `the Hub serves ${served} other compan${served === 1 ? "y" : "ies"} on the ${line} line${reference.length ? ` and the reference list adds ${reference.length}` : ""}: ${have} same-business peers, not ${SAME_MIN}` : null;
-  return { ...fixed, n: kept.length + added.length + reference.length, kept: [...kept, ...added, ...reference], dropped: fixed.dropped.filter((r) => !kept.some((k) => k.ticker === r.ticker) && !added.some((k) => k.ticker === r.ticker)),
-    counts: { ...fixed.counts, kept: kept.length + added.length + reference.length, base: kept.length, added: added.length, reference: reference.length },
+  return { ...fixed, n: kept.length + added.length + reference.length + statedAdded.length, kept: [...kept, ...added, ...reference, ...statedAdded].map(stMark), dropped: fixed.dropped.filter((r) => !kept.some((k) => k.ticker === r.ticker) && !added.some((k) => k.ticker === r.ticker) && !statedAdded.some((k) => k.ticker === r.ticker)),
+    stated: st ? { line: st.line, peers: st.peers, legs: st.legs || null, why: st.why, from: st.from, not_served: st.not_served || [], added: statedAdded.map((r) => r.ticker), missing: st.peers.filter((S) => !rowOf[S] && !reference.some((r) => r.ticker === S)) } : null,
+    counts: { ...fixed.counts, kept: kept.length + added.length + reference.length + statedAdded.length, base: kept.length, added: added.length + statedAdded.length, reference: reference.length },
     base_kept: base.kept.map((r) => r.ticker), base_lines: base.own_lines, added: added.map((r) => r.ticker), reference: reference.map((r) => r.ticker), same: { n: have, need: SAME_MIN, line, pool: pool.map((r) => r.ticker), short },
     rule: base.rule + ` · CP1: the kept set stays; same-business companies it lacks are added until it carries ${SAME_MIN} (or the line runs out), reference peers last, never beyond ${N_MAX}` };
 }
