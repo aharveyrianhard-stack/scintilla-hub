@@ -1,0 +1,49 @@
+// SCINTILLA · comps-feed v6 (FD1, 7 Oct 2026) — the value layer of the allocation tool, from the SCINTILLA database only.
+//
+// WHY v6. v5 (20 Jul) told the live knockout that Micron's sales were shrinking 59% (they grew 256%) and gave every
+// name a forward P/E of 0. The cause, the rules that replace it and the measured rows are in ./feed.mjs; this file is
+// only the reads and the answer. It makes no FMP call and writes to no table.
+//
+// THE CONTRACT IS UNCHANGED, so no page changes:
+//   GET /functions/v1/comps-feed?syms=MU,SNDK,…   (up to 60 symbols, as before; no key needed, as before)
+//   → text/csv:  sym,mktcap,pe,fwd_pe,ps,pb,gross_m,net_m,de,div_yld,rev_growth,updated
+//   A figure that is not held is an EMPTY cell (v5 printed 0). Margins and growth are fractions (0.64, 2.56).
+//   `updated` is now the fundamentals row's own date, not the minute of the request.
+//   ?format=json adds the basis of every figure (which twelve months, which fiscal year, which currency rate).
+//
+// THE RULES IT WILL NOT BREAK.
+//   1. Read-only: GET requests to PostgREST, nothing else.
+//   2. Every read names its period, carries a total order and is paged to its end (feed.mjs readAll).
+//   3. If a read fails, the answer is the header alone with status 503 — a name with no line reads "not held" on the
+//      page. It never prints a guess.
+//   4. Keys are read from the environment and never printed.
+import { HEAD, VERSION, parseSyms, readTables, buildFeed } from "./feed.mjs";
+
+const SB_URL = Deno.env.get("SUPABASE_URL") || "";
+const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const CORS = { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*", "x-comps-feed-version": VERSION };
+const CSV = { ...CORS, "Content-Type": "text/csv; charset=utf-8" };
+const JSONH = { ...CORS, "Content-Type": "application/json; charset=utf-8" };
+
+async function get(path: string) {
+  const r = await fetch(SB_URL + "/rest/v1/" + path, { headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY } });
+  if (!r.ok) throw new Error(path.split("?")[0] + " " + r.status);
+  return await r.json();
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+  if (req.method !== "GET") return new Response(HEAD, { status: 405, headers: CSV });
+  const u = new URL(req.url);
+  const syms = parseSyms(u.searchParams.get("syms") || "");
+  const asJson = u.searchParams.get("format") === "json";
+  if (!syms.length) return new Response(asJson ? JSON.stringify({ version: VERSION, rows: [] }) : HEAD, { headers: asJson ? JSONH : CSV });
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const out = buildFeed(syms, await readTables(get, syms, today), today);
+    return new Response(asJson ? JSON.stringify({ version: VERSION, today, rows: out.rows }) : out.csv, { headers: asJson ? JSONH : CSV });
+  } catch (e) {
+    const why = String((e && (e as Error).message) || e).slice(0, 120);
+    return new Response(asJson ? JSON.stringify({ version: VERSION, error: why, rows: [] }) : HEAD, { status: 503, headers: { ...(asJson ? JSONH : CSV), "x-comps-feed-error": why } });
+  }
+});
