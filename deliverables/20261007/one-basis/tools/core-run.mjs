@@ -92,7 +92,9 @@ const isFinancial = (t) => ((inp.profiles[t] || {}).sector || "") === "Financial
 function rowOf(t, T, X, bal) {
   const { snap, ctx, C } = X, own = t === T, tb = own ? snap.table.company : snap.table.peers[t] || {}, i = ctx.inputs.find((x) => x.ticker === t) || {}, note = own ? snap.fwd : snap.fwd_peers[t], fxn = own ? snap.fx : snap.fx_peers[t];
   const m = (k) => { const r = C.rows.find((x) => x.key === k) || snap.rows.find((x) => x.key === k); if (!r) return null; return own ? (r.own ? r.own.multiple : null) : r.values && r.values[t] ? r.values[t].multiple : null; };
-  const b = bal[t] || {}, debt = debtReading({ net_debt: i.net_debt, total_debt: b.total_debt, cash: b.cash_and_equiv, ebitda: i.ebitda && i.ebitda.now, operating_income: i.oi && i.oi.now, interest_expense: null, fcf: i.fcf && i.fcf.now, mcap: i.mcap, financial: isFinancial(t) });
+  /* the balance row is as filed, in the company's own currency: its total debt and cash are read only for a dollar reporter
+     (net debt, EBITDA and free cash flow come from the comps reader, already in dollars) */
+  const usdFiler = !(fxn && fxn.currency && fxn.currency !== "USD"), b = usdFiler ? bal[t] || {} : {}, debt = debtReading({ net_debt: i.net_debt, total_debt: b.total_debt, cash: b.cash_and_equiv, ebitda: i.ebitda && i.ebitda.now, operating_income: i.oi && i.oi.now, interest_expense: null, fcf: i.fcf && i.fcf.now, mcap: i.mcap, financial: isFinancial(t) });
   const annual = own ? snap.pe_fwd_annual : snap.pe_fwd_annual_peers[t];
   return { ticker: t, name: nameOf(t), price: r2(i.price), mcap: i.mcap || null,
     pe_ttm: r2(m("pe_ttm")), pe_fwd: r2(m("pe_fwd")), pe_fwd_text: multipleText(m("pe_fwd"), !!(note && note.rate)), pe_fwd_fiscal_year: r2(annual), ev_ebitda: r2(m("ev_ebitda")), ev_sales: r2(m("ev_sales")), ps: r2(m("ps")), peg: r2(m("peg")), p_ffo: r2(tb.p_ffo),
