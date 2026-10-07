@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from a32f916) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8001803) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -4495,6 +4495,15 @@ body.co-exp #boardPanel{display:none !important}
 .sc-lists .sc-star{color:var(--ink-liked)}
 .sc-lists .sc-star:not(.is-fav):hover .sc-star__off{color:var(--ink-liked)}
 .sc-lists--co{gap:5px;margin:0 8px 0 0;flex:none}
+/* HC1 (6 Oct) — a list that refuses a name says so, in one line at the foot of the screen. The same honesty rule as the
+   cohort editor's "save failed" (R22 FIX 5): bear ink, and it stays until it is dismissed or the next list tap. */
+.sc-listnote{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9100;display:flex;align-items:flex-start;gap:10px;
+  box-sizing:border-box;width:max-content;max-width:min(640px,calc(100vw - 24px));padding:9px 10px 9px 12px;background:var(--panel2);
+  border:.8px solid var(--bear);box-shadow:0 6px 24px rgba(0,0,0,.6);font-family:var(--mono);font-size:11px;line-height:1.45;
+  letter-spacing:.03em;color:#C9C9CE}
+.sc-listnote[hidden]{display:none}
+.sc-listnote__x{flex:none;padding:0 2px;background:none;border:0;cursor:pointer;font:inherit;color:#8A8A92}
+.sc-listnote__x:hover{color:#C9C9CE}
 .sc-lists--co .sc-star,.sc-lists--co .sc-lst{font-size:13px;width:15px}
 /* the 60px these take comes out of the news queue on the right (built to clip its furthest item), never out of the
    usual-day readout, which had no flex rule and was squashed under LIVE */
@@ -6956,6 +6965,50 @@ async function listsLoad() {
     if (changed.length || (first && LIST_COHS[S.coh])) listsRepaint(changed.some((l) => LIST_COHS[S.coh] === l) || (first && !!LIST_COHS[S.coh]));
   } catch (e) { console.error("station_lists read failed", e); }
 }
+/* HC1 (6 Oct) — A LIST THAT REFUSES A NAME SAYS SO. Alan: "I can't add favorites … Reload it. Nope … CrowdStrike …
+   NET … OKTA … still nope." public.station_lists allowed positions 1–64 (station_lists_position_check). His FAVORITES
+   reached 64 at 16:51 ET; from then on every add asked for position 65, the database refused the whole write
+   (HTTP 400, SQLSTATE 23514), and this page re-read the stored 64 and un-starred the name without a word. The cap is
+   the database's, and the coordinator raised it there the same evening (64 → 256); what was wrong HERE is the
+   silence. So: the refusal carries the database's own reason, the screen goes straight back to what is stored, and
+   one plain line says what happened. No cap is written into this page — the server's answer is the only authority,
+   so a cap that moves needs no change here. */
+/* a refused write as an Error that keeps the server's answer: status, SQLSTATE and message (never thrown away) */
+async function listRefused(r, step, list) {
+  let b = null;
+  try { b = await r.json(); } catch (_) {}
+  const e = new Error("station_lists " + step + " " + list + " → " + r.status + (b && b.message ? " · " + b.message : ""));
+  e.step = step; e.status = r.status; e.pgCode = String((b && b.code) || ""); e.pgMessage = String((b && b.message) || "");
+  return e;
+}
+/* why a list write failed, from the server's answer alone (pure): "full" · "ticker" · "other" */
+function listFailKind(e) {
+  const m = String((e && e.pgMessage) || "");
+  if (e && e.pgCode === "23514" && /position_check/.test(m)) return "full";
+  if (e && e.pgCode === "23514" && /ticker_check/.test(m)) return "ticker";
+  return "other";
+}
+/* the one line shown for a failed toggle (pure). storedN = how many names the list holds now; liked = the name is on LIKED */
+function listFailLine(list, t, on, e, storedN, liked) {
+  const L = String(list).toUpperCase(), T = String(t).toUpperCase(), kind = listFailKind(e);
+  const not = T + (on ? " was not added" : " was not taken off");
+  if (kind === "full") return L + " is full: it holds " + storedN + " names and cannot take more. " + not +
+    (on && liked ? " (it is on LIKED)" : "") + ". Take a name off " + L + " to make room.";
+  if (kind === "ticker") return L + " cannot store the ticker " + T + ". " + not + ".";
+  return L + " was not saved" + (e && e.status ? " (the server answered " + e.status + ")" : "") + ". " + not + ". Try again.";
+}
+function listNoteShow(text) {
+  let n = el("listNote");
+  if (!n) {
+    n = document.createElement("div");
+    n.id = "listNote"; n.className = "sc-listnote"; n.setAttribute("role", "status"); n.setAttribute("aria-live", "polite");
+    document.body.appendChild(n);
+  }
+  n.innerHTML = '<span class="sc-listnote__t">' + esc(text) + '</span>' +
+    '<button type="button" class="sc-listnote__x" data-act="listnote-x" aria-label="Dismiss">✕</button>';
+  n.hidden = false;
+}
+function listNoteClear() { const n = el("listNote"); if (n) n.hidden = true; }
 /* upsert positions 1..n, THEN trim the tail: the list is never empty mid-write, and a reader that lands
    between the two sees at most one name twice (listsFromRows counts it once) */
 async function listStore(list, tickers) {
@@ -6964,11 +7017,11 @@ async function listStore(list, tickers) {
   if (rows.length) {
     const r = await fetch(SB + "/rest/v1/station_lists?on_conflict=list,position", { method: "POST",
       headers: Object.assign({ Prefer: "resolution=merge-duplicates,return=minimal" }, H), body: JSON.stringify(rows) });
-    if (!r.ok) throw new Error("station_lists write " + list + " → " + r.status);
+    if (!r.ok) throw await listRefused(r, "write", list);
   }
   const d = await fetch(SB + "/rest/v1/station_lists?list=eq." + encodeURIComponent(list) + "&position=gt." + rows.length,
     { method: "DELETE", headers: H });
-  if (!d.ok) throw new Error("station_lists trim " + list + " → " + d.status);
+  if (!d.ok) throw await listRefused(d, "trim", list);
 }
 let LIST_WRITES = Promise.resolve();          // one write at a time, in click order
 /* A toggle is an INTENT (put T on / take T off), applied to what is stored NOW — re-read just before the
@@ -6977,14 +7030,27 @@ function listIntent(list, t, on) {
   const T = String(t).toUpperCase();
   LISTS[list] = listApply(LISTS[list], T, on);                  // the screen moves now
   listsRemember();
+  listNoteClear();                                              // a new tap answers for itself
   listsRepaint(LIST_COHS[S.coh] === list);
   LIST_WRITES = LIST_WRITES.then(async () => {
+    let stored = null;
     try {
-      const stored = listsFromRows(await pg(LISTS_SEL, 1))[list];
+      stored = listsFromRows(await pg(LISTS_SEL, 1))[list];
       const want = listApply(stored, T, on);
       await listStore(list, want);
       if (LISTS[list].join(",") !== want.join(",")) { LISTS[list] = want; listsRepaint(LIST_COHS[S.coh] === list); }
-    } catch (e) { console.error("list write failed", list, T, e); listsLoad(); }   // say so, then show what is really stored
+    } catch (e) {
+      console.error("list write failed", list, T, e);
+      /* the names are written in ONE statement, so a refused write stored nothing: the list is what was read just before
+         it (or, when that read failed too, the screen's list without this tap). A failed TRIM is different — the names
+         are already stored and only a stale tail row is left, which the next write removes — so the screen stays. */
+      if (!(e && e.step === "trim")) {
+        const back = stored || listApply(LISTS[list], T, !on);
+        if (LISTS[list].join(",") !== back.join(",")) { LISTS[list] = back; listsRemember(); listsRepaint(LIST_COHS[S.coh] === list); }
+        listNoteShow(listFailLine(list, T, on, e, back.length, S.fav.includes(T)));
+      }
+      listsLoad();                                              // then confirm against what is really stored
+    }
   });
   return LIST_WRITES;
 }
@@ -23969,6 +24035,7 @@ document.addEventListener("click", (e) => {
     }
     case "star":       e.preventDefault(); e.stopPropagation(); toggleFav(a.dataset.t); break;   // FIX F — never opens the company page
     case "lst":        e.preventDefault(); e.stopPropagation(); toggleList(a.dataset.l, a.dataset.t); break;   // H-FRONT — ★ FAVORITES / ◎ RADAR, never opens the company page
+    case "listnote-x": e.preventDefault(); e.stopPropagation(); listNoteClear(); break;                        // HC1 — dismiss "FAVORITES is full …"
     case "corange": {  // H-FRONT — the timeframe row changes ONLY the embedded pane's range, remembered per browser
       e.preventDefault(); e.stopPropagation();
       const r = coRange(a.dataset.r);

@@ -1,0 +1,30 @@
+-- HC1 (6 Oct 2026) — ROLLBACK of 20261006_station_lists_cap_500.sql: put the cap on a list back to 64.
+--
+--   supabase db query --linked --project-ref wadinxqplrggagkvrdag -f supabase/migrations/20261006_station_lists_cap_500_ROLLBACK.sql
+--
+-- IT REFUSES TO RUN WHILE ANY LIST HOLDS MORE THAN 64 NAMES, and deletes nothing. Putting the 64 check back over a
+-- longer list would wedge that list: the Hub writes the whole list on every toggle, so every add AND every removal
+-- would be refused from then on. If a list has grown past 64, either keep the 500 cap or have Alan take names off the
+-- list first. See what stands in the way (read-only):
+--   select list, count(*) as names, max(position) as highest from public.station_lists group by list order by list;
+
+begin;
+
+do $$
+declare
+  over text;
+begin
+  select string_agg(list || ' (' || n || ' names)', ', ' order by list) into over
+    from (select list, count(*) as n from public.station_lists group by list having max(position) > 64) s;
+  if over is not null then
+    raise exception 'station_lists: not rolled back — these lists hold more than 64 names: %. Nothing was changed.', over;
+  end if;
+end $$;
+
+alter table public.station_lists
+  drop constraint if exists station_lists_position_check;
+
+alter table public.station_lists
+  add constraint station_lists_position_check check (position >= 1 and position <= 64);
+
+commit;

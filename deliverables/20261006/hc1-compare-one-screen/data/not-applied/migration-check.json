@@ -1,0 +1,86 @@
+{
+ "engine": "PostgreSQL 18.3 (PGlite 0.5.8) on wasm32-unknown-emscripten, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74 (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit",
+ "steps": [
+  {
+   "name": "the copy matches what was read from live",
+   "ok": true,
+   "note": "64 favorites, the last one DLR; cap is CHECK (((\"position\" >= 1) AND (\"position\" <= 64)))"
+  },
+  {
+   "name": "as on live: adding EQIX as the 65th name is refused and nothing is written",
+   "ok": true,
+   "code": "23514",
+   "message": "new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\"",
+   "constraint": "station_lists_position_check",
+   "note": "SQLSTATE 23514 · new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\""
+  },
+  {
+   "name": "as on live: adding CRWD as the 65th name is refused and nothing is written",
+   "ok": true,
+   "code": "23514",
+   "message": "new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\"",
+   "constraint": "station_lists_position_check",
+   "note": "SQLSTATE 23514 · new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\""
+  },
+  {
+   "name": "as on live: adding NET as the 65th name is refused and nothing is written",
+   "ok": true,
+   "code": "23514",
+   "message": "new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\"",
+   "constraint": "station_lists_position_check",
+   "note": "SQLSTATE 23514 · new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\""
+  },
+  {
+   "name": "as on live: adding OKTA as the 65th name is refused and nothing is written",
+   "ok": true,
+   "code": "23514",
+   "message": "new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\"",
+   "constraint": "station_lists_position_check",
+   "note": "SQLSTATE 23514 · new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\""
+  },
+  {
+   "name": "RADAR (19 names) still takes a name under the old cap",
+   "ok": true,
+   "note": "so it is the list's size, not the name"
+  },
+  {
+   "name": "the migration runs and the cap reads 500",
+   "ok": true,
+   "note": "CHECK (((\"position\" >= 1) AND (\"position\" <= 500)))"
+  },
+  {
+   "name": "the migration can be run twice",
+   "ok": true
+  },
+  {
+   "name": "after the migration EQIX is stored as the 65th name",
+   "ok": true,
+   "note": "position 65"
+  },
+  {
+   "name": "500 names are accepted and the 501st is refused",
+   "ok": true,
+   "note": "new row for relation \"station_lists\" violates check constraint \"station_lists_position_check\""
+  },
+  {
+   "name": "the ticker rule is untouched (ES=F is still refused)",
+   "ok": true,
+   "note": "new row for relation \"station_lists\" violates check constraint \"station_lists_ticker_check\""
+  },
+  {
+   "name": "the rollback refuses while FAVORITES holds 65 names, and changes nothing",
+   "ok": true,
+   "note": "station_lists: not rolled back — these lists hold more than 64 names: favorites (65 names). Nothing was changed."
+  },
+  {
+   "name": "with 64 names the rollback runs and the cap reads 64 again",
+   "ok": true,
+   "note": "CHECK (((\"position\" >= 1) AND (\"position\" <= 64)))"
+  },
+  {
+   "name": "…and the 65th name is refused again, as before the fix",
+   "ok": true
+  }
+ ],
+ "pass": true
+}

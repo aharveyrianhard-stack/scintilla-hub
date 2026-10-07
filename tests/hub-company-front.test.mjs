@@ -232,7 +232,8 @@ function listsHarness(stored, fav) {
   const favToggles = [];
   const api = new Function("S", "pg", "fetch", "SB", "ANON", "restartFeed", "updateBoard", "el", "LEFT_T", "toggleFav", "console",
     LISTS_SRC + fn("listApply") + fn("listRowsFor") + fn("listsFromRows") + fn("coListsRepaint") + fn("listsRepaint") +
-    fn("listsLoad") + fn("listStore") + "let LIST_WRITES = Promise.resolve();\n" + fn("listIntent") + fn("toggleList") +
+    fn("listsLoad") + fn("listRefused") + fn("listFailKind") + fn("listFailLine") + fn("listNoteShow") + fn("listNoteClear") +   /* HC1 (6 Oct) — a refused write says so; these writes are all taken, so no line is ever shown here */
+    fn("listStore") + "let LIST_WRITES = Promise.resolve();\n" + fn("listIntent") + fn("toggleList") +
     "\nreturn { LISTS, toggleList, listIntent, listsLoad, done: () => LIST_WRITES };")(
     S, pg, fetch, "https://sb.invalid", "anon", () => calls.push(["restartFeed"]), () => {}, () => null, null,
     (t) => { favToggles.push(t); S.fav = S.fav.includes(t) ? S.fav.filter((x) => x !== t) : S.fav.concat([t]); }, { error() {} });

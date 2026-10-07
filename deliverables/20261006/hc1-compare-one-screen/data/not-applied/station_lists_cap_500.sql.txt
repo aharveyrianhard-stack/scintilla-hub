@@ -1,0 +1,50 @@
+-- HC1 (6 Oct 2026) — FAVORITES STOPPED TAKING NAMES AT 64. Raise the cap on a list from 64 to 500.
+--
+-- NOT APPLIED BY THE LANE. The coordinator applies it:
+--   supabase db query --linked --project-ref wadinxqplrggagkvrdag -f supabase/migrations/20261006_station_lists_cap_500.sql
+-- Rollback: supabase/migrations/20261006_station_lists_cap_500_ROLLBACK.sql
+--
+-- WHAT HAPPENED. public.station_lists holds the Hub's ★ FAVORITES and ⊙ RADAR and the Station's SCRATCH wall, one row
+-- per (list, position). It was created on 25 Sep with
+--     station_lists_position_check  CHECK (position >= 1 AND position <= 64)
+-- Alan's FAVORITES reached 64 names on 6 Oct at 16:51:00 ET (DLR). Twelve seconds later he starred EQIX: the Hub sent the
+-- whole list with EQIX at position 65, the check refused the statement (PostgREST 400, SQLSTATE 23514), nothing was
+-- written, and the page re-read the stored 64 and un-starred EQIX without a word. CRWD, NET and OKTA at 18:46–18:47 ET
+-- were refused the same way. ♥ LIKED kept working because it is another table (public.hub_favorites, no cap).
+-- Read on 6 Oct ~19:20 ET: favorites 64 rows (max position 64, all stamped 20:51:00.569Z), radar 19, no gaps, no doubles.
+--
+-- WHY 500, AND WHY A CAP AT ALL. The Hub reads FAVORITES and RADAR in ONE request
+-- (station_lists?…&list=in.(favorites,radar), no limit) and this project's API returns at most 1,000 rows per request
+-- (measured 6 Oct: analyst_estimates answered 0-999/49723). The Hub's write path re-reads the list, writes positions
+-- 1..n and then DELETES every position above n — so a read cut short by the API would delete the tail of the list.
+-- Two lists of at most 500 names can never be cut short: 2 × 500 = 1,000. Do not raise it past 500 without first paging
+-- that read. For scale: FAVORITES is a subset of ♥ LIKED (155 names today), and the Hub serves 612 names in all.
+--
+-- THE NEIGHBOURS OF THIS RULE (checked 6 Oct; none changes behaviour at today's sizes):
+--   · Station SCRATCH — list "scratch", positions 1–8: untouched.
+--   · Station SAVE AS RADAR — appends to "radar" with the same upsert: now also bounded by 500 instead of 64.
+--   · Station tapes — read "favorites" with no limit: a longer list is a longer tape.
+--   · YouTube searches (yt-config, youtube-feed) follow "radar": the search budget is per day (79 searches), not per
+--     name, so a longer RADAR is searched less often per name and cannot spend more quota.
+--   · station_lists_ticker_check (^[A-Z0-9.\-]{1,12}$) and station_lists_list_check: untouched. All 612 names the Hub
+--     serves pass the ticker check today.
+--   · The primary key (list, position), the open read/write policy and the grants: untouched.
+--
+-- SAFE TO RE-RUN: the old check is dropped only if it exists; the new one is added only if it is not already 500.
+
+begin;
+
+alter table public.station_lists
+  drop constraint if exists station_lists_position_check;
+
+alter table public.station_lists
+  add constraint station_lists_position_check check (position >= 1 and position <= 500);
+
+comment on constraint station_lists_position_check on public.station_lists is
+  'A list holds at most 500 names. 500 because the Hub reads favorites + radar in one request and the API returns at most 1,000 rows; its write path trims above what it read. Was 64 until 6 Oct 2026 (HC1).';
+
+commit;
+
+-- CHECK AFTER APPLYING (read-only) — expect: CHECK (((position >= 1) AND (position <= 500)))
+--   select pg_get_constraintdef(oid) from pg_constraint
+--    where conrelid = 'public.station_lists'::regclass and conname = 'station_lists_position_check';
