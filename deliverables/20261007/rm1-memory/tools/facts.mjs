@@ -32,7 +32,7 @@ const chimeTxt = text("evidence/chime-experiment.txt");
 const chimeEnd = /after (\d+) minutes: the live page opened (\d+) sound channels, closed (\d+), and (\d+) are still alive; the branch opened (\d+), closed (\d+), and (\d+) are still alive/.exec(chimeTxt) || [];
 const firstAt = (d) => { const r = rows(d); return r.length ? Date.parse(r[0].at) : NaN; };
 const probeLines = text("evidence/quotes-route-probe.txt").split("\n").map((l) => /^(\d\d):(\d\d):\d\d\s+HTTP (\d+) in ([\d.]+)s/.exec(l)).filter(Boolean);
-const probe = { reads: String(probeLines.length), slow: String(probeLines.filter((m) => +m[4] > 1).length), failed: String(probeLines.filter((m) => m[3] !== "200").length),
+const probe = { reads: String(probeLines.length), slow: String(probeLines.filter((m) => m[3] === "200" && +m[4] > 1).length), fast: String(probeLines.filter((m) => m[3] === "200" && +m[4] < 0.5).length), failed: String(probeLines.filter((m) => m[3] !== "200").length),
   until: probeLines.length ? String((+probeLines[probeLines.length - 1][1] + 20) % 24).padStart(2, "0") + ":" + probeLines[probeLines.length - 1][2] : "?" };
 const startLag = Number.isFinite(firstAt("after-hub") - firstAt("before-hub")) ? Math.round((firstAt("after-hub") - firstAt("before-hub")) / 60000) : 39;
 const facts = {
