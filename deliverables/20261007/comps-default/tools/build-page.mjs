@@ -92,8 +92,8 @@ ${NAV}<div data-scnav-slot style="display:flex;gap:8px;min-height:40px;margin:0 
 <p>Against the engine as it stood this afternoon, four names move by more than three points: Broadcom ${pct(AFT("AVGO").upside_pct)} → ${pct(C("AVGO").upside_pct)}, Nvidia ${pct(AFT("NVDA").upside_pct)} → ${pct(C("NVDA").upside_pct)}, Alphabet ${pct(AFT("GOOGL").upside_pct)} → ${pct(C("GOOGL").upside_pct)} and Western Digital ${pct(AFT("WDC").upside_pct)} → ${pct(C("WDC").upside_pct)}. The other eight are within three points.</p>
 
 <h2>PICTURES</h2><div class="grid">
-${shot("live-hub-NVDA-1680.png", `LIVE NOW — the Hub itself with Nvidia's COMPS tab open at the close today: ${pct(LIVE.names.NVDA.to_centre_pct)} to a centre of ${px(LIVE.names.NVDA.centre)}, and no line saying it is not a target.`)}
-${shot("hub-tab-NVDA-1680.png", "THIS BRANCH — Nvidia's COMPS tab: the NOT A TARGET line under the number, the growth yardstick's row saying it counts 30%, and the outlier cases written out (Arm left out).")}
+${shot("live-hub-NVDA-1680.png", `LIVE NOW — the Hub itself at the close today, Nvidia selected and its COMPS tab open at “the 5 peers that price it — chip designers”. Further down, out of this picture, the tab read ${pct(LIVE.names.NVDA.to_centre_pct)} to a centre of ${px(LIVE.names.NVDA.centre)}, with no line saying it is not a target.`)}
+${shot("hub-tab-NVDA-1680.png", "THIS BRANCH — Nvidia's whole COMPS tab: the NOT A TARGET line under the number, the growth yardstick's row saying it counts 30%, each peer's share of the weight, and the outlier cases written out (Arm left out).")}
 ${shot("hub-tab-AVGO-1680.png", "THIS BRANCH — Broadcom: +56%. Arm is left out for being priced far above the group; Qualcomm stays although it is cheap, with the reason.")}
 ${shot("hub-tab-GOOGL-1680.png", "THIS BRANCH — Alphabet: Meta 24%, Microsoft 23% and Amazon 20% of the weight; the two clouds are marked “seated on its cloud line”.")}
 ${shot("hub-tab-NVDA-390.png", "THIS BRANCH on a phone (390 wide) — Nvidia's tab.")}
