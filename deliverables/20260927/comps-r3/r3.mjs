@@ -53,10 +53,10 @@ export const ROWS = [
   { key: "net_debt",  group: "SIZE",  label: "Net debt, newest balance",        fmt: "money", better: "low",              axis: ["net cash", "more debt"], basis: "debt − cash at the newest balance date; below zero is net cash" },
   { key: "pe_ttm",    group: "VAL",   label: "P/E, trailing",                   fmt: "x",     better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "price ÷ EPS over the last twelve months" },
   { key: "pe_adj",    group: "VAL",   label: "P/E, adjusted",                   fmt: "x",     better: "low",              axis: ["cheaper", "dearer"], basis: "the Hub's adjusted P/E on the fundamentals row (adjusted_pe, as stored)" },
-  { key: "pe_fwd",    group: "VAL",   label: "P/E, forward",                    fmt: "x",     better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "price ÷ analysts' EPS for the current fiscal year" },
+  { key: "pe_fwd",    group: "VAL",   label: "P/E, forward",                    fmt: "x",     better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "price ÷ analysts' EPS for the next four quarters (the dashboard's forward P/E)" },
   { key: "ev_sales",  group: "VAL",   label: "EV / sales",                      fmt: "x",     better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "enterprise value ÷ revenue, TTM" },
   { key: "ev_ebitda", group: "VAL",   label: "EV / EBITDA",                     fmt: "x",     better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "enterprise value ÷ EBITDA, TTM" },
-  { key: "peg",       group: "VAL",   label: "PEG",                             fmt: "x2",    better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "forward P/E ÷ next year's EPS growth in %" },
+  { key: "peg",       group: "VAL",   label: "PEG",                             fmt: "x2",    better: "low",  implied: true, axis: ["cheaper", "dearer"], basis: "forward P/E ÷ EPS growth into the following year, in %" },
   { key: "rev_g_ttm", group: "GROW",  label: "Revenue growth, TTM",             fmt: "pct",   better: "high",             axis: ["slower", "faster"], basis: "revenue TTM over the twelve months before" },
   { key: "rev_g_fy",  group: "GROW",  label: "Revenue growth, next FY est",     fmt: "pct",   better: "high",             axis: ["slower", "faster"], basis: "analysts' revenue, next fiscal year over this one" },
   { key: "eps_g_fy",  group: "GROW",  label: "EPS growth, next FY est",         fmt: "pct",   better: "high",             axis: ["slower", "faster"], basis: "analysts' EPS, next fiscal year over this one" },
@@ -213,10 +213,10 @@ export function verdict(r, value, med) {
 export function ownFigure(key, inp) {
   const revNow = inp.rev?.now ?? inp.revenue_ttm_on_file;
   if (key === "pe_ttm") return { word: "EPS, last twelve months", value: inp.eps_ttm, fmt: "usd2", formula: "multiple × EPS" };
-  if (key === "pe_fwd") return { word: "EPS estimate, FY" + (inp.fy1_date ? String(inp.fy1_date).slice(0, 4) : "?"), value: inp.eps_fy1, fmt: "usd2", formula: "multiple × EPS" };
+  if (key === "pe_fwd") return { word: inp.fwd_basis ? "EPS estimate, " + inp.fwd_basis.label : "EPS estimate, FY" + (inp.fy1_date ? String(inp.fy1_date).slice(0, 4) : "?"), value: inp.eps_fy1, fmt: "usd2", formula: "multiple × EPS" };   /* CP3: the one forward basis names itself */
   if (key === "ev_sales") return { word: "revenue TTM", value: revNow, fmt: "money", formula: "(multiple × revenue − net debt) ÷ shares" };
   if (key === "ev_ebitda") return { word: "EBITDA TTM", value: inp.ebitda?.now, fmt: "money", formula: "(multiple × EBITDA − net debt) ÷ shares" };
-  if (key === "peg") { const g = growthPct(inp.eps_fy2, inp.eps_fy1); return { word: "EPS growth next FY × EPS estimate", value: g != null && inp.eps_fy1 != null ? g * inp.eps_fy1 : null, fmt: "usd2", formula: "PEG × growth % × EPS", growth: g }; }
+  if (key === "peg") { const g = growthPct(inp.eps_fy2, inp.eps_fy1); return { word: inp.fwd_basis ? "EPS growth into the following year × EPS estimate" : "EPS growth next FY × EPS estimate", value: g != null && inp.eps_fy1 != null ? g * inp.eps_fy1 : null, fmt: "usd2", formula: "PEG × growth % × EPS", growth: g }; }
   return null;
 }
 

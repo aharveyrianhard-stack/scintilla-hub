@@ -98,10 +98,17 @@ test("the answer does not depend on the order the rows arrive in, nor on which o
   assert.equal(feed(FX.names, Object.fromEntries(Object.entries(T).map(([n, rows]) => [n, rows.slice().reverse()]))).csv, base, "reversed");
   for (const t of FX.names) assert.equal(feed([t]).csv.split("\n")[1], base.split("\n").find((l) => l.startsWith(t + ",")), t + " alone = " + t + " in the batch");
 });
-test("a quarter's estimate never enters the forward P/E; the nearest fiscal year ending today or later does (the comps tab's FY1)", () => {
+/* CP3 (7 Oct, later the same day) changed this rule on purpose: v6 took the nearest FISCAL YEAR (the comps tab's FY1 at the
+   time); v7 takes the NEXT FOUR QUARTERS, the dashboard's forward P/E, so the feed, the comps tab, the cards and the
+   dashboard print one multiple (tests/cp3-one-basis.test.mjs). One quarter alone is still never the forward EPS (v5's fault). */
+test("the forward P/E is the next FOUR quarters (the dashboard's rule); one quarter alone never is; with fewer than four on file the nearest fiscal year stands in", () => {
   const withQuarters = { ...T, estimates: [...FX.v5.micron_estimates_as_v5_read_them.filter((r) => r.fiscal_date >= TODAY), ...T.estimates.filter((r) => r.ticker !== "MU")] };
-  assert.ok(withQuarters.estimates.some((r) => r.ticker === "MU" && r.period === "quarter"));
-  near(rowOf("MU", withQuarters).fwd_pe, rowOf("MU").fwd_pe, 1e-12);
+  const q4 = withQuarters.estimates.filter((r) => r.ticker === "MU" && r.period === "quarter").sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date)).slice(0, 4);
+  assert.equal(q4.length, 4); const ntm = q4.reduce((s, r) => s + r.est_eps_avg, 0);
+  const four = rowOf("MU", withQuarters);
+  near(four.fwd_pe, 1045.56 / ntm, 1e-9, "price over the next four quarters, summed"); assert.equal(four.basis.forward, "next four quarters"); assert.equal(four.basis.forward_through, q4[3].fiscal_date);
+  assert.ok(Math.abs(four.fwd_pe - 1045.56 / q4[0].est_eps_avg) > 15, "never one quarter's EPS under a full price (v5 read 27.8×)");
+  near(rowOf("MU").fwd_pe, 1045.56 / 173.77169, 1e-9, "no quarterly rows read: the nearest fiscal year, and the basis says so"); assert.equal(rowOf("MU").basis.forward, "fiscal year");
   const e = [{ period: "annual", fiscal_date: "2026-12-31", est_eps_avg: 10 }, { period: "annual", fiscal_date: "2027-12-31", est_eps_avg: 12 }, { period: "quarter", fiscal_date: "2026-10-31", est_eps_avg: 2 }];
   assert.deepEqual(F.forwardYear(e, "2026-12-31"), { eps: 10, fiscal_date: "2026-12-31" }, "a year ending today is still the year in progress");
   assert.deepEqual(F.forwardYear(e, "2027-01-01"), { eps: 12, fiscal_date: "2027-12-31" });
@@ -146,7 +153,14 @@ test("one currency per multiple (C5b): TSMC's EPS and sales are put in dollars a
   assert.ok(rate && rate.rate > 0.02 && rate.rate < 0.05 && rate.date <= TODAY);
   near(r.pe, pr.price / (f.eps_ttm * rate.rate), 1e-9); assert.ok(r.pe > 15 && r.pe < 60, "a P/E a chip foundry can carry: " + r.pe);
   assert.equal(r.mktcap, pr.market_cap, "the profile's market value is the US listing's, in dollars"); assert.ok(r.mktcap > 1e12 && r.mktcap < 5e12);
-  assert.ok(r.fwd_pe > 10 && r.fwd_pe < r.pe); assert.equal(r.pb, null); assert.equal(r.div_yld, null); assert.equal(r.basis.currency, "TWD");
+  /* CP3: the forward EPS takes the supplier's own paired rate, as on the dashboard. This fixture holds no dollar estimates
+     for TSMC, so the forward cell is blank and says why; given the pair, it is priced. */
+  assert.equal(r.fwd_pe, null); assert.match(r.basis.forward_why, /not comparable: EPS in TWD and no agreeing rate on file/);
+  { const est = of(T.estimates, "TSM"), y1 = est.filter((e) => e.period === "annual").sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date))[0];
+    const paired = F.feedRow("TSM", { fundamentals: f, profile: pr, history: of(T.history, "TSM"), ratios: of(T.ratios, "TSM"), estimates: est, filer: of(T.filers, "TSM")[0] || null,
+      events: [{ date: "2026-07-16", eps_estimate: 3.14, revenue_estimate: 31.4e9 }], pairQuarters: [{ fiscal_date: "2026-06-30", est_eps_avg: 100, est_revenue_avg: 1000e9 }] }, TODAY, T.fx);
+    near(paired.fwd_pe, pr.price / (y1.est_eps_avg * 0.0314), 1e-9, "the paired rate, 0.0314 dollars a Taiwan dollar"); assert.ok(paired.fwd_pe > 10 && paired.fwd_pe < r.pe); assert.equal(paired.basis.forward_rate.currency, "TWD"); }
+  assert.equal(r.pb, null); assert.equal(r.div_yld, null); assert.equal(r.basis.currency, "TWD");
   near(r.ps, pr.market_cap / (F.flow(of(T.history, "TSM"), "revenue").now * rate.rate), 1e-9, "P/S: dollars over dollars"); assert.ok(r.ps > 10 && r.ps < 25);
   const noRate = rowOf("TSM", { ...T, fx: [] });
   assert.equal(noRate.pe, null); assert.equal(noRate.fwd_pe, null); assert.equal(noRate.ps, null); assert.equal(noRate.basis.withheld, true);
@@ -193,12 +207,13 @@ test("the request: sixty symbols at most, upper case, no repeats, nothing that i
 });
 test("every read names its period, carries a total order and is paged to its end", async () => {
   const q = F.queries(["MU", "BRK.B"], TODAY);
-  assert.match(q.estimates, /period=eq\.annual/); assert.match(q.estimates, /fiscal_date=gte\.2026-10-07/); assert.match(q.estimates, /order=ticker\.asc,fiscal_date\.asc$/);
+  assert.match(q.estimates, /period=in\.\(annual,quarter\)/, "CP3: both periods, named"); assert.match(q.estimates, /fiscal_date=gte\.2026-10-07/); assert.match(q.estimates, /order=ticker\.asc,period\.asc,fiscal_date\.asc$/);
+  assert.equal(q.events, null, "no foreign reporter asked for: no paired-rate read"); assert.match(F.queries(["TSM", "MU"], TODAY).events, /^earnings_events\?select=ticker,date,eps_estimate,revenue_estimate&ticker=in\.\(%22TSM%22\)/);
   assert.match(q.history, /order=ticker\.asc,fiscal_date\.desc,period\.asc$/); assert.match(q.ratios, /order=ticker\.asc,fiscal_date\.desc,period\.asc$/);
   assert.match(q.history, /fiscal_date=gte\.2023-10-0[0-9]/, "three years: eight quarters and two fiscal years with room");
   for (const k of ["fundamentals", "profiles", "history", "ratios", "estimates", "filers"]) assert.match(q[k], /ticker=in\.\(%22MU%22,%22BRK\.B%22\)/, k);
   assert.match(q.profiles, /^company_profile\?select=ticker,price,market_cap,updated_ts&/);
-  for (const p of Object.values(q)) assert.ok(!/limit=|offset=/.test(p), "the caller pages");
+  for (const p of Object.values(q).filter(Boolean)) assert.ok(!/limit=|offset=/.test(p), "the caller pages");
   const rows = Array.from({ length: 2345 }, (_, i) => ({ i })), asked = [];
   const get = async (p) => { asked.push(p); const lim = +/limit=(\d+)/.exec(p)[1], off = +/offset=(\d+)/.exec(p)[1]; return rows.slice(off, off + lim); };
   const all = await F.readAll(get, "t?select=i");
@@ -216,7 +231,7 @@ test("the function: read-only, GET only, the header alone with 503 when a read f
   assert.ok(!/method:\s*"(POST|PATCH|PUT|DELETE)"/.test(src) && !/\.(insert|upsert|update|delete)\(/.test(src), "no write of any kind");
   assert.match(src, /req\.method !== "GET"/); assert.match(src, /status: 503/); assert.match(src, /"x-comps-feed-version": VERSION/);
   assert.ok(!/financialmodelingprep|FMP_/.test(src + read("supabase/functions/comps-feed/feed.mjs").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")), "no FMP call: the SCINTILLA database only");
-  assert.equal(F.VERSION, "comps-feed-v6");
+  assert.equal(F.VERSION, "comps-feed-v7");
   assert.equal(createHash("sha256").update(readFileSync(new URL("../supabase/functions/comps-feed/index.ts.ROLLBACK-v5-20260720", import.meta.url))).digest("hex"), "3b21b8cab905ae02caf40fa4bda47c7c5d50c30ecc6c8ff655ad5d086cb49a33", "the deployed v5 source, as kept in the 20 Aug security copy");
 });
 test("the function itself, run end to end on the fixture: the same line as the pure part, 503 with the header alone when a read fails, GET only", async () => {
@@ -236,7 +251,7 @@ test("the function itself, run end to end on the fixture: the same line as the p
     await import("../supabase/functions/comps-feed/index.ts");
     assert.equal(typeof handler, "function");
     const ok = await handler(new Request("https://fn.test/comps-feed?syms=mu,WDC,zzzz"));
-    assert.equal(ok.status, 200); assert.match(ok.headers.get("content-type"), /text\/csv/); assert.equal(ok.headers.get("x-comps-feed-version"), "comps-feed-v6"); assert.equal(ok.headers.get("access-control-allow-origin"), "*"); assert.equal(ok.headers.get("cache-control"), "no-store");
+    assert.equal(ok.status, 200); assert.match(ok.headers.get("content-type"), /text\/csv/); assert.equal(ok.headers.get("x-comps-feed-version"), "comps-feed-v7"); assert.equal(ok.headers.get("access-control-allow-origin"), "*"); assert.equal(ok.headers.get("cache-control"), "no-store");
     const text = await ok.text(), lines = text.split("\n");
     assert.equal(lines[0], F.HEAD); assert.equal(lines.length, 4);
     assert.equal(lines[1], feed(["MU"]).csv.split("\n")[1]); assert.equal(lines[2], feed(["WDC"]).csv.split("\n")[1]); assert.equal(lines[3], "ZZZZ,,,,,,,,,,,");
@@ -244,7 +259,7 @@ test("the function itself, run end to end on the fixture: the same line as the p
     assert.deepEqual([...new Set(asked.map((a) => a.name))].sort(), ["analyst_estimates", "company_profile", "filer_currency", "fundamentals", "fundamentals_history", "fx_rates", "ratios_history"]);
     assert.ok(!text.includes("test-key"));
     const js = await (await handler(new Request("https://fn.test/comps-feed?syms=MU&format=json"))).json();
-    assert.equal(js.version, "comps-feed-v6"); assert.equal(js.rows[0].basis.forward_year, "2027-09-03"); assert.equal(js.rows[0].basis.growth, "twelve months over the twelve before");
+    assert.equal(js.version, "comps-feed-v7"); assert.equal(js.rows[0].basis.forward_year, "2027-09-03"); assert.equal(js.rows[0].basis.growth, "twelve months over the twelve before");
     assert.equal(await (await handler(new Request("https://fn.test/comps-feed"))).text(), F.HEAD, "no symbol: the header alone, as before");
     fail = "analyst_estimates";
     const bad = await handler(new Request("https://fn.test/comps-feed?syms=MU"));

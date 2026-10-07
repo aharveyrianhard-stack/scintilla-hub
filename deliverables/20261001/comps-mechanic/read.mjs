@@ -49,10 +49,12 @@ export function buildSet(ticker, inp, { band = BAND_DEFAULT, n = N_DEFAULT } = {
   return { ...sel, sources: src, source_state: { fmp: src.from.fmp || (inp.tables.fmp_peers || inp.tables.peer_sources ? "no rows for this company" : "table not on hand"), massive: src.from.massive || (inp.tables.peer_sources ? "no rows for this company" : "table not on hand"), fund: cand.my_funds.length ? cand.my_funds.join(", ") : "no industry fund holds it", industry: inp.profiles[T] && inp.profiles[T].industry ? inp.profiles[T].industry : "unknown" } };
 }
 
-/** The figures for the kept set. opts: { today, pg, quotes, livePrices, fxStandin, marketValueFrom (FD1: "profile" = today's market value for every company; off by default) } */
+/** The figures for the kept set. opts: { today, pg, quotes, livePrices, fxStandin, marketValueFrom (FD1: "profile" = today's market value for every company; off by default),
+    forward (CP3: "next-four-quarters", the default — the dashboard's forward basis — or "fiscal-year", the reader before CP3) } */
 export async function readSet(ticker, set, opts) {
   const T = String(ticker).toUpperCase(), members = [T, ...set.kept.map((r) => r.ticker)];
-  const ctx = await readCohort({ ticker: T, cohortAsked: null, today: opts.today, pg: opts.pg, quotes: opts.quotes, livePrices: opts.livePrices || {}, fxStandin: opts.fxStandin || null, membersAsked: members, labelAsked: `the ${set.kept.length} nearest comparables`, marketValueFrom: opts.marketValueFrom || null });
+  const ctx = await readCohort({ ticker: T, cohortAsked: null, today: opts.today, pg: opts.pg, quotes: opts.quotes, livePrices: opts.livePrices || {}, fxStandin: opts.fxStandin || null, membersAsked: members, labelAsked: `the ${set.kept.length} nearest comparables`, marketValueFrom: opts.marketValueFrom || null,
+    ...(opts.forward ? { forward: opts.forward } : {}), forwardSeries: set.kept.filter((r) => r.reference).map((r) => r.ticker) });   /* CP3: a comps-only reference peer has no dollar estimates and no quarterly ones */
   ctx.peer_source = set.rule; ctx.set = set;
   return ctx;
 }

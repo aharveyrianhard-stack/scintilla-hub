@@ -40,10 +40,10 @@ export const GROUPS = [
 ];
 export const COMPONENTS = [
   { key: "pe_ttm",     group: "VAL",    label: "P/E, trailing",               fmt: "x",   better: "low",  implied: true,  basis: "price ÷ EPS over the last twelve months" },
-  { key: "pe_fwd",     group: "VAL",    label: "P/E, forward",                fmt: "x",   better: "low",  implied: true,  basis: "price ÷ analysts' EPS for the current fiscal year" },
+  { key: "pe_fwd",     group: "VAL",    label: "P/E, forward",                fmt: "x",   better: "low",  implied: true,  basis: "price ÷ analysts' EPS for the next four quarters (the dashboard's forward P/E)" },
   { key: "ev_sales",   group: "VAL",    label: "EV / sales",                  fmt: "x",   better: "low",  implied: true,  basis: "enterprise value ÷ revenue, TTM" },
   { key: "ev_ebitda",  group: "VAL",    label: "EV / EBITDA",                 fmt: "x",   better: "low",  implied: true,  basis: "enterprise value ÷ EBITDA, TTM" },
-  { key: "peg",        group: "VAL",    label: "PEG",                         fmt: "x2",  better: "low",  implied: true,  basis: "forward P/E ÷ next year's EPS growth in %" },
+  { key: "peg",        group: "VAL",    label: "PEG",                         fmt: "x2",  better: "low",  implied: true,  basis: "forward P/E ÷ EPS growth into the following year, in %" },
   { key: "rev_g_ttm",  group: "GROW",   label: "Revenue growth, TTM",         fmt: "pct", better: "high", basis: "revenue TTM over the twelve months before" },
   { key: "rev_g_fy",   group: "GROW",   label: "Revenue growth, next FY est", fmt: "pct", better: "high", basis: "analysts' revenue, next fiscal year over this one" },
   { key: "eps_g_fy",   group: "GROW",   label: "EPS growth, next FY est",     fmt: "pct", better: "high", basis: "analysts' EPS, next fiscal year over this one" },
@@ -132,6 +132,14 @@ export function buildInputs(src, todayISO) {
   const est = (src.estimates || []).filter((e) => (e.period || "annual") === "annual" && e.fiscal_date >= todayISO)
     .sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date));
   const [fy1, fy2] = est;
+  /* CP3 (7 Oct) — ONE FORWARD BASIS. When the reader hands `src.forward` (lib/forward-basis.mjs: the dashboard's rule),
+     the forward EPS is the NEXT FOUR QUARTERS' consensus in dollars, and "the year after" is the four quarters after
+     those — so P/E forward, PEG, EPS growth and the implied prices all rest on the multiple the dashboard prints.
+     The fiscal-year estimate this reader used before is kept beside it (eps_fy1_annual) for the before → after.
+     A forward multiple under 2.5× is a wrong-basis estimate (the dashboard's guard): the EPS is withheld. */
+  const fw = src.forward && src.forward.basis ? src.forward : null;
+  let fwEps = fw ? fw.eps_usd : null, fwWhy = fw && fw.withheld && fw.eps_usd == null ? fw.why : null;
+  if (fw && fwEps > 0 && price > 0 && price / fwEps < 2.5) { fwEps = null; fwWhy = "under 2.5×: the estimate is on the wrong basis"; }
   const rev = flow(src.incQ, src.incFY, "revenue");
   const gp = flow(src.incQ, src.incFY, "gross_profit");
   const oi = flow(src.incQ, src.incFY, "operating_income");
@@ -151,8 +159,11 @@ export function buildInputs(src, todayISO) {
     shares, mcap: shares != null && price != null ? shares * price : num(f.market_cap), mcap_on_file: num(f.market_cap),
     net_debt: netDebt, net_debt_date: bal ? bal.fiscal_date : null,
     eps_ttm: num(f.eps_ttm), fund_date: f.date || null,
-    eps_fy1: num(fy1?.est_eps_avg), eps_fy2: num(fy2?.est_eps_avg), rev_fy1: num(fy1?.est_revenue_avg), rev_fy2: num(fy2?.est_revenue_avg),
-    fy1_date: fy1?.fiscal_date || null, fy2_date: fy2?.fiscal_date || null,
+    eps_fy1: fw ? fwEps : num(fy1?.est_eps_avg), eps_fy2: fw ? (fwEps == null ? null : fw.eps_following_usd) : num(fy2?.est_eps_avg),
+    rev_fy1: fw ? fw.revenue_usd : num(fy1?.est_revenue_avg), rev_fy2: fw ? fw.revenue_following_usd : num(fy2?.est_revenue_avg),
+    fy1_date: fw ? fw.through : fy1?.fiscal_date || null, fy2_date: fw ? fw.following_through : fy2?.fiscal_date || null,
+    fwd_basis: fw ? { basis: fw.basis, label: fw.label, growth_basis: fw.growth_basis, growth_from: fw.growth_from, flags: fw.flags || [], rate: fw.rate || null, why: fwWhy } : null,
+    eps_fy1_annual: num(fy1?.est_eps_avg), eps_fy2_annual: num(fy2?.est_eps_avg), fy1_annual_date: fy1?.fiscal_date || null,
     rev, gp, oi, ebitda, capex, ocf, fcf, capexFY,
     revenue_ttm_on_file: num(f.revenue_ttm),
     next_report: src.next_report || null,

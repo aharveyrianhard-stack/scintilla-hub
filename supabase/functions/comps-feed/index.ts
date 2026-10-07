@@ -1,4 +1,7 @@
-// SCINTILLA · comps-feed v6 (FD1, 7 Oct 2026) — the value layer of the allocation tool, from the SCINTILLA database only.
+// SCINTILLA · comps-feed v7 (CP3, 7 Oct 2026; v6 was FD1's) — the value layer of the allocation tool, from the SCINTILLA database only.
+//
+// v7: fwd_pe is the dashboard's forward P/E — today's price ÷ the next four quarters of consensus EPS (./forward-basis.mjs,
+// the one rule the dashboard, the comps tab, the cards and this feed share). "Today" is the New York date, as on the dashboard.
 //
 // WHY v6. v5 (20 Jul) told the live knockout that Micron's sales were shrinking 59% (they grew 256%) and gave every
 // name a forward P/E of 0. The cause, the rules that replace it and the measured rows are in ./feed.mjs; this file is
@@ -39,7 +42,7 @@ Deno.serve(async (req) => {
   const syms = parseSyms(u.searchParams.get("syms") || "");
   const asJson = u.searchParams.get("format") === "json";
   if (!syms.length) return new Response(asJson ? JSON.stringify({ version: VERSION, rows: [] }) : HEAD, { headers: asJson ? JSONH : CSV });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });   // v7: the dashboard's "today" (New York), so a quarter ending today is in or out on both at once
   try {
     const out = buildFeed(syms, await readTables(get, syms, today), today);
     return new Response(asJson ? JSON.stringify({ version: VERSION, today, rows: out.rows }) : out.csv, { headers: asJson ? JSONH : CSV });
