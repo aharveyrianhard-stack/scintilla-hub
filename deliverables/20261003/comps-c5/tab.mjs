@@ -184,10 +184,14 @@ async function segments(pg) {
 }
 
 export async function mountCompsTab(root, opts) {
+  /* CP4 (7 Oct 2026): THE ARTIFACT FIRST. The one comps engine's reading of this name is drawn when it exists; this in-browser
+     reader runs only for a name the artifact does not carry, and says so. */
+  try { const ce = await import("/deliverables/20261007/comps-engine/tab.mjs"); root.dataset.mounted = String(opts.ticker).toUpperCase(); if (await ce.mountFromArtifact(root, opts)) { root.dataset.source = "comps-engine"; return; } } catch (_) {}
+  root.dataset.source = "in-browser (not in the engine's artifact)";
   ensureCSS();
   const T = String(opts.ticker).toUpperCase();
   root.classList.add("cm5"); root.classList.toggle("narrow", root.clientWidth < 560); root.dataset.mounted = T;
-  root.innerHTML = `<div class="loading">BUILDING THE COMPARABLE SET OF ${esc(T)}…</div>`;
+  root.innerHTML = `<div class="loading">NOT IN THE ENGINE'S ARTIFACT — BUILDING THE COMPARABLE SET OF ${esc(T)} IN THE BROWSER…</div>`;
   const S = { root, opts, T, n: opts.n || N_DEFAULT, way: "C", reasonFor: null, open: {} };
   try {
     if (!INPUTS || Date.now() - INPUTS_AT > TTL) { const [inp, seg] = await Promise.all([c4inputs({ pg: opts.pg, fetchJson }), segments(opts.pg)]); inp.segments = seg.companies; inp.segments_from = seg.from; const facts = await refFacts(); if (facts) inp.reference = referenceOf(facts).peers; INPUTS = inp; INPUTS_AT = Date.now(); }
