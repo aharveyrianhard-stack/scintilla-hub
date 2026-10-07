@@ -28,13 +28,49 @@
        the outliers.
      C6's rule as first built (all sixteen columns each a vote, 40%) stays reproducible as C6_RULE, for the report.
    One pass: the flags are measured on the whole group once; the group is not re-measured after the outliers leave
-     (median and MAD hold up to half the peers being wild, and a second pass would keep peeling a tight pack). */
+     (median and MAD hold up to half the peers being wild, and a second pass would keep peeling a tight pack).
+
+   CP1 (6 Oct) · A TIGHTER RULE WHERE ONE PEER OR ONE MULTIPLE DOMINATES, proposed inside this rule; each part a named
+   switch, OFF until Alan says (with every switch off this file answers exactly as C6b left it).
+     cellRule     ONE MULTIPLE. A single cell beyond the cut leaves THAT measure's centre and field; the peer stays
+                  everywhere else. (C5's cell rule, which C6 had switched off; its cut is now this rule's 3.5.)
+     consistency  ONE PEER, far on nearly everything. A peer beyond CUT2 (2.5 spreads — the moderately conservative cut
+                  of Leys, Ley, Klein, Bernard & Licata 2013) on the SAME side on at least CONSIST_MIN (4) of the five
+                  votes, or on three-quarters of the votes it has (at least 3), is an outlier even when no single multiple
+                  reaches 3.5.
+     influence    ONE PEER, moving the answer. After the rule above each peer is left out in turn (the jackknife's
+                  leave-one-out). When EXACTLY ONE peer's removal moves the centre by more than INFLUENCE (10%) AND that
+                  peer is itself marked on a price multiple (a flag at 3.5, or beyond 2.5 on two votes on one side), it
+                  dominates and is left out: influential and unusual, both. A peer that only happens to sit at the pivot
+                  of the field (normal multiples) is never cut. How many peers move the centre that much is reported as
+                  the centre's FRAGILITY — information, never a cut. Only while INFLUENCE_MIN_N peers stay.
+     priceOnBusiness  THE COMPLETION OF C6b 4 ("fix the peers, not the outliers"), for the lines Alan named the comps of.
+                  On a line listed in PRICE_ON_LINES (memory & storage, data-centre reit), when fewer than half the peers
+                  share the company's business and at least PRICE_ON_BUSINESS_MIN (2) do, the price comes from the peers
+                  that share it; the others stay on the page, greyed "different business: shown, not priced", and the
+                  whole-set reading is kept beside the price. (Not in the coordinator's six: without it the memory and
+                  storage peers are added to Micron's set and outvoted by nine chip makers — measured, CP1 report. Not
+                  applied to every line: on Nvidia's three "data-center chips" peers it reads +195% — also measured.)
+     selfOutlier  THE COMPANY ITSELF (Alan, 6 Oct: "what about when it's a fast grower — the company we're actually
+                  tracking?"). The company is measured against its peers exactly as a peer is: when it is itself far from
+                  the group on 3 or more votes, or on half the votes it has (at least 2), the set cannot price it. The
+                  band is then withheld — "no peer set — valued on growth (PEG) and estimates" — and the peers' reading is
+                  kept beside it as information.
+   Neighbours tested together (tests/comps-cp1.test.mjs): C6b 4 (a mostly-different-business set never loses the peers that
+   share the business), the operator's KEEP click (always wins), the fast-grower protection (growth never votes), the
+   five-peer floor per column. */
 import { latestDecisions, selectionOf } from "../../20260930/comps-tab/comps-tab.mjs";
 import { ROWS, TABLE, SHORT } from "../../20261001/comps-template/cohort.mjs";
-import { conclusion, pegRow, median } from "../../20261003/comps-c5/field.mjs";
-import { SIM_MIN } from "../../20261003/comps-c5/lines.mjs";
+import { conclusion, pegRow, median, CP1_FIELD_ON, CP1_FIELD_OFF } from "../../20261003/comps-c5/field.mjs";
+import { SIM_MIN, CP1_LINES_ON, CP1_LINES_OFF } from "../../20261003/comps-c5/lines.mjs";
 
 export const CUT = 3.5, MIN_N = 5, MIN_FLAGS = 3, SHARE = 0.5, SHARE_MIN_FLAGS = 2, MAD_SCALE = 1.4826, MEANAD_SCALE = 1.2533;
+/* CP1 · the switches (see the header). OFF = C6b exactly. */
+export const CP1_OUT_OFF = Object.freeze({ cellRule: false, consistency: false, influence: false, selfOutlier: false, priceOnBusiness: false });
+export const CP1_OUT_ON = Object.freeze({ cellRule: true, consistency: true, influence: true, selfOutlier: true, priceOnBusiness: true });
+export const CUT2 = 2.5, CONSIST_MIN = 4, CONSIST_SHARE = 0.75, CONSIST_SHARE_MIN = 3, INFLUENCE = 0.10, INFLUENCE_MIN_N = 6, PRICE_ON_BUSINESS_MIN = 2;
+export const PRICE_ON_LINES = ["memory & storage", "data-centre reit"];
+export const NO_PEER_SET = "no peer set — valued on growth (PEG) and estimates";
 export const COLUMNS = TABLE.map((c) => ({ key: c.key, label: c.label, short: SHORT[c.key] || c.label, fmt: c.fmt, log: ROWS.includes(c.key) }));
 /* C6b · the votes: the valuation multiples only, trailing and forward P/E as one */
 export const VOTES = [{ key: "pe", short: "P/E", cols: ["pe_ttm", "pe_fwd"] }, ...ROWS.filter((k) => k !== "pe_ttm" && k !== "pe_fwd").map((k) => ({ key: k, short: SHORT[k] || k, cols: [k] }))];
@@ -74,7 +110,7 @@ export function columnsOf(rows, table, peers, { cellsOff = new Set(), cut = CUT,
     of its columns flags the peer, and the peer HAS the vote when any of its columns judged it. Columns that belong to
     no vote are information only (`info`).
     Returns { T: { have, flags: [{key (the farthest column), vote, short, d, side, v}], n, far, share, outlier, words, marks, info } }. */
-export function scorePeers(cols, peers, { votes = VOTES, minFlags = MIN_FLAGS, share = SHARE, shareMinFlags = SHARE_MIN_FLAGS, noun = "multiples", lead = "priced far from the group on" } = {}) {
+export function scorePeers(cols, peers, { votes = VOTES, minFlags = MIN_FLAGS, share = SHARE, shareMinFlags = SHARE_MIN_FLAGS, noun = "multiples", lead = "priced far from the group on", consistency = false } = {}) {
   const out = {}, voting = new Set(votes.flatMap((v) => v.cols));
   const cell = (k, t) => (cols[k] && cols[k].judged && cols[k].cells[t]) || null;
   const mark = (k, t) => ({ key: k, short: cols[k].short, d: cols[k].cells[t].d, side: cols[k].cells[t].side, v: cols[k].cells[t].v });
@@ -88,8 +124,13 @@ export function scorePeers(cols, peers, { votes = VOTES, minFlags = MIN_FLAGS, s
     flags.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
     const info = Object.keys(cols).filter((k) => !voting.has(k) && cell(k, t) && cols[k].cells[t].flag).map((k) => mark(k, t)).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
     const n = flags.length, sh = have ? n / have : 0, marks = flags.reduce((x, f) => x + f.cols.length, 0) + info.length;
-    const outlier = n >= minFlags || (n >= shareMinFlags && sh >= share);
-    out[t] = { have, flags, info, marks, n, far: flags.reduce((x, f) => x + Math.abs(f.d), 0), share: sh, outlier, words: n ? `${lead} ${n} of ${have} ${noun}` : "" };
+    /* CP1 consistency: per vote the farthest column's distance; how many votes sit beyond CUT2 on one side */
+    let hi = 0, lo = 0;
+    if (consistency) for (const v of votes) { const ds = v.cols.filter((k) => cell(k, t)).map((k) => cols[k].cells[t].d); if (!ds.length) continue; const far = ds.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a)); if (far > CUT2) hi++; else if (far < -CUT2) lo++; }
+    const side = Math.max(hi, lo), consistent = consistency && (side >= CONSIST_MIN || (side >= CONSIST_SHARE_MIN && have > 0 && side / have >= CONSIST_SHARE));
+    const byRule = n >= minFlags || (n >= shareMinFlags && sh >= share), outlier = byRule || consistent;
+    out[t] = { have, flags, info, marks, n, far: flags.reduce((x, f) => x + Math.abs(f.d), 0), share: sh, outlier, consistent: consistent && !byRule, side, sideWord: hi >= lo ? "above" : "below",
+      words: byRule || !consistent ? (n ? `${lead} ${n} of ${have} ${noun}` : "") : `${hi >= lo ? "above" : "below"} the group by more than ${CUT2} spreads on ${side} of ${have} ${noun} (never past ${CUT} on three)` };
   }
   return out;
 }
@@ -116,22 +157,60 @@ export function keptPeers(decisions, company) {
 /** Everything the page draws, C6: C5's conclusion with the outlier PEERS left out (and no cell dropped on one flag),
     plus `c6`: { cols, score, outliers: [tickers out], kept: [outliers kept in], withOutliers: the same conclusion with
     every peer in }. The band/ways/rows of the result are WITHOUT the outliers. */
-export function conclusion6(snap, decisions, estimates, today, way = "C", { only = null, set = null, rule = {} } = {}) {
-  const T = snap.ticker, dec = decisions || [], sel = selectionOf(dec, T), kept = keptPeers(dec, T);
+export function conclusion6(snap, decisions, estimates, today, way = "C", { only = null, set = null, rule = {}, fx = null } = {}) {
+  const T = snap.ticker, dec = decisions || [], sel = selectionOf(dec, T), kept = keptPeers(dec, T), X = fx || CP1_OUT_OFF;
+  if (X.priceOnBusiness) {   /* CP1: a mostly-different-business set is priced on the peers that share the business */
+    const inner = { ...X, priceOnBusiness: false }, whole = conclusion6(snap, dec, estimates, today, way, { only, set, rule, fx: inner }), b = whole.c6.business;
+    if (!(b && b.mostlyDifferent && b.same.length >= PRICE_ON_BUSINESS_MIN && PRICE_ON_LINES.includes(b.line))) return { ...whole, c6: { ...whole.c6, pricedOn: "set" } };
+    const others = whole.c6.peers.filter((t) => !b.same.includes(t) && !kept.has(t));
+    const C2 = conclusion6(snap, [...dec, ...others.map((t) => ({ company: T, peer: t, measure: "ALL", off: true, reason: "different business: shown, not priced", set_by: "rule-business", set_at: RULE_AT }))], estimates, today, way, { only, set, rule, fx: inner });
+    return { ...C2, sel: { ...C2.sel, userPeers: sel.peers }, off: sel.list.length, c6: { ...C2.c6, pricedOn: "business", business: b, businessPeers: b.same, notPriced: others, wholeSet: { band: whole.band, upside: whole.upside, bandFromPeers: whole.c6.bandFromPeers, noPeerSet: whole.c6.noPeerSet, self: whole.c6.self, outliers: whole.c6.outliers, fragile: whole.c6.fragile || null } } };
+  }
+  if (X.consistency) rule = { ...rule, consistency: true };
   const rows = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today) : r)) : snap.rows;
   const peers = snap.members.filter((t) => t !== T && !(snap.excluded || []).some((e) => e.ticker === t) && !sel.peers.has(t));
   const allCols = columnsOf(rows, snap.table, peers, { cellsOff: sel.cells }), cols = only ? Object.fromEntries(Object.entries(allCols).filter(([k]) => only.includes(k))) : allCols, score = scorePeers(cols, peers, rule);   /* only: a what-if on fewer columns; rule: C6_RULE reproduces C6 as first built (the report), never the tab */
   const business = businessOf(set, peers), safe = new Set(business && business.mostlyDifferent ? business.same : []);   /* C6b 4 */
   const flagged = peers.filter((t) => score[t].outlier).sort((a, b) => score[b].n - score[a].n || score[b].far - score[a].far);
   const out = flagged.filter((t) => !kept.has(t) && !safe.has(t)), keptIn = flagged.filter((t) => kept.has(t)), notCut = flagged.filter((t) => !kept.has(t) && safe.has(t));
-  const ruleRows = out.map((t) => ({ company: T, peer: t, measure: "ALL", off: true, reason: "outlier: " + score[t].words, set_by: "rule", set_at: RULE_AT }));
-  const opts = { k: Infinity };
-  const withAll = conclusion(snap, dec, estimates, today, way, opts);
-  const C = out.length ? conclusion(snap, [...dec, ...ruleRows], estimates, today, way, opts) : withAll;
-  const ruleOff = new Set(out);
-  return { ...C, sel: { ...C.sel, list: C.sel.list.filter((d) => d.set_by !== "rule"), userPeers: sel.peers }, off: sel.list.length,
-    c6: { cols, score, peers, outliers: out, kept: keptIn, notCut, business, ruleOff, flaggedCells: peers.reduce((s, t) => s + score[t].marks, 0), withOutliers: withAll, centre: { with: withAll.band ? withAll.band.mid : null, without: C.band ? C.band.mid : null } } };
+  const offRow = (t, why) => ({ company: T, peer: t, measure: "ALL", off: true, reason: why, set_by: "rule", set_at: RULE_AT });
+  let ruleRows = out.map((t) => offRow(t, "outlier: " + score[t].words));
+  const opts = { k: X.cellRule ? CUT : Infinity, fx: X };   /* CP1 cellRule: one wild multiple leaves its own measure */
+  const withAll = conclusion(snap, dec, estimates, today, way, { k: Infinity, fx: X });
+  let C = out.length || X.cellRule ? conclusion(snap, [...dec, ...ruleRows], estimates, today, way, opts) : withAll;
+  /* CP1 influence: leave one peer out at a time; a peer whose removal alone moves the centre by more than INFLUENCE dominates */
+  let dominating = [], fragile = null;
+  if (X.influence && C.band && C.band.mid > 0) {
+    const left = peers.filter((t) => !out.includes(t)), movers = [];
+    if (left.length >= INFLUENCE_MIN_N) for (const t of left) {
+      const Ct = conclusion(snap, [...dec, ...ruleRows, offRow(t, "leave-one-out")], estimates, today, way, opts);
+      if (Ct.band && Ct.band.mid > 0) { const shift = Ct.band.mid / C.band.mid - 1; if (Math.abs(shift) > INFLUENCE) movers.push({ ticker: t, shift, centre_without: Ct.band.mid }); }
+    }
+    const unusual = (t) => score[t] && (score[t].n >= 1 || score[t].side >= 2);
+    if (movers.length === 1 && unusual(movers[0].ticker) && !kept.has(movers[0].ticker) && !safe.has(movers[0].ticker)) dominating = movers;
+    if (movers.length && !dominating.length) fragile = { n: movers.length, of: left.length, movers, words: movers.length === 1 ? `the centre moves ${(movers[0].shift * 100).toFixed(0)}% when ${movers[0].ticker} alone is taken out (a peer with ordinary multiples at the pivot of the field: kept)` : `the centre moves more than ${Math.round(INFLUENCE * 100)}% when any one of ${movers.length} of the ${left.length} peers is taken out (${movers.map((m) => m.ticker).join(", ")}): it sits in a gap of the field` };
+    if (dominating.length) { ruleRows = [...ruleRows, ...dominating.map((d) => offRow(d.ticker, `dominates: the centre moves ${(d.shift * 100).toFixed(0)}% without it`))]; C = conclusion(snap, [...dec, ...ruleRows], estimates, today, way, opts); }
+  }
+  const outAll = [...out, ...dominating.map((d) => d.ticker)], ruleOff = new Set(outAll);
+  /* CP1 selfOutlier: the company measured against its own peers the way a peer is */
+  let self = null;
+  if (X.selfOutlier) {
+    const flags = []; let have = 0;
+    for (const v of VOTES) {
+      const ds = v.cols.map((k) => { const c = cols[k], r = (C.rows || []).find((x) => x.key === k) || rows.find((x) => x.key === k), own = r && r.own ? r.own.multiple : null; return c && c.judged && own > 0 && c.median > 0 && c.spread > 0 ? { key: k, short: c.short, d: (Math.log(own) - Math.log(c.median)) / c.spread, v: own, median: c.median } : null; }).filter(Boolean);
+      if (!ds.length) continue; have++;
+      const far = ds.reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a)); if (Math.abs(far.d) > CUT) flags.push({ ...far, vote: v.key, voteShort: v.short, side: far.d > 0 ? "high" : "low" });
+    }
+    const n = flags.length, is = n >= MIN_FLAGS || (n >= SHARE_MIN_FLAGS && have > 0 && n / have >= SHARE);
+    self = { have, n, flags, outlier: is, words: n ? `${T} itself is priced far from this group on ${n} of ${have} multiples (${flags.map((f) => `${f.voteShort} ${f.v.toFixed(f.v < 10 ? 2 : 0)}× against ${f.median.toFixed(f.median < 10 ? 2 : 0)}×`).join(", ")})` : "" };
+  }
+  const noPeerSet = !!(self && self.outlier);
+  return { ...C, band: noPeerSet ? null : C.band, upside: noPeerSet ? null : C.upside, reason: noPeerSet ? NO_PEER_SET : C.reason, sel: { ...C.sel, list: C.sel.list.filter((d) => !String(d.set_by || "").startsWith("rule")), userPeers: sel.peers }, off: sel.list.length,
+    c6: { cols, score, peers, outliers: outAll, byRule: out, dominating, fragile, kept: keptIn, notCut, business, ruleOff, self, noPeerSet, bandFromPeers: C.band, upsideFromPeers: C.upside, flaggedCells: peers.reduce((s, t) => s + score[t].marks, 0), withOutliers: withAll, centre: { with: withAll.band ? withAll.band.mid : null, without: C.band ? C.band.mid : null } } };
 }
+/** Every CP1 switch of the three modules in one object, for the caller at the top of the stack. */
+export const CP1_ALL = Object.freeze({ ...CP1_LINES_ON, ...CP1_FIELD_ON, ...CP1_OUT_ON });
+export const CP1_NONE = Object.freeze({ ...CP1_LINES_OFF, ...CP1_FIELD_OFF, ...CP1_OUT_OFF });
 export const isFlagged = (c6, peer, key) => !!(c6 && c6.cols[key] && c6.cols[key].cells[peer] && c6.cols[key].cells[peer].flag);
 const VOTING = new Set(VOTES.flatMap((v) => v.cols));
 /** Does this column count toward the verdict (a multiple), or is its mark information only? */

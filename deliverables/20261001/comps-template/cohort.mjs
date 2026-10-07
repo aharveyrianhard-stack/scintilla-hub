@@ -152,7 +152,24 @@ export function snapshotFromCohort(ctx, ticker) {
   }
   const rows = ROWS.map((k) => (k === "ps" ? psRow() : liveRow(k)));
   /* the full table: every component of comps.mjs for the company and each peer (P/S added) */
-  const comp = (i) => { const c = k2Components(i).v; c.ps = psOf(i); return c; };
+  /* CP1 (6 Oct) — four figures added to every company's row. None is in TABLE, so no tab draws them until asked.
+     ffo_ps / p_ffo: funds from operations APPROXIMATED from the statements on file — net income (trailing EPS × shares)
+     plus depreciation and amortisation (EBITDA − operating income), trailing twelve months. Nareit's FFO also takes out
+     gains on property sales and adds back only real-estate depreciation; the companies' own FFO / AFFO is not in our data.
+     rev_g_2y / eps_g_2y: TWO-YEAR FORWARD GROWTH, a year — from the trailing twelve months to the consensus for the fiscal
+     year after next, annualised over the time between the two period ends. It counts the fiscal year in progress, which
+     the "next FY" column (FY2 over FY1) leaves out: for a company whose year has just turned, that column skips the year
+     the growth is in (Micron, 6 Oct: next FY +18%, two-year forward +55% a year). */
+  const yearsTo = (from, to) => (from && to ? (Date.parse(to + "T00:00:00Z") - Date.parse(String(from).slice(0, 10) + "T00:00:00Z")) / (365.25 * 86400e3) : null);
+  const comp = (i) => { const c = k2Components(i).v; c.ps = psOf(i);
+    const da = i.ebitda?.now != null && i.oi?.now != null ? i.ebitda.now - i.oi.now : null;
+    c.ffo_ps = i.eps_ttm != null && da != null && i.shares > 0 ? i.eps_ttm + da / i.shares : null;
+    c.p_ffo = c.ffo_ps > 0 && i.price > 0 ? i.price / c.ffo_ps : null;
+    const yrs = i.rev?.basis === "TTM" || i.rev?.basis === "FY" ? yearsTo(i.rev.to, i.fy2_date) : null, ok = yrs != null && yrs >= 0.75 && yrs <= 3.5;
+    c.rev_g_2y = ok && i.rev.now > 0 && i.rev_fy2 > 0 ? (Math.pow(i.rev_fy2 / i.rev.now, 1 / yrs) - 1) * 100 : null;
+    c.eps_g_2y = ok && i.eps_ttm > 0 && i.eps_fy2 > 0 ? (Math.pow(i.eps_fy2 / i.eps_ttm, 1 / yrs) - 1) * 100 : null;
+    c.g_2y_years = ok ? yrs : null;
+    return c; };
   const table = { company: comp(me), peers: Object.fromEntries(peersIn.map((p) => [p.ticker, comp(p)])) };
   const m = ctx.meta[TICKER] || {};
   const peerDates = {};

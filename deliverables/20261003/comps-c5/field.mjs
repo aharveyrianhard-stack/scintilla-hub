@@ -23,7 +23,23 @@
      peer weight; the CENTRE is the weighted median of all those points, LOW and HIGH the weighted 25th and 75th.
      The midpoint of low and high is stated beside the centre, so the two are never confused (Alan: "417 is not the
      center of 319 and 823"). Ways A and B stay as alternatives: A the range of the measure medians (centre = the median
-     of those medians), B the middle-half band (centre = the median of the medians). */
+     of those medians), B the middle-half band (centre = the median of the medians).
+
+   CP1 (6 Oct) · FIXES PROPOSED INSIDE THE FIELD, each a named switch, OFF until Alan says (way C only; A and B carry no
+   weights). With every switch off this file answers exactly as C5 / C6b left it.
+     growthCredit   A faster grower may sit above the peer median in proportion to its growth: the PEG row is the P/E
+                    with the growth credit already in it (peers' median PEG × the company's own growth × its EPS), so
+                    its prior is multiplied by the company's forward EPS growth ÷ the peers' median forward EPS growth,
+                    never below 1 and never above GROWTH_CREDIT_MAX (3). A company growing no faster than its peers is
+                    untouched.
+     reitYardstick  A property trust is priced on funds from operations and EV/EBITDA, not on earnings after property
+                    depreciation (Nareit's FFO white paper; Damodaran): class "reit" gets its own prior (REIT_PRIOR) and
+                    a seventh row, P/FFO, built from the figures the comps reader already holds (cohort.mjs: FFO
+                    approximated as net income + depreciation and amortisation).
+     marginGate     A sales multiple treats a dollar of sales as worth the same in every company. When the company's
+                    operating margin is more than MARGIN_GATE (2) times the peers' median, or under half of it, EV/sales
+                    and P/S (the same reading twice) leave the price: weight 0, the row still drawn, the reason on it.
+                    A loss-making company keeps them (nothing else prices it). */
 import { median, quantile } from "../../20260927/comps-r3/r3.mjs";
 import { repriceRow, priceAt } from "../../20260929/comps-live/ladder.mjs";
 import { rangeOfMedians, middleHalfBand, upsideTo } from "../../20260928/comps-r3-labels/labels-r3.mjs";
@@ -34,6 +50,14 @@ export { SECTOR_PRIOR, sectorClass };
 export { median, quantile, upsideTo, selectionOf, isOff, ROWS, TABLE };
 
 export const OUTLIER_K = 3, OUTLIER_MIN_N = 5, MAD_SCALE = 1.4826, PEG_YEARS_MAX = 3.5, PEER_SIGMA = 0.5;
+/* CP1 · the field's switches (see the header). OFF = C5 / C6b exactly. */
+export const CP1_FIELD_OFF = Object.freeze({ growthCredit: false, reitYardstick: false, marginGate: false });
+export const CP1_FIELD_ON = Object.freeze({ growthCredit: true, reitYardstick: true, marginGate: true });
+export const GROWTH_CREDIT_MAX = 3, MARGIN_GATE = 2, SALES_ROWS = ["ev_sales", "ps"];
+export const REIT_PRIOR = { pe_ttm: 0.2, pe_fwd: 0.3, ev_ebitda: 1.5, ev_sales: 0.6, ps: 0.5, peg: 0.3, p_ffo: 1.6 };
+export const isReit = (snap) => /reit|real estate/i.test([snap.sector, snap.industry].filter(Boolean).join(" "));
+/** The valuation rows: C5's six, and P/FFO when the reit yardstick added it. */
+export const isValuation = (key) => ROWS.includes(key) || key === "p_ffo";
 export const FUND_KEYS = TABLE.filter((c) => !ROWS.includes(c.key)).map((c) => c.key);
 
 /* ---- outliers ------------------------------------------------------------------------------------- */
@@ -66,7 +90,7 @@ export function applyField(snap, decisions, { k = OUTLIER_K, minN = OUTLIER_MIN_
     const fl = outlierFlags({ ...r, peers: afterSel }, { k, minN });
     const excluded = fl.out.filter((o) => !isKept(kept, o.ticker, r.key)).map((o) => o.ticker), keptHere = fl.out.filter((o) => isKept(kept, o.ticker, r.key)).map((o) => o.ticker);
     const keep = afterSel.filter((p) => !excluded.includes(p.ticker));
-    const base = offPeers.length || excluded.length ? repriceRow(r, keep, snap) : { ...r };
+    const base = offPeers.length || excluded.length ? (r.key === "p_ffo" ? ffoRow(snap, keep.map((p) => p.ticker)) : repriceRow(r, keep, snap)) : { ...r };
     return { ...base, dropped: offPeers, outliers: { ...fl, flagged: fl.out, excluded, kept: keptHere } };
   });
   return { rows, sel, kept };
@@ -117,13 +141,15 @@ export function pegRow(snap, estimates, today) {
 
 /* ---- weights ------------------------------------------------------------------------------------------- */
 /** The six measure weights, measured in the set. rows: after applyField. Returns { weights, parts, basis } */
-export function measureWeights(rows, peerCount, cls = "default") {
-  const prior = SECTOR_PRIOR[cls] || SECTOR_PRIOR.default, parts = {}; let sum = 0;
-  for (const r of rows.filter((x) => ROWS.includes(x.key))) {
+export function measureWeights(rows, peerCount, cls = "default", adj = null) {
+  /* CP1 — adj: { table: another prior table (the reit yardstick), credit: { key: multiplier } (the growth credit), off: { key: reason } (the margin gate) } */
+  const prior = (adj && adj.table) || SECTOR_PRIOR[cls] || SECTOR_PRIOR.default, parts = {}; let sum = 0;
+  for (const r of rows.filter((x) => isValuation(x.key))) {
     const vals = (r.peers || []).map((p) => p.multiple).filter((v) => v != null && v > 0), med = vals.length ? median(vals) : null;
     const coverage = peerCount > 0 ? vals.length / peerCount : 0, errs = med > 0 ? vals.map((v) => Math.abs(med / v - 1)) : [], fit = errs.length ? 1 / (1 + median(errs)) : 0;
-    const priced = r.ok && r.ends && r.ends.median && r.ends.median.price != null, score = priced && vals.length >= 2 ? (prior[r.key] || 1) * coverage * fit : 0;
-    parts[r.key] = { prior: prior[r.key] || 1, coverage, fit, median_error: errs.length ? median(errs) : null, score, priced, n: vals.length }; sum += score;
+    const credit = adj && adj.credit && adj.credit[r.key] > 0 ? adj.credit[r.key] : 1, off = (adj && adj.off && adj.off[r.key]) || null, pr = (prior[r.key] ?? 1) * credit;
+    const priced = r.ok && r.ends && r.ends.median && r.ends.median.price != null, score = priced && vals.length >= 2 && !off ? pr * coverage * fit : 0;
+    parts[r.key] = { prior: pr, coverage, fit, median_error: errs.length ? median(errs) : null, score, priced, n: vals.length, ...(credit !== 1 ? { credit, prior_before: prior[r.key] ?? 1 } : {}), ...(off ? { off } : {}) }; sum += score;
   }
   const weights = {}; const priced = Object.keys(parts).filter((k) => parts[k].priced);
   for (const k of Object.keys(parts)) weights[k] = sum > 0 ? parts[k].score / sum : priced.length ? (parts[k].priced ? 1 / priced.length : 0) : 0;
@@ -147,11 +173,11 @@ export function peerWeights(snap, peers, { sigma = PEER_SIGMA } = {}) {
 /** Way C: every peer's implied price on every priced measure is a point (measure weight × peer weight). */
 export function fullField(rows, snap, mw, pw) {
   const pts = [], rowMid = {};
-  for (const r of rows.filter((x) => ROWS.includes(x.key) && x.ok && (mw.weights[x.key] || 0) > 0)) {
+  for (const r of rows.filter((x) => isValuation(x.key) && x.ok && (mw.weights[x.key] || 0) > 0)) {
     const peers = (r.peers || []).filter((p) => p.multiple != null && p.multiple > 0), pwSum = peers.reduce((s, p) => s + (pw.weights[p.ticker] ?? 1), 0);
     if (!peers.length || !(pwSum > 0)) continue;
     const rp = [];
-    for (const p of peers) { const price = r.key === "peg" ? (r.ends && r.ends.median && r.ends.median.multiple ? (r.ends.median.price / r.ends.median.multiple) * p.multiple : null) : priceAt(r.key, p.multiple, snap); if (price == null || !(price > 0)) continue; const w = mw.weights[r.key] * (pw.weights[p.ticker] ?? 1) / pwSum; pts.push({ key: r.key, ticker: p.ticker, multiple: p.multiple, price, w }); rp.push({ price, w }); }
+    for (const p of peers) { const price = r.key === "peg" || r.key === "p_ffo" ? (r.ends && r.ends.median && r.ends.median.multiple ? (r.ends.median.price / r.ends.median.multiple) * p.multiple : null) : priceAt(r.key, p.multiple, snap); if (price == null || !(price > 0)) continue; const w = mw.weights[r.key] * (pw.weights[p.ticker] ?? 1) / pwSum; pts.push({ key: r.key, ticker: p.ticker, multiple: p.multiple, price, w }); rp.push({ price, w }); }
     if (rp.length) rowMid[r.key] = wquantile(rp, 0.5);
   }
   if (!pts.length) return { ok: false, way: "C", reason: "no measure can be priced" };
@@ -183,12 +209,53 @@ export const WAY_WORDS = {
 
 /** Everything the page draws for one company and one way. estimates: { T: { eps_ttm, est } } (may be empty). */
 export function conclusion(snap, decisions, estimates, today, way = "C", opts = {}) {
-  const snap2 = estimates ? { ...snap, rows: snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today) : r)) } : snap;
+  const fx = opts.fx || CP1_FIELD_OFF, reit = !!(fx.reitYardstick && isReit(snap));
+  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today) : r)) : snap.rows;
+  if (reit) rows0 = [...rows0.filter((r) => r.key !== "p_ffo"), ffoRow(snap)];   /* CP1 reitYardstick: the seventh row */
+  const snap2 = rows0 === snap.rows ? snap : { ...snap, rows: rows0 };
   const F = applyField(snap2, decisions, opts);   /* C6 passes k = Infinity: no cell leaves a centre on one flag */
   const peersOn = snap.members.filter((t) => t !== snap.ticker && !(snap.excluded || []).some((e) => e.ticker === t) && !F.sel.peers.has(t));
-  const mw = measureWeights(F.rows, peersOn.length, sectorClass(snap.sector, snap.industry, snap.cohort)), pw = peerWeights(snap, peersOn);
+  const cls = reit ? "reit" : sectorClass(snap.sector, snap.industry, snap.cohort), cp1 = fieldAdjust(snap2, F.rows, peersOn, fx, reit);
+  const mw = measureWeights(F.rows, peersOn.length, cls, cp1.adj), pw = peerWeights(snap, peersOn);
   const W = ways(F.rows, snap2, mw, pw), w = wayOf(W, way);
   const outliers = F.rows.filter((r) => ROWS.includes(r.key)).flatMap((r) => r.outliers.flagged.map((o) => ({ ...o, key: r.key, excluded: r.outliers.excluded.includes(o.ticker), kept: r.outliers.kept.includes(o.ticker) })));
   return { ticker: snap.ticker, price: snap.price, way, band: w && w.ok ? { lo: w.lo, mid: w.mid, hi: w.hi, midpoint: w.midpoint } : null, upside: w && w.ok ? w.upside : null, reason: w && !w.ok ? w.reason : null,
-    ways: W, rows: F.rows, sel: F.sel, kept: F.kept, peersOn, off: F.sel.list.length, measureWeights: mw, peerWeights: pw, outliers, snap: snap2 };
+    ways: W, rows: F.rows, sel: F.sel, kept: F.kept, peersOn, off: F.sel.list.length, measureWeights: mw, peerWeights: pw, outliers, snap: snap2, cp1: { fx, reit, growth: cp1.growth, margin: cp1.margin } };
+}
+
+/* ---- CP1 · the three field fixes ------------------------------------------------------------------- */
+/** P/FFO for a property trust, from the figures the comps reader already holds (snap.table: ffo_ps, p_ffo).
+    only: the peers to count (the operator's selection and the outlier rule), or null for every peer. */
+export function ffoRow(snap, only = null) {
+  const T = snap.ticker, own = (snap.table && snap.table.company) || {}, tp = (snap.table && snap.table.peers) || {};
+  const all = snap.members.filter((t) => t !== T && tp[t]).map((t) => ({ ticker: t, multiple: tp[t].p_ffo > 0 ? tp[t].p_ffo : null }));
+  const sorted = all.filter((x) => x.multiple != null && (!only || only.includes(x.ticker))).sort((a, b) => a.multiple - b.multiple), vals = sorted.map((p) => p.multiple);
+  const band = { n: vals.length, min: vals.length ? vals[0] : null, q1: vals.length ? quantile(vals, 0.25) : null, median: vals.length ? median(vals) : null, q3: vals.length ? quantile(vals, 0.75) : null, max: vals.length ? vals[vals.length - 1] : null };
+  const price = (m) => (m != null && own.ffo_ps > 0 ? m * own.ffo_ps : null), at = (m, who = []) => ({ multiple: m, who, price: price(m) });
+  const ends = { min: at(band.min, sorted.length ? [sorted[0].ticker] : []), q1: at(band.q1), median: at(band.median), q3: at(band.q3), max: at(band.max, sorted.length ? [sorted[sorted.length - 1].ticker] : []) };
+  const ok = band.n >= 2 && ends.median.price != null;
+  return { key: "p_ffo", label: "P/FFO", fmt: "x", basis: "price ÷ funds from operations per share, TTM — FFO approximated as net income + depreciation and amortisation from the statements on file", own: { multiple: own.p_ffo > 0 ? own.p_ffo : null, price: snap.price },
+    figure: { word: "FFO per share (approx.)", value: own.ffo_ps ?? null, fmt: "usd2", formula: "multiple × FFO per share" }, n: band.n, band, ends, peers: sorted, nm: [], missing: all.filter((x) => x.multiple == null).map((x) => x.ticker),
+    values: Object.fromEntries(all.map((x) => [x.ticker, { multiple: x.multiple, why: x.multiple == null ? "no positive FFO on file" : null }])), outliers: { rule: null, fence: null, out: [] },
+    upside: ok && snap.price > 0 ? (ends.median.price / snap.price - 1) * 100 : null, ok, reason: ok ? null : band.n < 2 ? `only ${band.n} peer${band.n === 1 ? "" : "s"} carr${band.n === 1 ? "ies" : "y"} this multiple` : `${T} has no positive FFO on file`, computable: own.p_ffo > 0 };
+}
+/** The adjustment measureWeights takes: the reit table, the growth credit on PEG, the margin gate on the sales rows.
+    Returns { adj, growth: { own, peers, ratio, credit } | null, margin: { own, peers, ratio, off } | null }. */
+export function fieldAdjust(snap, rows, peersOn, fx = CP1_FIELD_OFF, reit = false) {
+  const adj = { table: reit ? REIT_PRIOR : null, credit: {}, off: {} }; let growth = null, margin = null;
+  if (fx.growthCredit) {
+    const peg = rows.find((r) => r.key === "peg"), own = peg && peg.figure ? peg.figure.growth : null;
+    const gs = peg && peg.growth ? peersOn.map((t) => peg.growth[t] && peg.growth[t].pct).filter((v) => v != null && Number.isFinite(v) && v > 0) : [], med = gs.length >= 3 ? median(gs) : null;
+    if (own > 0 && med > 0) { const ratio = own / med, credit = Math.min(GROWTH_CREDIT_MAX, Math.max(1, ratio)); growth = { own, peers: med, n: gs.length, ratio, credit }; if (credit > 1) adj.credit.peg = credit; }
+    else growth = { own: own ?? null, peers: med, n: gs.length, ratio: null, credit: 1, why: !(own > 0) ? "the company's forward EPS growth is not positive or not on file" : "fewer than three peers carry forward EPS growth" };
+  }
+  if (fx.marginGate) {
+    const own = snap.table && snap.table.company ? snap.table.company.om : null, ms = peersOn.map((t) => snap.table.peers[t] && snap.table.peers[t].om).filter((v) => v != null && Number.isFinite(v)), med = ms.length >= 3 ? median(ms) : null;
+    if (own != null && own > 0 && med != null) {
+      const ratio = med > 0 ? own / med : Infinity, apart = ratio > MARGIN_GATE || ratio < 1 / MARGIN_GATE;
+      margin = { own, peers: med, n: ms.length, ratio: Number.isFinite(ratio) ? ratio : null, off: apart };
+      if (apart) for (const k of SALES_ROWS) adj.off[k] = `operating margin ${own.toFixed(0)}% against the peers' ${med.toFixed(0)}%: more than ${MARGIN_GATE}× apart, so a dollar of sales is not worth the same`;
+    } else margin = { own: own ?? null, peers: med, n: ms.length, ratio: null, off: false, why: own == null ? "no operating margin on file" : !(own > 0) ? "the company runs at a loss: the sales rows stay (nothing else prices it)" : "fewer than three peers carry an operating margin" };
+  }
+  return { adj: adj.table || Object.keys(adj.credit).length || Object.keys(adj.off).length ? adj : null, growth, margin };
 }
