@@ -10,6 +10,8 @@ const J = (p) => JSON.parse(readFileSync(p, "utf8")), IDX = J(DATA + "/comps.jso
 const TWELVE = ["GOOGL", "AMZN", "AVGO", "NVDA", "TSM", "VST", "MU", "ORCL", "DLR", "EQIX", "SNDK", "WDC"];
 const O = await import(ROOT + "/deliverables/20261005/comps-c6/outliers.mjs"), F = await import(ROOT + "/deliverables/20261003/comps-c5/field.mjs"), L = await import(ROOT + "/deliverables/20261003/comps-c5/lines.mjs"), LAD = await import(ROOT + "/deliverables/20260929/comps-live/ladder.mjs");
 const OK = Object.entries(IDX.names).filter(([, n]) => n.ok);
+/* the nightly rebuild's neighbour: a test that names a figure of the 6 Oct close skips itself when the files are from another close; the rule tests always run */
+const SIX_OCT = IDX.today === "2026-10-06" ? {} : { skip: "the engine's files are from the " + IDX.today + " close; this test names 6 Oct figures" };
 const col = (pairs) => pairs.map(([ticker, v]) => ({ ticker, v }));
 const PACK = [["A", 10], ["B", 11], ["C", 12], ["D", 9], ["E", 10.5], ["F", 9.5], ["G", 11.5]];
 
@@ -45,7 +47,7 @@ test("the configuration that is live on the Hub carries none of the new switches
   assert.equal(O.LIVE_FX, O.CP3_ALL); for (const k of ["expensiveOnly", "lineSeats", "pegCap"]) assert.ok(!(k in O.CP3_ALL), k + " is not in the live configuration"); assert.ok(!("expensiveOnly" in O.CP4_ALL) && !("lineSeats" in O.CP4_ALL));
   assert.equal(O.CP5_ALL.expensiveOnly, true); assert.equal(O.CP5_ALL.lineSeats, true); assert.equal(O.CP5_ALL.pegCap, O.CP5_CAP); assert.equal(O.CP5_CAP, 30);
   for (const k of Object.keys(O.CP4_ALL)) if (k !== "pegCap") assert.equal(O.CP5_ALL[k], O.CP4_ALL[k], k + " as the afternoon's engine had it"); });
-test("the live rule's own answer did not move: every name's reading on the live configuration equals the one recorded before this round", () => {
+test("the live rule's own answer did not move: every name's reading on the live configuration equals the one recorded before this round", SIX_OCT, () => {
   const before = J(DATA + "/before-outlier-and-cap-fix.json"); assert.ok(Object.keys(before.names).length >= 400);
   /* the engine prints the live rule's centre beside the new one (variants.A); the tab on the same closes printed the same twelve (the release's table) */
   const rl1 = { GOOGL: 330.2, AMZN: 321.3, AVGO: 729.8, NVDA: 564.3, TSM: 525.5, VST: 181.3, MU: 1177.1, ORCL: 243.5, DLR: 208.1, EQIX: 849.0, SNDK: 990.5, WDC: 283.9 };
@@ -82,7 +84,7 @@ test("nobody is ever left out for being cheap: every peer the rule leaves out si
     for (const p of r.peers) if (p.outlier) assert.ok(r.outlier_cases.some((c) => c.ticker === p.ticker && c.verdict === "left out"), `${t}: ${p.ticker} is out and its reason is written`);
     for (const p of r.peers) if (p.spared) assert.equal(p.priced, true, `${t}: the spared ${p.ticker} prices it`); }
   assert.ok(out >= 50 && kept >= 20, `${out} left out, ${kept} kept`); });
-test("Broadcom's set shows both cases: Arm is left out for being priced far above the group, Qualcomm stays although far below", () => {
+test("Broadcom's set shows both cases: Arm is left out for being priced far above the group, Qualcomm stays although far below", SIX_OCT, () => {
   const r = name("AVGO"), arm = r.outlier_cases.find((c) => c.ticker === "ARM"), q = r.outlier_cases.find((c) => c.ticker === "QCOM");
   assert.equal(arm.verdict, "left out"); assert.match(arm.words, /^Arm is left out: it is priced far above the group on \d of the \d yardsticks/);
   assert.equal(q.verdict, "kept"); assert.equal(q.would_be_cut, true); assert.match(q.words, /^Qualcomm stays in: it is priced far below the group/); assert.match(q.words, /two-sided rule left it out/);
@@ -93,22 +95,22 @@ test("the conservative direction, measured on everything: the one-sided rule rea
   assert.ok(lower >= 40 && lower > 4 * higher, `lower on ${lower}, higher on ${higher}`); });
 
 /* ---- 5 · a business line with no peer of its own seats its two best ---- */
-test("Alphabet: Amazon and Microsoft are seated on its cloud line, and Meta no longer carries the set alone", () => {
+test("Alphabet: Amazon and Microsoft are seated on its cloud line, and Meta no longer carries the set alone", SIX_OCT, () => {
   const r = name("GOOGL"); assert.deepEqual(r.sets.seated.map((s) => s.ticker).sort(), ["AMZN", "MSFT"]); for (const s of r.sets.seated) assert.equal(s.line, "cloud");
   const w = Object.fromEntries(r.peers.map((p) => [p.ticker, p.weight_share || 0])); assert.ok(w.META < 0.35, "Meta's share of the weight: " + w.META); assert.ok(w.AMZN > 0.1 && w.MSFT > 0.1, `Amazon ${w.AMZN}, Microsoft ${w.MSFT}`);
   for (const t of ["META", "AMZN", "MSFT"]) assert.ok(r.sets.priced.includes(t), t + " prices it");
   assert.ok(r.sets.seat_lines.advertising.peers.includes("META") && r.sets.seat_lines.cloud.peers.includes("MSFT"));
   assert.ok(!r.sets.before.includes("MSFT") && !r.sets.before.includes("AMZN"), "neither was in the afternoon's set"); });
-test("neighbour: the seat adds, it never re-labels or removes — Oracle's and Broadcom's sets are the afternoon's, peer for peer", () => {
+test("neighbour: the seat adds, it never re-labels or removes — Oracle's and Broadcom's sets are the afternoon's, peer for peer", SIX_OCT, () => {
   for (const t of ["ORCL", "AVGO", "NVDA", "MU", "VST", "TSM", "DLR", "EQIX", "SNDK", "WDC", "AMZN"]) { const r = name(t); assert.deepEqual(r.sets.now, r.sets.before, t); assert.deepEqual(r.sets.seated, [], t); }
   for (const [t] of OK) { const r = name(t); for (const p of r.sets.before) assert.ok(r.sets.now.includes(p), `${t} still has ${p}`); }
   assert.ok(IDX.counts.with_a_seated_peer >= 1 && IDX.counts.with_a_seated_peer <= 12, "a handful of sets, not the universe: " + IDX.counts.with_a_seated_peer); });
-test("neighbour: a seated peer counts in full only when 15 cents of the dollar is shared; a tenth of the revenue never carries the price", () => {
+test("neighbour: a seated peer counts in full only when 15 cents of the dollar is shared; a tenth of the revenue never carries the price", SIX_OCT, () => {
   assert.equal(L.CP5_LINES_ON.lineSeats, true); assert.equal(L.CP5_LINES_ON.seatMin, 0.10); assert.ok(!("lineSeats" in L.CP4_LINES_ON) && !("lineSeats" in L.CP3_LINES_ON));
   const u = name("UBER"); for (const p of u.peers.filter((x) => x.seated)) assert.equal(p.same_business, false, "Uber's freight-line seat " + p.ticker + " blends in as adjacent"); });
 
 /* ---- 6 · "not a target" ---- */
-test("not a target: Oracle for growth, Nvidia and TSMC for the size of their peers — each in its own plain words, each well above its price", () => {
+test("not a target: Oracle for growth, Nvidia and TSMC for the size of their peers — each in its own plain words, each well above its price", SIX_OCT, () => {
   const o = name("ORCL").not_a_target, n = name("NVDA").not_a_target, t = name("TSM").not_a_target;
   assert.deepEqual(o.reasons, ["growth"]); assert.match(o.words, /^Not a target\. .* of the gap between today's price and the centre comes from the growth yardstick/);
   assert.deepEqual(n.reasons, ["size"]); assert.match(n.words, /^Not a target\. Every company that shares Nvidia's business here is a fraction of its size/); assert.deepEqual(t.reasons, ["size"]);
@@ -130,6 +132,12 @@ test("what Alan reads carries no internal codes: the cases, the not-a-target lin
   assert.ok(!/\bevenings?\b/.test(shown), "the tab says trading days"); assert.ok(!/\b(CP\d|C6b?|v[12]|rung)\b/.test(shown.replace(/cp3/g, "")), "no internal codes in what the tab draws"); });
 
 /* ---- 8 · the nightly rebuild is designed, written with its way back, and not installed ---- */
-test("the nightly rebuild: the step, its checks and its rollback are on the branch; nothing schedules it", () => {
-  const dir = ROOT + "/deliverables/20261007/comps-default/nightly"; for (const f of ["rebuild-comps.sh", "ROLLBACK.md", "com.scintilla.comps-rebuild.plist.NOT-INSTALLED"]) assert.ok(existsSync(dir + "/" + f), f);
-  const sh = readFileSync(dir + "/rebuild-comps.sh", "utf8"); assert.match(sh, /DRY_RUN/); assert.ok(!/vercel\s+--prod|git push(?! --dry-run)/.test(sh.replace(/^\s*#.*$/gm, "")), "the step itself never deploys or pushes"); });
+test("the nightly rebuild: the step, its gate and its way back are on the branch; it is dry by default, never deploys, and only ever sends a data branch", () => {
+  const dir = ROOT + "/deliverables/20261007/comps-default/nightly"; for (const f of ["rebuild-comps.sh", "inputs.mjs", "check-artifact.mjs", "DESIGN.md", "ROLLBACK.md", "com.scintilla.comps-rebuild.plist.NOT-INSTALLED"]) assert.ok(existsSync(dir + "/" + f), f);
+  const sh = readFileSync(dir + "/rebuild-comps.sh", "utf8"), code = sh.replace(/^\s*#.*$/gm, "").replace(/^\s*say .*$/gm, "");
+  assert.match(code, /MODE="\$\{MODE:-dry\}"/, "dry unless asked"); assert.match(code, /DRY_RUN:-0\}" = "1" \] && MODE=dry/, "DRY_RUN is a second lock");
+  assert.ok(!/\bvercel\b|supabase\s|\bfly\b|launchctl/.test(code), "it never deploys, writes a table, touches a machine or installs itself");
+  const pushes = code.match(/\bpush\b[^\n]*/g) || []; assert.equal(pushes.length, 1, "one push in the whole file"); assert.match(pushes[0], /origin "\$BR"/); assert.match(code, /BR="data\/comps-\$DAY"/, "and it is the night's data branch, never the live line");
+  assert.match(code, /grep -v " \$ENGINE_DIR\/data\/"/, "anything changed outside the engine's data stops the run");
+  for (const f of ["inputs.mjs", "check-artifact.mjs"]) { const js = readFileSync(dir + "/" + f, "utf8"); assert.ok(!/method:\s*["'](POST|PUT|PATCH|DELETE)/i.test(js), f + " only reads"); assert.ok(!/console\.log\([^)]*KEY/.test(js), f + " never prints the key"); }
+  assert.ok(!existsSync(dir + "/com.scintilla.comps-rebuild.plist"), "the schedule file cannot be loaded under this name"); });

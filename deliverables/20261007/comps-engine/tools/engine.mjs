@@ -35,7 +35,7 @@
    both periods 7 Oct ~18:00Z), the settled 6 Oct closes, the knockout's Geiger replay and its saved weekly bars. Read-only:
    nothing is written to any table. Run from the scratch folder (snap/, quotes-all-raw.json, geiger-year.json, channels.json):
      node engine.mjs [--out <dir>] [--cap 30|40|none] [TICKER …]        (no tickers = every company the knockout runs)        */
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, statSync } from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url)), WT = path.resolve(HERE, "../../../.."), DATA_DEFAULT = path.resolve(HERE, "../data");
 const { localPg } = await import(WT + "/deliverables/20261007/knockout/tools/local-pg.mjs");
 const { inputs: c4inputs, readSet, snapshotFromCohort } = await import(WT + "/deliverables/20261001/comps-mechanic/read.mjs");
@@ -82,7 +82,7 @@ inp.segments = J(WT + "/deliverables/20261003/comps-c5/segments-2026-10-03.json"
   inp.funds = inp.funds.map((f) => { const h = top[f.ticker] || {}; const all = new Map(f.holdings.map(([s, w]) => [String(s).toUpperCase(), w])); for (const r of h.top || []) if (r.ticker) all.set(String(r.ticker).toUpperCase(), r.weight_pct); return { ...f, all: [...all], count: h.count_in_fund || f.holdings.length }; }); }
 const KO = existsSync(WT + "/deliverables/20261007/knockout/data/knockout.json") ? J(WT + "/deliverables/20261007/knockout/data/knockout.json") : { names: {} };
 const GY = existsSync("geiger-year.json") ? J("geiger-year.json") : { names: {} }, CH = existsSync("channels.json") ? J("channels.json") : { names: {} };
-const ZONES_FILE = process.env.CP4_ZONES || WT.replace(/_worktrees\/.*$/, "_worktrees/alloc-cp4-clickthrough-20261007/data/confluence-zones-20261006.json"), ZONES = existsSync(ZONES_FILE) ? J(ZONES_FILE) : null;
+const ZONES_FILE = process.env.CP4_ZONES || WT.replace(/_worktrees\/.*$/, "_worktrees/alloc-cp4-clickthrough-20261007/data/confluence-zones-20261006.json"), ZONES = existsSync(ZONES_FILE) && statSync(ZONES_FILE).isFile() ? J(ZONES_FILE) : null;   /* CP5: run from a folder that is not beside the tool's worktree (the nightly step), the path is no file: no reviewed rails, the computed channel stands */
 const OLD_CARDS = existsSync(WT + "/deliverables/20261007/one-basis/data/cards.json") ? J(WT + "/deliverables/20261007/one-basis/data/cards.json") : { cards: {} };
 const BEFORE_FILE = DATA_DEFAULT + "/before-outlier-and-cap-fix.json", BEFORE = existsSync(BEFORE_FILE) ? J(BEFORE_FILE) : { names: {} };   /* CP5: the reading each name carried this afternoon (a dated record) */
 const r2 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100), r1 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10), r3 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 1000) / 1000);
