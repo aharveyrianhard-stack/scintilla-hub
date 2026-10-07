@@ -61,7 +61,7 @@
    five-peer floor per column. */
 import { latestDecisions, selectionOf } from "../../20260930/comps-tab/comps-tab.mjs";
 import { ROWS, TABLE, SHORT } from "../../20261001/comps-template/cohort.mjs";
-import { conclusion, pegRow, median, CP1_FIELD_ON, CP1_FIELD_OFF } from "../../20261003/comps-c5/field.mjs";
+import { conclusion, pegRow, median, CP1_FIELD_ON, CP1_FIELD_OFF, FD1_FIELD_ON, FD1_FIELD_LAST } from "../../20261003/comps-c5/field.mjs";
 import { SIM_MIN, CP1_LINES_ON, CP1_LINES_OFF } from "../../20261003/comps-c5/lines.mjs";
 
 export const CUT = 3.5, MIN_N = 5, MIN_FLAGS = 3, SHARE = 0.5, SHARE_MIN_FLAGS = 2, MAD_SCALE = 1.4826, MEANAD_SCALE = 1.2533;
@@ -167,7 +167,7 @@ export function conclusion6(snap, decisions, estimates, today, way = "C", { only
     return { ...C2, sel: { ...C2.sel, userPeers: sel.peers }, off: sel.list.length, c6: { ...C2.c6, pricedOn: "business", business: b, businessPeers: b.same, notPriced: others, wholeSet: { band: whole.band, upside: whole.upside, bandFromPeers: whole.c6.bandFromPeers, noPeerSet: whole.c6.noPeerSet, self: whole.c6.self, outliers: whole.c6.outliers, fragile: whole.c6.fragile || null } } };
   }
   if (X.consistency) rule = { ...rule, consistency: true };
-  const rows = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today) : r)) : snap.rows;
+  const rows = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today, { forward: !!X.growthForward, fromLast: !!X.growthFromLastYear }) : r)) : snap.rows;   /* FD1 growthForward: the same PEG the field prices on */
   const peers = snap.members.filter((t) => t !== T && !(snap.excluded || []).some((e) => e.ticker === t) && !sel.peers.has(t));
   const allCols = columnsOf(rows, snap.table, peers, { cellsOff: sel.cells }), cols = only ? Object.fromEntries(Object.entries(allCols).filter(([k]) => only.includes(k))) : allCols, score = scorePeers(cols, peers, rule);   /* only: a what-if on fewer columns; rule: C6_RULE reproduces C6 as first built (the report), never the tab */
   const business = businessOf(set, peers), safe = new Set(business && business.mostlyDifferent ? business.same : []);   /* C6b 4 */
@@ -211,6 +211,10 @@ export function conclusion6(snap, decisions, estimates, today, way = "C", { only
 /** Every CP1 switch of the three modules in one object, for the caller at the top of the stack. */
 export const CP1_ALL = Object.freeze({ ...CP1_LINES_ON, ...CP1_FIELD_ON, ...CP1_OUT_ON });
 export const CP1_NONE = Object.freeze({ ...CP1_LINES_OFF, ...CP1_FIELD_OFF, ...CP1_OUT_OFF });
+/** FD1 (7 Oct): CP1's twelve switches plus growth measured from one forecast year to the next (field.mjs growthForward). */
+export const FD1_ALL = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_ON, ...CP1_OUT_ON });
+/** The proposal beside it: growth from the fiscal year just reported, on the analysts' basis (field.mjs growthFromLastYear). */
+export const FD1_ALL_LAST = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_LAST, ...CP1_OUT_ON });
 export const isFlagged = (c6, peer, key) => !!(c6 && c6.cols[key] && c6.cols[key].cells[peer] && c6.cols[key].cells[peer].flag);
 const VOTING = new Set(VOTES.flatMap((v) => v.cols));
 /** Does this column count toward the verdict (a multiple), or is its mark information only? */

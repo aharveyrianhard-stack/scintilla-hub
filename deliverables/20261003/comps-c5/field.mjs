@@ -39,7 +39,21 @@
      marginGate     A sales multiple treats a dollar of sales as worth the same in every company. When the company's
                     operating margin is more than MARGIN_GATE (2) times the peers' median, or under half of it, EV/sales
                     and P/S (the same reading twice) leave the price: weight 0, the row still drawn, the reason on it.
-                    A loss-making company keeps them (nothing else prices it). */
+                    A loss-making company keeps them (nothing else prices it).
+
+   FD1 (7 Oct) · ONE MORE SWITCH, CP1's decision 2 as approved, OFF by default and not one of CP1's twelve:
+     growthForward  The growth PEG rests on is measured FROM ONE FORECAST YEAR TO THE NEXT: the compound rate from the
+                    consensus EPS of the first forecast fiscal year to the consensus of the furthest one inside
+                    PEG_YEARS_MAX — never from the trailing REPORTED EPS, which a single write-off bends (AbbVie's and
+                    Pfizer's reported earnings carried write-offs, so measured from them their "growth" read as fast as
+                    Lilly's and the credit could not tell them apart). It is the rule a foreign filer already gets here
+                    (consensusOnly), now for every company: the PEG row's multiples, the company's own growth and
+                    therefore the growth credit's ratio. What it cannot see: the fiscal year in progress, which is its
+                    starting point — a company whose year has just turned (Micron, 4 Sep) shows only the years after.
+     growthFromLastYear  (with growthForward) the starting point is the fiscal year JUST REPORTED, on the analysts' own
+                    basis (its consensus row, when the year ended within LAST_YEAR_MAX and the caller's estimates carry
+                    it), so the year in progress counts and no write-off enters. Without that row the rule is
+                    growthForward's. A proposal beside the approved rule: measured, not switched on. */
 import { median, quantile } from "../../20260927/comps-r3/r3.mjs";
 import { repriceRow, priceAt } from "../../20260929/comps-live/ladder.mjs";
 import { rangeOfMedians, middleHalfBand, upsideTo } from "../../20260928/comps-r3-labels/labels-r3.mjs";
@@ -53,6 +67,10 @@ export const OUTLIER_K = 3, OUTLIER_MIN_N = 5, MAD_SCALE = 1.4826, PEG_YEARS_MAX
 /* CP1 · the field's switches (see the header). OFF = C5 / C6b exactly. */
 export const CP1_FIELD_OFF = Object.freeze({ growthCredit: false, reitYardstick: false, marginGate: false });
 export const CP1_FIELD_ON = Object.freeze({ growthCredit: true, reitYardstick: true, marginGate: true });
+/* FD1 · CP1's field switches plus forward-to-forward growth (the header). CP1_FIELD_ON stays CP1's own three. */
+export const FD1_FIELD_ON = Object.freeze({ ...CP1_FIELD_ON, growthForward: true });
+export const FD1_FIELD_LAST = Object.freeze({ ...FD1_FIELD_ON, growthFromLastYear: true });
+export const LAST_YEAR_MAX = 1.1;   // years: "the fiscal year just reported" ended no longer ago than this
 export const GROWTH_CREDIT_MAX = 3, MARGIN_GATE = 2, SALES_ROWS = ["ev_sales", "ps"];
 export const REIT_PRIOR = { pe_ttm: 0.2, pe_fwd: 0.3, ev_ebitda: 1.5, ev_sales: 0.6, ps: 0.5, peg: 0.3, p_ffo: 1.6 };
 export const isReit = (snap) => /reit|real estate/i.test([snap.sector, snap.industry].filter(Boolean).join(" "));
@@ -98,42 +116,47 @@ export function applyField(snap, decisions, { k = OUTLIER_K, minN = OUTLIER_MIN_
 
 /* ---- PEG from forward growth --------------------------------------------------------------------- */
 /** Forward EPS growth, % a year: compound from trailing EPS to the consensus EPS three fiscal years out.
-    e: { eps_ttm, est: [{fiscal_date, eps}] } · today: ISO. Returns { pct, from, to, years, basis } or null. */
-export function pegGrowth(e, today, { consensusOnly = false } = {}) {
+    e: { eps_ttm, est: [{fiscal_date, eps}] } · today: ISO. Returns { pct, from, to, years, basis } or null.
+    consensusOnly: from the first forecast year's consensus instead of trailing EPS (a foreign filer; FD1 growthForward).
+    fromLast: with consensusOnly, from the consensus of the fiscal year just reported when e.est carries it (FD1). */
+export function pegGrowth(e, today, { consensusOnly = false, fromLast = false } = {}) {
   if (!e) return null;
-  const t0 = Date.parse(today + "T00:00:00Z"), est = (e.est || []).filter((x) => x && x.eps != null && x.fiscal_date >= today).sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date));
+  const t0 = Date.parse(today + "T00:00:00Z"), all = (e.est || []).filter((x) => x && x.eps != null && x.fiscal_date), est = all.filter((x) => x.fiscal_date >= today).sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date));
   const years = (d) => (Date.parse(d + "T00:00:00Z") - t0) / (365.25 * 86400e3);
   const far = est.filter((x) => years(x.fiscal_date) <= PEG_YEARS_MAX && x.eps > 0).pop();
   if (!far) return null;
   let base = null;
+  const last = consensusOnly && fromLast ? all.filter((x) => x.fiscal_date < today && years(x.fiscal_date) >= -LAST_YEAR_MAX && x.eps > 0).sort((a, b) => a.fiscal_date.localeCompare(b.fiscal_date)).pop() : null;
   if (e.eps_ttm > 0 && !consensusOnly) base = { eps: e.eps_ttm, years: 0, word: "trailing EPS" };
+  else if (last) base = { eps: last.eps, years: years(last.fiscal_date), word: "FY" + last.fiscal_date.slice(0, 4) + " consensus (the year just reported)" };
   else if (est[0] && est[0] !== far && est[0].eps > 0) base = { eps: est[0].eps, years: years(est[0].fiscal_date), word: "FY" + est[0].fiscal_date.slice(0, 4) + " consensus" };
   if (!base) return null;
   const span = years(far.fiscal_date) - base.years; if (!(span >= 0.75)) return null;
   const pct = (Math.pow(far.eps / base.eps, 1 / span) - 1) * 100;
   return { pct, from: base.eps, to: far.eps, years: span, to_date: far.fiscal_date, basis: `${base.word} $${base.eps.toFixed(2)} → FY${far.fiscal_date.slice(0, 4)} consensus $${far.eps.toFixed(2)}, ${span.toFixed(1)} years` };
 }
-/** The PEG row rebuilt from forward growth. estimates: { T: { eps_ttm, est } }; the company's EPS estimate for the price comes from the snapshot. */
-export function pegRow(snap, estimates, today) {
+/** The PEG row rebuilt from forward growth. estimates: { T: { eps_ttm, est } }; the company's EPS estimate for the price comes from the snapshot.
+    forward (FD1 growthForward): every company's growth from consensus to consensus, as a foreign filer's already is. */
+export function pegRow(snap, estimates, today, { forward = false, fromLast = false } = {}) {
   const T = snap.ticker, old = snap.rows.find((r) => r.key === "peg"), fwd = snap.rows.find((r) => r.key === "pe_fwd");
   const growth = {}, values = {}, peers = [];
   /* a foreign filer's consensus rows are in its own currency while trailing EPS is converted: growth from consensus to consensus */
   const foreign = (t) => { const fx = t === T ? snap.fx : snap.fx_peers && snap.fx_peers[t]; return !!(fx && fx.currency && fx.currency !== "USD"); };
   for (const t of snap.members.filter((x) => x !== T)) {
-    const g = pegGrowth(estimates[t], today, { consensusOnly: foreign(t) }), pf = fwd && fwd.values && fwd.values[t] ? fwd.values[t].multiple : null;
+    const g = pegGrowth(estimates[t], today, { consensusOnly: forward || foreign(t), fromLast: forward && fromLast }), pf = fwd && fwd.values && fwd.values[t] ? fwd.values[t].multiple : null;
     growth[t] = g;
     const m = g && g.pct > 0 && pf != null && pf > 0 ? pf / g.pct : null;
     values[t] = { multiple: m, why: m != null ? null : pf == null ? "no forward P/E" : !g ? "no forward EPS path" : "EPS is not expected to grow" };
     if (m != null) peers.push({ ticker: t, multiple: m });
   }
-  const gOwn = pegGrowth(estimates[T], today, { consensusOnly: foreign(T) }), pfOwn = fwd && fwd.own ? fwd.own.multiple : null, mOwn = gOwn && gOwn.pct > 0 && pfOwn > 0 ? pfOwn / gOwn.pct : null;
+  const gOwn = pegGrowth(estimates[T], today, { consensusOnly: forward || foreign(T), fromLast: forward && fromLast }), pfOwn = fwd && fwd.own ? fwd.own.multiple : null, mOwn = gOwn && gOwn.pct > 0 && pfOwn > 0 ? pfOwn / gOwn.pct : null;
   const epsFy1 = snap.eps_fy1, price = (m) => m != null && gOwn && gOwn.pct > 0 && epsFy1 > 0 ? m * gOwn.pct * epsFy1 : null;
   const sorted = peers.slice().sort((a, b) => a.multiple - b.multiple), vals = sorted.map((p) => p.multiple);
   const band = { n: vals.length, min: vals.length ? vals[0] : null, q1: vals.length ? quantile(vals, 0.25) : null, median: vals.length ? median(vals) : null, q3: vals.length ? quantile(vals, 0.75) : null, max: vals.length ? vals[vals.length - 1] : null };
   const at = (m, who = []) => ({ multiple: m, who, price: price(m) });
   const ends = { min: at(band.min, sorted.length ? [sorted[0].ticker] : []), q1: at(band.q1), median: at(band.median), q3: at(band.q3), max: at(band.max, sorted.length ? [sorted[sorted.length - 1].ticker] : []) };
   const ok = band.n >= 2 && ends.median.price != null;
-  return { ...(old || { key: "peg", label: "PEG", fmt: "x2" }), key: "peg", basis: "forward P/E ÷ forward EPS growth (% a year, three years out)", own: { multiple: mOwn, price: snap.price }, own_why: mOwn != null ? null : null,
+  return { ...(old || { key: "peg", label: "PEG", fmt: "x2" }), key: "peg", basis: forward ? (fromLast ? "forward P/E ÷ forward EPS growth (% a year, from the year just reported on the analysts' basis to the furthest forecast year within three and a half years)" : "forward P/E ÷ forward EPS growth (% a year, from the first forecast year to the furthest within three and a half years)") : "forward P/E ÷ forward EPS growth (% a year, three years out)", growth_from: forward ? (fromLast ? "last year" : "forecast") : "trailing", own: { multiple: mOwn, price: snap.price }, own_why: mOwn != null ? null : null,
     figure: { word: "EPS growth × EPS estimate", value: gOwn && epsFy1 != null ? gOwn.pct * epsFy1 : null, fmt: "usd2", formula: "PEG × growth % × EPS", growth: gOwn ? gOwn.pct : null, growth_basis: gOwn ? gOwn.basis : null },
     n: band.n, band, ends, peers: sorted, nm: [], missing: Object.keys(values).filter((t) => values[t].multiple == null), values, growth, upside: ok && snap.price > 0 ? (ends.median.price / snap.price - 1) * 100 : null,
     ok, reason: ok ? null : band.n < 2 ? `only ${band.n} peer${band.n === 1 ? "" : "s"} carr${band.n === 1 ? "ies" : "y"} this multiple` : null, computable: mOwn != null };
@@ -210,7 +233,7 @@ export const WAY_WORDS = {
 /** Everything the page draws for one company and one way. estimates: { T: { eps_ttm, est } } (may be empty). */
 export function conclusion(snap, decisions, estimates, today, way = "C", opts = {}) {
   const fx = opts.fx || CP1_FIELD_OFF, reit = !!(fx.reitYardstick && isReit(snap));
-  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today) : r)) : snap.rows;
+  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today, { forward: !!fx.growthForward, fromLast: !!fx.growthFromLastYear }) : r)) : snap.rows;
   if (reit) rows0 = [...rows0.filter((r) => r.key !== "p_ffo"), ffoRow(snap)];   /* CP1 reitYardstick: the seventh row */
   const snap2 = rows0 === snap.rows ? snap : { ...snap, rows: rows0 };
   const F = applyField(snap2, decisions, opts);   /* C6 passes k = Infinity: no cell leaves a centre on one flag */
@@ -244,9 +267,13 @@ export function ffoRow(snap, only = null) {
 export function fieldAdjust(snap, rows, peersOn, fx = CP1_FIELD_OFF, reit = false) {
   const adj = { table: reit ? REIT_PRIOR : null, credit: {}, off: {} }; let growth = null, margin = null;
   if (fx.growthCredit) {
-    const peg = rows.find((r) => r.key === "peg"), own = peg && peg.figure ? peg.figure.growth : null;
-    const gs = peg && peg.growth ? peersOn.map((t) => peg.growth[t] && peg.growth[t].pct).filter((v) => v != null && Number.isFinite(v) && v > 0) : [], med = gs.length >= 3 ? median(gs) : null;
-    if (own > 0 && med > 0) { const ratio = own / med, credit = Math.min(GROWTH_CREDIT_MAX, Math.max(1, ratio)); growth = { own, peers: med, n: gs.length, ratio, credit }; if (credit > 1) adj.credit.peg = credit; }
+    /* FD1 growthForward: measured from forecast years a peer's EPS can be expected to SHRINK (Pfizer, Bristol), which
+       measured from a depressed trailing figure it never did. A shrinking peer has no PEG, but it is still a peer: it
+       counts in the median the company's growth is compared with. When that median is zero or below, a growing company
+       takes the full credit. With growthForward off the rule is CP1's, to the letter: growers only. */
+    const fwdG = !!fx.growthForward, peg = rows.find((r) => r.key === "peg"), own = peg && peg.figure ? peg.figure.growth : null;
+    const gs = peg && peg.growth ? peersOn.map((t) => peg.growth[t] && peg.growth[t].pct).filter((v) => v != null && Number.isFinite(v) && (fwdG || v > 0)) : [], med = gs.length >= 3 ? median(gs) : null;
+    if (own > 0 && med != null && (med > 0 || fwdG)) { const ratio = med > 0 ? own / med : Infinity, credit = Math.min(GROWTH_CREDIT_MAX, Math.max(1, ratio)); growth = { own, peers: med, n: gs.length, ratio: Number.isFinite(ratio) ? ratio : null, credit, from: fwdG ? (fx.growthFromLastYear ? "last year" : "forecast") : "trailing" }; if (credit > 1) adj.credit.peg = credit; }
     else growth = { own: own ?? null, peers: med, n: gs.length, ratio: null, credit: 1, why: !(own > 0) ? "the company's forward EPS growth is not positive or not on file" : "fewer than three peers carry forward EPS growth" };
   }
   if (fx.marginGate) {
