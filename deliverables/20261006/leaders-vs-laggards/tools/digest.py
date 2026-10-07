@@ -62,6 +62,13 @@ def fit(x, limit=1900):   # the reader takes lines up to 2,000 characters: short
         for k in ("events", "story", "last_report", "customers_words"): x[k] = x[k][:cut]
     return c(x)
 lines += ["## THE NAMES, ONE PER LINE (leaders, then laggards, then the five named mid-field)"] + [fit(x) for x in out["names"]]
+K = S["checks"]
+lines += ["## FOUR CHECKS ON THE FINDING",
+          c({"check": "each leader and laggard against its OWN comps' median in the run", "beat": K["beat_own_comps"]["beat"], "fell_behind": K["beat_own_comps"]["behind"], "leaders_that_beat": K["beat_own_comps"]["leaders_that_beat"], "laggards_that_beat": K["beat_own_comps"]["laggards_that_beat"]})] + \
+         [c({"condition": x["words"], "beat_its_comps": f'{x["a_yes"]} of {x["a_n"]}', "fell_behind": f'{x["b_yes"]} of {x["b_n"]}', "gap_points": x["gap_points"], "how_sure": x["strength"]}) for x in K["beat_own_comps"]["conditions"]] + \
+         [c({"check": "ticks all four: guidance raised, earnings estimate raised, profitable, free cash flow above zero", "leaders": f'{K["ticks_every_box"]["leaders"]} of {K["ticks_every_box"]["leaders_total"]}', "laggards": f'{K["ticks_every_box"]["laggards"]} of {K["ticks_every_box"]["laggards_total"]}', "named_mid": f'{K["ticks_every_box"]["named_mid"]} of {K["ticks_every_box"]["named_mid_total"]}', "names_and_ranks": [[b["ticker"], b["group"], b["rank"]] for b in K["ticks_every_box"]["names"]]}),
+          c({"check": "bigger estimate raise, bigger move (profitable names with a then-and-now pair)", "names": K["size_of_raise"]["n"], "rank_correlation_with_the_run": r(K["size_of_raise"]["rank_corr_with_run"], 2), "rank_correlation_with_3_months": r(K["size_of_raise"]["rank_corr_with_3m"], 2)}),
+          c({"check": "who added the dollars in the run (whole field, Hub profile value x price change 15 Sep -> 5 Oct), $B", "field_added": r(K["who_added_the_dollars"]["field_added_b"]), "leaders_added": r(K["who_added_the_dollars"]["leaders_added_b"]), "laggards_added": r(K["who_added_the_dollars"]["laggards_added_b"]), "top5_share_of_field_gain": r(K["who_added_the_dollars"]["top5_share"], 2), "top3_leaders_share_of_leader_value": r(K["who_added_the_dollars"]["top3_leaders_share_of_leader_value"], 2), "top": [[a["ticker"], a["group"], a["rank"], r(a["added_b"])] for a in K["who_added_the_dollars"]["top"]]})]
 lines += ["## DATA QUALITY", c(out["data_quality"])]
 open(os.path.join(D, "digest.txt"), "w").write("\n".join(lines) + "\n")
 print("digest.txt", os.path.getsize(os.path.join(D, "digest.txt")), "bytes,", len(lines), "lines, longest", max(len(l) for l in lines))
