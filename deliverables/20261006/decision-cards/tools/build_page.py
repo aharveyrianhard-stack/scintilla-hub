@@ -128,7 +128,7 @@ def ladder_mu(W=640, H=560, narrow=False):
         v = T[f"sma{k}"]; y = Y(v); ty = y + 4
         if lastr is not None and ty - lastr < gap: ty = lastr + gap
         mc = UP if T[f"sma{k}_rising"] else DN
-        lab = f'{k}D {v:,.0f}' if narrow else f'{word} · {px(v)} · {"RISING" if T[f"sma{k}_rising"] else "FALLING"}{" · MAGNET" if k == 100 else ""}'
+        lab = f'{k}D {v:,.0f}' if narrow else f'{word} · {px(v)} {"▲" if T[f"sma{k}_rising"] else "▼"}{" · MAGNET" if k == 100 else ""}'
         lastr = ty; o.append(f'<line x1="{x0}" y1="{y:.1f}" x2="{x1}" y2="{y:.1f}" stroke="{mc}" stroke-width="1.2" stroke-dasharray="5 4"/><line x1="{x1}" y1="{y:.1f}" x2="{x1+14}" y2="{ty-4:.1f}" stroke="{FAINT}" stroke-width="1"/><text x="{x1+17}" y="{ty:.1f}" fill="{mc}">{lab}</text>')
     y = Y(price); cw = 118 if narrow else 132
     o.append(f'<line x1="{x0-6}" y1="{y:.1f}" x2="{x1+6}" y2="{y:.1f}" stroke="{INK}" stroke-width="2.5"/><rect x="{x1-cw}" y="{y-FS-10:.1f}" width="{cw}" height="{FS+6}" fill="#0a0a0c"/><text x="{x1-4}" y="{y-8:.1f}" fill="{INK}" font-weight="700" text-anchor="end">CLOSE {px(price)}</text>')
