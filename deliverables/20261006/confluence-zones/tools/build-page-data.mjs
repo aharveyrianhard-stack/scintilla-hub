@@ -64,7 +64,9 @@ const data = {
   names: Object.fromEntries(Object.entries(run.results).map(([t, r]) => [t, name(t, r)])), pairs,
   closes: { MU: run.closes.MU, DRAM: run.closes.DRAM, SMH: run.closes.SMH },
   load: load ? { run_id: load.receipt_row.run_id, counts: load.receipt_row.counts, applied: load.applied, sample: load.sample_zone_rows.map((r) => ({ path: r.path, kind: r.kind, lo: r.low, hi: r.high, side: r.side, d: r.distance_pct, n: r.member_count, ms: r.multi_source, rank: r.rank_on_side, last: r.last_session, labels: r.labels })) } : null,
-  parity: parity ? { native_read_at: parity.native_read_at, summary: parity.summary, symbols: parity.symbols.map((s) => ({ t: s.ticker, native: s.native_labels, equal: s.equal })) } : null,
+  parity: parity ? { native_read_at: parity.native_read_at, summary: parity.summary, symbols: parity.symbols.map((s) => ({ t: s.ticker, native: s.native_labels, equal: s.equal })),
+    grid: parity.source_bar_grid ? { three_day: [parity.source_bar_grid.three_day.on_grid, parity.source_bar_grid.three_day.checked], two_week: [parity.source_bar_grid.two_week.on_grid, parity.source_bar_grid.two_week.checked], names: parity.source_bar_grid.by_symbol.filter((r) => !parity.source_bar_grid.not_comparable.tickers.includes(r.ticker)).length, not_comparable: parity.source_bar_grid.not_comparable.tickers } : null } : null,
+  warnings: run.warnings || [],
 };
 const OUT = path.join(HERE, "..", "data");
 fs.mkdirSync(OUT, { recursive: true });
