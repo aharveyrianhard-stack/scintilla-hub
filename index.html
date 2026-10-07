@@ -11639,6 +11639,18 @@ function renderNews(cohort) {                            // paints from the per-
   if (sl) sl.textContent = S.tq || cohort;
 }
 const newsInScope = (n) => scopeItems([n], S.coh, S.tq, S.fav, COHSETS).length > 0;   // realtime gate
+/* RM1 (7 Oct 2026) — A LIVE HEADLINE JOINS A LIST THE WAY A PULL WOULD HAVE DELIVERED IT: in date order, and the list
+   stays the newest NEWS_LIMIT. Every arriving headline was pushed onto every list that had ever been opened and nothing
+   was ever taken off: a pull holds 120, but the table gains 5,800 to 8,700 headlines a day (MEASURED 7 Oct; 1,800 to
+   2,600 of them for the FAVORITES names), each arrival re-sorted the whole list, and with the NEWS room on screen each
+   one repainted every headline in it. A list read fresh already holds exactly these rows, so nothing shown changes on
+   the day; only a list left open no longer grows without end. */
+function newsCachePush(items, row, order, limit) {
+  items.push(row);
+  items.sort(order);
+  if (items.length > limit) items.length = limit;
+  return items;
+}
 function newsRoomHTML() {
   /* FIX 5 (R37) — restore the cohort tabs in NEWS so headlines can be scoped by
      cohort (FAV/ALL/AI HW/…). Same shared strip + data-act="coh" wiring the board
@@ -26950,7 +26962,7 @@ if (sb) {
       return ta < tb ? 1 : -1;                              // newest first
     };
     for (const [key, ent] of NEWS_CACHE)                    // FIX A3 — feed every cached scope the item belongs to
-      if (newsItemInKey(p.new, key)) { ent.items.push(p.new); ent.items.sort(tsDesc); }
+      if (newsItemInKey(p.new, key)) newsCachePush(ent.items, p.new, tsDesc, NEWS_LIMIT);   // RM1 — and keep it the newest NEWS_LIMIT
     if (el("newsList") && S.sec === "NEWS" && newsInScope(p.new))
       renderNews(S.coh);                                    // re-render in true order (list + rail + dedupe)
   }).subscribe();
@@ -27114,6 +27126,7 @@ loadSentiment(); setInterval(loadSentiment, 300000);
       g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.32);
       o.connect(g); g.connect(ac.destination);
       o.start(ac.currentTime); o.stop(ac.currentTime+0.34);
+      scAudioDone(ac, o, 1500);   /* RM1 — the sound channel is closed when the note ends (see scAudioDone) */
     }catch(e){}
   }
 
@@ -27389,11 +27402,32 @@ function updateLive(){
     }
   }catch(e){}
 }
+/* RM1 (7 Oct 2026) — A SOUND CHANNEL THAT IS OPENED IS CLOSED. The news chime and the feed-down alarm each opened a
+   new AudioContext and left it open. A browser never takes an open one back: it keeps its own real-time thread and
+   its buffers until the page goes away. MEASURED headless (deliverables/20261007/rm1-memory): 40 chimes left 40
+   contexts alive after a forced collection - about 1.2 threads and 1 to 2 MB each, and together 11% of one core
+   while silent - and closing each as its note ended gave all of it back. The chime can ring every four minutes
+   all day, so an open Hub gathered them by the hundred.
+   The channel is closed when the last note ends, or after `afterMs` if it never plays (a browser that has not been
+   clicked yet holds sound back; the old code would then ring minutes late, on the first click). Once only. */
+function scAudioDone(ac, lastNote, afterMs) {
+  var closed = false;
+  var close = function () {
+    if (closed) return;
+    closed = true;
+    try { if (ac && ac.state !== "closed" && typeof ac.close === "function") ac.close(); } catch (e) {}
+  };
+  try { if (lastNote) lastNote.onended = close; } catch (e) {}
+  setTimeout(close, afterMs);
+  return close;
+}
 function scAlert(msg){
   try{
     var ac = new (window.AudioContext||window.webkitAudioContext)();
     if(ac.state==="suspended" && ac.resume){ ac.resume(); }
-    [0,0.2,0.4].forEach(function(t){ var o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.0001, ac.currentTime+t); g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime+t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+t+0.16); o.start(ac.currentTime+t); o.stop(ac.currentTime+t+0.17); });
+    var last = null;
+    [0,0.2,0.4].forEach(function(t){ var o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.0001, ac.currentTime+t); g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime+t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+t+0.16); o.start(ac.currentTime+t); o.stop(ac.currentTime+t+0.17); last = o; });
+    scAudioDone(ac, last, 2500);   /* RM1 — closed after the third beep */
   }catch(e){}
   try{ document.title = "🔴 FEED DOWN · SCINTILLA"; }catch(e){}
   try{ console.warn("SCINTILLA ALERT:", msg); }catch(e){}
