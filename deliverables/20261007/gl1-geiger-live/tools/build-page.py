@@ -36,6 +36,7 @@ for i, r0 in enumerate(ms[0]["rows"]):
     body += '<tr><td class="t">%s</td>%s</tr>' % (r0["symbol"], cells)
 equal = " · ".join("%s: %d of %d equal" % (labels.get(m["moment"], m["moment"]), m["equal_to_two_decimals__publisher_vs_oscillator_every_rung"], m["names"]) for m in ms)
 inst = max(m["max_gap__publisher_vs_installed"] for m in ms)
+inst_c = max(r["gap_publisher_vs_installed"]["c"] for m in ms for r in m["rows"])
 size = logp["size"]
 
 page = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -101,7 +102,7 @@ details{ margin:18px 0 0; border-top:1px solid var(--line); padding-top:10px; } 
 <h2>5 · Does it match the oscillator? Twenty names, three moments today</h2>
 <p>%(equal)s — to two decimals on Geiger, trend and momentum; in fact to four. "Our publisher" is the new production code fed the provider's finished bars and our stored minutes. "The oscillator's formula" is the TradingView script's own arithmetic, written out and run on 30-minute and daily bars the way TradingView builds them.</p>
 <div class="scroll"><table><tr><th rowspan="2">name</th>%(head)s</tr><tr>%(sub)s</tr>%(body)s</table></div>
-<p><b>One difference found, and it is in the oscillator, not the Hub.</b> The script on your charts holds its 3-day and weekly parts until the last trading day inside each bar. The new rule counts them as they build, as you asked. Until the script's small change (version 4, in this folder, not installed) is saved, the Hub and the oscillator can differ on those two parts: about 0.01 on most names, up to %(inst)s today (Vistra). After it, they are the same number. The coordinator can also hold the Hub to the oscillator's rule for a day with one setting.</p>
+<p><b>One difference found, and it is in the oscillator, not the Hub.</b> The script on your charts holds its 3-day and weekly parts until the last trading day inside each bar. The new rule counts them as they build, as you asked. Until the script's small change (version 4, in this folder, not installed) is saved, the Hub and the oscillator can differ on those two parts: about 0.01 on most names, up to %(inst_c)s on the Geiger itself and %(inst)s on momentum today (Vistra). After it, they are the same number. The coordinator can also hold the Hub to the oscillator's rule for a day with one setting.</p>
 <p><small>What this check is not: a comparison of TradingView's price feed with ours, name by name. Both sides here read our provider. The one true TradingView reading on file is Micron at 11:22, above: Geiger and trend equal, momentum 0.33 against 0.32.</small></p>
 
 <h2>6 · The log — "to watch how it would have looked before"</h2>
@@ -156,7 +157,7 @@ out = page % dict(
     s_st_cat=shot("station-chip-CAT-after-420.png", "Eight-chart size, Caterpillar: Geiger −0.15; trend still up (short green bar), momentum down (long red bar).", "narrow"),
     s_st_vst=shot("station-chip-VST-after-420.png", "Eight-chart size, Vistra.", "narrow"),
     n_fav=len(names), median="%.2f" % median, n10=sum(1 for g in gaps if g >= 0.10), fav=fav,
-    equal=equal, head=head, sub=sub, body=body, inst="%.2f" % inst,
+    equal=equal, head=head, sub=sub, body=body, inst="%.2f" % inst, inst_c="%.2f" % inst_c,
     rows="{:,}".format(size["rows_per_session_day"]), mb="%.1f" % size["total_mb_per_session_day"], gb="%.1f" % size["steady_state"]["gb"])
 open(os.path.join(D, "GL1-GEIGER-LIVE.html"), "w", encoding="utf-8").write(out)
 print("GL1-GEIGER-LIVE.html", len(out), "bytes ·", len(names), "names · median gap", "%.3f" % median, "· moved ≥0.10:", sum(1 for g in gaps if g >= 0.10))
