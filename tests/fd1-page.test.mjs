@@ -48,6 +48,12 @@ test("what the page prints is what the data holds", () => {
   const y = RV.names.MU.years.fy1; assert.equal(y.eps.on_the_date.copies, 3); assert.equal(y.eps.on_the_fiscal_year.copies, 4); assert.equal(y.eps.on_the_fiscal_year.pct, 12.4); has("+12.4%"); has("+24.5%");
   assert.equal(Object.values(RV.names).filter((n) => n.key_moved).map((n) => 1).length, 4);
   assert.equal(RR.names.LLY.cp1.upside_pct, -35.9); assert.equal(RR.names.LLY.fd1.upside_pct, -30.6); assert.equal(RR.names.VST.cp1.upside_pct, 22.2); assert.equal(RR.names.VST.fd1.upside_pct, 25.1); has("−36% → −31%"); has("+22% → +25%");
+  /* a number means the same thing in the knockout and on the COMPS tab: for all 26 names the fixed feed's trailing P/E,
+     forward P/E and P/S are the comps reader's own (on today's market values), from two separate runs of two programs */
+  let compared = 0;
+  for (const s of KO.cards) { const a = A.figures[s], m = RR.names[s].cp1_mv.multiples[s];
+    for (const [fk, mk] of [["pe", "pe_ttm"], ["fwd_pe", "pe_fwd"], ["ps", "ps"]]) { if (a[fk] == null || m[mk] == null || a[fk] <= 0) continue; assert.ok(Math.abs(a[fk] - m[mk]) <= 0.006 * Math.abs(m[mk]) + 0.006, `${s} ${fk}: feed ${a[fk]} · comps ${m[mk]}`); compared++; } }
+  assert.ok(compared >= 70, compared + " figures compared");
   /* every one of the 26 is on the page, the eighteen in both charts */
   for (const s of KO.cards) assert.ok(body.includes(`<b>${s}</b>`), s); assert.equal(KO.eighteen.length, 18); assert.equal(KO.cards.length, 26);
   assert.equal(KO.before.non_get_blocked, 0); assert.equal(KO.after.non_get_blocked, 0); assert.deepEqual(KO.after.page_errors, []);

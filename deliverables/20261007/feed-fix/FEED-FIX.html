@@ -170,7 +170,7 @@ node deliverables/20261007/feed-fix/tools/comps-rerun.mjs --out memory.json MU S
 <li>A figure that is not held is blank, never zero. The pages already read a blank as "not held".</li>
 <li>Every read is in a fixed order and is read to its end, so the answer no longer depends on how many names are asked for.</li>
 </ul>
-<p>Micron's trailing and forward P/E now come out at 14.09 and 6.02, the same as the COMPS tab to the digit.</p>
+<p>Micron's trailing and forward P/E now come out at 14.09 and 6.02, the same as the COMPS tab to the digit. Checked for all 26 card names: the fixed feed's trailing P/E, forward P/E and P/S equal the COMPS tab's own (on today's market values) to two decimals, and its sales growth equals the tab's for 24 of the 26. The two that differ are the two restated years: Western Digital (+36% here, +13% on the tab) and Nebius (+351% here, +461% on the tab).</p>
 
 <h4>1 · WHERE THE NUMBERS ON THE FEED PANELS COME FROM</h4>
 <p>"As the live tool was told": the live allocation tool, run in a hidden browser at 02:44 ET on 7 October, its own requests to the deployed feed. "On the fixed feed": the same tool in the same minute, with only the feed's answers swapped for what the new code returns from the same tables. Nothing was deployed to do this. The knockout score is the tool's own, unchanged: price, growth, margin and leverage against the name's business line. The tool priced 1,211 symbols; 387 of them have an estimate on file.</p>
@@ -219,6 +219,15 @@ node deliverables/20261007/feed-fix/tools/comps-rerun.mjs --out memory.json MU S
 <li>The allocation repository was not touched: the fault is not there.</li>
 <li>The earlier lane's flag tool on another branch still groups copies by exact date; it was not changed from here.</li>
 <li>No Hermes report (blocked for an earlier lane and not retried) and no Linear or Notion update.</li>
+</ul>
+
+<h4>HOW EACH PIECE IS SWITCHED ON — NOTHING IS ON TODAY</h4>
+<ul>
+<li><b>The feed.</b> One command for the coordinator, from the Hub checkout on this branch: <code>supabase functions deploy comps-feed --project-ref wadinxqplrggagkvrdag --no-verify-jwt</code>. Then check what is live: <code>curl -s "https://wadinxqplrggagkvrdag.supabase.co/functions/v1/comps-feed?syms=MU&amp;format=json"</code> must answer <code>comps-feed-v6</code> with Micron's forward year 2027-09-03 and a forward P/E near 6. The way back: the old program is kept byte for byte as <code>supabase/functions/comps-feed/index.ts.ROLLBACK-v5-20260720</code>; put it back as <code>index.ts</code> and deploy again. The allocation tool and the Station need no change.</li>
+<li><b>The cards' revision line.</b> Already in the card tool; it takes effect the next time the cards are built.</li>
+<li><b>Today's market values in comps.</b> The reader takes one option, <code>marketValueFrom: "profile"</code>; the COMPS tab and the card job pass it once Alan says so.</li>
+<li><b>Growth from one forecast year to the next.</b> The caller passes <code>FD1_ALL</code> in place of <code>CP1_ALL</code> (or <code>FD1_ALL_LAST</code> for the proposal).</li>
+<li><b>The foreign peers.</b> The facts file dropped beside the comps code is picked up by itself.</li>
 </ul>
 
 <h4>HOW IT WAS CHECKED</h4>
