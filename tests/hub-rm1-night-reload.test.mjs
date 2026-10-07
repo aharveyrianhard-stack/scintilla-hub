@@ -182,6 +182,15 @@ test("the place is restored by pressing the Hub's own controls, and kept in this
   assert.doesNotMatch(keep + block, /fetch\(|operatorWrite|\.insert\(|\.upsert\(/, "keeping a place never talks to the server");
 });
 
+test("a panel is put back when it is long enough, again if a late repaint moves it, and never once a hand touches the page", () => {
+  const block = page.slice(page.indexOf("function hubRestorePlace()"), page.indexOf("/* R19 — PWA SELF-UPDATE"));
+  assert.match(block, /if \(touched \|\| !n \|\| !\(n\.scrollHeight - n\.clientHeight >= it\.top && n\.scrollWidth - n\.clientWidth >= it\.x\)\) continue;/, "only a panel long enough to be there, and only while nobody has touched the page");
+  assert.match(block, /if \(Math\.abs\(n\.scrollTop - it\.top\) > 2 \|\| Math\.abs\(n\.scrollLeft - it\.x\) > 2\) \{ n\.scrollTop = it\.top; n\.scrollLeft = it\.x; it\.heldAt = now; \}/, "moved by a repaint: put back, and the 8 s start again");
+  assert.match(block, /if \(touched \|\| \+\+tries >= 120 \|\| left\.every\(\(it\) => it\.heldAt && now - it\.heldAt >= 8000\)\) \{\n\s+clearInterval\(timer\);/, "it ends: a touch, a minute, or every panel still for 8 s");
+  assert.match(block, /const kinds = \["pointerdown", "wheel", "keydown", "touchstart"\];/);
+  assert.match(block, /kinds\.forEach\(\(kind\) => \{ try \{ window\.removeEventListener\(kind, touch, \{ capture: true \}\); \} catch \(_\) \{\} \}\);/, "and takes its own listeners away when it does");
+});
+
 test("R19 and K3 are as they were: the resume check and the quiet poll", () => {
   assert.match(page, /if \(et && SC_ETAG_SEEN && et !== SC_ETAG_SEEN\) \{ location\.reload\(\); return; \}/, "R19");
   assert.match(page, /\}, HUB_SELF_UPDATE_EVERY_MS\);/, "K3's cadence");
