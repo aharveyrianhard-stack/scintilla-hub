@@ -36,7 +36,7 @@ const tile = (label, before, after, note = "") => `<div class="tile"><div class=
 const fact = (label, value, note = "") => `<div class="tile"><div class="tl">${esc(label)}</div><div class="tv"><b>${esc(value)}</b></div>${note ? `<div class="tn">${esc(note)}</div>` : ""}</div>`;
 
 /* ---- 1 · the feed ------------------------------------------------------------------------------------- */
-const G = { lo: -100, hi: 450, ticks: [-100, 0, 100, 200, 300, 400] }, S = { lo: 0, hi: 1, ticks: [0, 0.25, 0.5, 0.75, 1] };
+const G = { lo: -100, hi: 520, ticks: [-100, 0, 100, 200, 300, 400, 500] }, S = { lo: 0, hi: 1, ticks: [0, 0.25, 0.5, 0.75, 1] };
 const growthRows = KO.eighteen.map((t) => { const b = B.figures[t], a = A.figures[t], gb = b && b.rev_growth != null ? b.rev_growth * 100 : null, ga = a && a.rev_growth != null ? a.rev_growth * 100 : null;
   return dbRow(t, NAME[t], [{ v: gb, cls: "was" }, { v: ga, cls: "now" }], G.lo, G.hi, G.ticks, 0, `<span class="was">${sgn(gb)}</span><span class="arr">→</span><b>${sgn(ga)}</b>`, `${NAME[t] || t} · sales, a year on a year · the tool was told ${sgn(gb)} · the rows say ${sgn(ga)}`); }).join("");
 const scoreRows = KO.eighteen.map((t) => { const b = EB[t], a = EA[t], sb = b ? b.score : null, sa = a ? a.score : null;

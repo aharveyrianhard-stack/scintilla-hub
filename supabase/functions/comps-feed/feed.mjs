@@ -29,10 +29,14 @@
 //     after the one before; when four are not on file, the last fiscal year. Never one quarter against a year.
 //   · rev_growth  = those twelve months over the twelve months before (eight consecutive quarters), else the last
 //                   fiscal year over the one before. A fraction: 2.56 = +256%.
-//   · A RESTATED YEAR: when the four quarters on file for a fiscal year do not add up to that year's own row (more
-//     than 2% apart), the year was restated after the quarters were filed — Western Digital's FY2025 row is the
-//     drives business alone, 9.5bn, while its December 2024 quarter still carries SanDisk, so the quarters add to
-//     11.4bn. Those quarters are not like for like, so they are not summed: the fiscal-year rows are used instead.
+//   · A RESTATED YEAR: when the four quarters on file for a fiscal year add up to MORE than that year's own row (by
+//     more than 2%), the year row was restated after a business was sold or spun off and some quarter still carries
+//     it — Western Digital's FY2025 row is the drives business alone, 9.5bn, while its December 2024 quarter still
+//     carries SanDisk, so the quarters add to 11.4bn. A restatement for a sold business only ever takes sales OUT, so
+//     of two figures for one year the smaller is the like-for-like one: those quarters are not summed and the
+//     fiscal-year rows are used instead. (On 7 Oct: WDC, AppLovin, American Tower, Honeywell.) When it is the quarters
+//     that add up to LESS than the year row (Crown Castle, Kimberly-Clark, Nebius …) the quarters are the restated
+//     side, and they are used as they are — the comps tab's rule, unchanged.
 //   · PRICE AND MARKET VALUE ARE TODAY'S, TOGETHER: company_profile's price and market_cap (the profile is refreshed
 //     every day at 06:25Z by fmp-backfill; its market value is its price × its shares), the rule C5b already uses
 //     for a foreign reporter. Only when a company has no profile figures, or its profile row is more than
@@ -106,13 +110,21 @@ export function quarterRun(rows) {
 }
 
 export const RECONCILE_TOL = 0.02;   // the four quarters of a fiscal year against the year's own row
-/** The fiscal years whose four quarters on file do NOT add up to the year's own row for `key` — restated years.
-    Only a year with its FY row and all four quarters on file can be judged; any other year is taken as filed. */
+/** The fiscal years whose four quarters on file add up to MORE than the year's own row for `key` — the year row was
+    restated (a sold business taken out) and a quarter still carries it. Only a year with its FY row and all four
+    quarters on file can be judged; any other year is taken as filed. A year whose quarters add up to LESS than its row
+    is not returned: there the quarters are the restated side (see the header). */
 export function restatedYears(rows, key = "revenue", tol = RECONCILE_TOL) {
-  const out = new Set(), years = new Map();
-  for (const r of rows || []) { const y = num(r.fiscal_year); if (y == null) continue; if (!years.has(y)) years.set(y, { fy: null, q: [] }); const g = years.get(y); if (isFY(r)) g.fy = num(r[key]); else if (isQ(r)) g.q.push(num(r[key])); }
-  for (const [y, g] of years) { if (g.fy == null || g.q.length !== 4 || g.q.some((v) => v == null)) continue; const sum = g.q.reduce((a, b) => a + b, 0); if (Math.abs(sum - g.fy) > tol * Math.abs(g.fy)) out.add(y); }
+  const out = new Set();
+  for (const [y, g] of yearSums(rows, key)) if (g.sum != null && g.fy > 0 && g.sum > g.fy * (1 + tol)) out.add(y);
   return out;
+}
+/** Per fiscal year: the year's own row and the sum of its four quarters (null unless all four are on file). */
+export function yearSums(rows, key = "revenue") {
+  const years = new Map();
+  for (const r of rows || []) { const y = num(r.fiscal_year); if (y == null) continue; if (!years.has(y)) years.set(y, { fy: null, q: [] }); const g = years.get(y); if (isFY(r)) g.fy = num(r[key]); else if (isQ(r)) g.q.push(num(r[key])); }
+  for (const g of years.values()) g.sum = g.fy != null && g.q.length === 4 && !g.q.some((v) => v == null) ? g.q.reduce((a, b) => a + b, 0) : null;
+  return years;
 }
 
 /** Twelve months of one flow and the twelve before: { now, prior, basis: "TTM" | "FY" | null, to }. The comps tab's flow(),

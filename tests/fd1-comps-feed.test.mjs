@@ -110,7 +110,7 @@ test("a quarter's estimate never enters the forward P/E; the nearest fiscal year
   const loss = rowOf("NBIS"); assert.equal(loss.fwd_pe, null, "a loss has no forward P/E: blank, not 0"); assert.ok(loss.pe < 0 && loss.ps > 0, "the page falls to P/S for a loss-maker, as before");
 });
 test("twelve months are the comps tab's twelve months (comps.mjs flow), number for number", () => {
-  for (const t of ["MU", "SNDK", "NVDA", "GOOGL", "ORCL", "TSM", "STX"]) {
+  for (const t of ["MU", "SNDK", "NVDA", "GOOGL", "ORCL", "TSM", "STX", "NBIS"]) {
     const h = of(T.history, t), k2 = k2flow(h.filter((r) => r.period !== "FY"), h.filter((r) => r.period === "FY"), "revenue"), mine = F.flow(h, "revenue");
     assert.equal(mine.now, k2.now, t + " now"); assert.equal(mine.prior, k2.prior, t + " the year before"); assert.equal(mine.basis, k2.basis, t); assert.equal(mine.to, k2.to, t);
   }
@@ -120,7 +120,7 @@ test("twelve months are the comps tab's twelve months (comps.mjs flow), number f
   assert.ok(rowOf("ORCL").rev_growth > 0 && rowOf("ORCL").rev_growth < 1, "Oracle: a year over a year — v5 read −71% (a quarter over a fiscal year)");
   assert.ok(FX.v5.answered_batch60.ORCL.rev_growth < 0.05, "v5 in the same minute: " + FX.v5.answered_batch60.ORCL.rev_growth);
 });
-test("a restated year: Western Digital's FY2025 quarters still carry SanDisk, so they are not summed — the fiscal years are", () => {
+test("a restated year: Western Digital's FY2025 quarters still carry SanDisk, so they are not summed — the fiscal years are; quarters that add up to less are left alone", () => {
   const h = of(T.history, "WDC");
   assert.deepEqual([...F.restatedYears(h)], [2025]);
   const q25 = h.filter((r) => r.fiscal_year === 2025 && r.period !== "FY").reduce((s, r) => s + r.revenue, 0), fy25 = h.find((r) => r.fiscal_year === 2025 && r.period === "FY").revenue;
@@ -131,11 +131,14 @@ test("a restated year: Western Digital's FY2025 quarters still carry SanDisk, so
   assert.equal(r.basis.sales, "TTM", "the newest four quarters add up to FY2026: they are used");
   near(r.ps, of(T.profiles, "WDC")[0].market_cap / 12919000000, 1e-9);
   assert.deepEqual([...F.restatedYears(of(T.history, "MU"))], []); assert.deepEqual([...F.restatedYears(of(T.history, "SNDK"))], []);
-  /* Nebius: FY2024's row (117m) is 10% above its quarters (105m) — restated too, so the year before is not summed */
-  assert.deepEqual([...F.restatedYears(of(T.history, "NBIS"))], [2024]); assert.match(rowOf("NBIS").basis.growth, /restated/); assert.equal(rowOf("NBIS").basis.sales, "TTM");
-  /* a year is judged only with its row and all four quarters; within 2% it is as filed */
+  /* the other direction — Nebius: its 2024 quarters add up to LESS (105m) than the year row (117m). A sold business only
+     ever takes sales out, so there the quarters are the restated side: they are summed as they are, the comps tab's rule */
+  const nb = F.yearSums(of(T.history, "NBIS")).get(2024); assert.ok(nb.sum < nb.fy * 0.95, `${nb.sum} against ${nb.fy}`);
+  assert.deepEqual([...F.restatedYears(of(T.history, "NBIS"))], []); assert.equal(rowOf("NBIS").basis.growth, "twelve months over the twelve before"); assert.equal(rowOf("NBIS").basis.sales, "TTM");
+  /* a year is judged only with its row and all four quarters; within 2% it is as filed; only quarters that add up to MORE count */
   const y = (fy, qs) => [{ period: "FY", fiscal_year: 2025, fiscal_date: "2025-12-31", revenue: fy }, ...qs.map((v, i) => ({ period: "Q" + (i + 1), fiscal_year: 2025, fiscal_date: `2025-${String(3 * (i + 1)).padStart(2, "0")}-28`, revenue: v }))];
   assert.deepEqual([...F.restatedYears(y(100, [25, 25, 25, 26.9]))], []); assert.deepEqual([...F.restatedYears(y(100, [25, 25, 25, 28]))], [2025]); assert.deepEqual([...F.restatedYears(y(100, [25, 25, 25]))], []);
+  assert.deepEqual([...F.restatedYears(y(100, [20, 20, 20, 20]))], [], "quarters below the year row: the quarters stand"); assert.equal(F.yearSums(y(100, [25, 25, 25])).get(2025).sum, null); assert.equal(F.yearSums(y(100, [25, 25, 25, 28])).get(2025).sum, 103);
 });
 test("one currency per multiple (C5b): TSMC's EPS and sales are put in dollars at the stored rate; with no rate the multiples are withheld, never mixed", () => {
   const f = of(T.fundamentals, "TSM")[0], pr = of(T.profiles, "TSM")[0], rate = F.rateToUsd("TWD", T.fx, TODAY), r = rowOf("TSM");
