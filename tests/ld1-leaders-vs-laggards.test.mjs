@@ -150,5 +150,9 @@ test("LD1 second pass: the page carries the Cerebras picture and the re-check, a
   assert.match(PAGE, /11 · THE SECOND PASS, 7 OCT: WHAT WAS RE-READ FIRST-HAND/);
   assert.equal((PAGE.match(/<svg /g) || []).length, 2, "two pictures drawn as SVG: the field, and Cerebras");
   assert.match(PAGE, /580 of 580 match/);
+  assert.match(PAGE, /11g · A TEST ON NAMES THE FINDING WAS NOT BUILT FROM/);
+  const oos = AUD.out_of_sample; assert.equal(oos.result.read, oos.rows.length); assert.equal(oos.result.estimate_raised, oos.rows.filter((r) => r.estimate === "up").length); assert.equal(oos.result.gave_a_higher_outlook, oos.rows.filter((r) => r.guidance === "raised").length);
+  for (const r of oos.rows) { assert.ok(!S.names[r.ticker], `${r.ticker} was not one of the names the finding was built from`); assert.ok(oos.entered_top_25.includes(r.ticker)); assert.ok(r.now > r.then === (r.estimate === "up")); }
+  assert.deepEqual([...oos.entered_top_25].sort(), S.recheck.rerank.leaders_entered.map((x) => x[0]).sort(), "the six tested are exactly the six the re-rank brings in");
   for (const e of AUD.cbrs.items) assert.ok(PAGE.includes(e.fact.replace(/&/g, "&amp;").replace(/'/g, "&#x27;")), `the Cerebras fact "${e.fact}" has a row`);
 });

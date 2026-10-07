@@ -194,12 +194,12 @@ CONDITIONS = [
  ("growth", "rev_next_15", "sales expected to grow 15% or more next fiscal year", cmp_("rev_growth_next_fy_pct", ">=", 15)),
  ("growth", "rev_q_20", "sales grew 20% or more in the latest quarter (year on year)", cmp_("rev_growth_latest_q_yoy_pct", ">=", 20)),
  ("growth", "eps_next_15", "earnings per share expected to grow 15% or more next fiscal year", cmp_("eps_growth_next_fy_pct", ">=", 15)),
- ("revisions", "eps_rev_up", "analysts RAISED the earnings estimate over the last 90 days", direction("eps_rev_90d_direction", "up")),
- ("revisions", "eps_rev_down", "analysts CUT the earnings estimate over the last 90 days", direction("eps_rev_90d_direction", "down")),
- ("revisions", "rev_rev_up", "analysts RAISED the sales estimate over the last 90 days", direction("rev_est_rev_90d_direction", "up")),
- ("revisions", "rev_rev_down", "analysts CUT the sales estimate over the last 90 days", direction("rev_est_rev_90d_direction", "down")),
- ("revisions", "guide_raised", "management RAISED its own guidance at the last report", direction("guidance_direction", "raised")),
- ("revisions", "guide_lowered", "management LOWERED its own guidance at the last report", direction("guidance_direction", "lowered")),
+ ("revisions", "eps_rev_up", "analysts raised the earnings estimate over the last 90 days", direction("eps_rev_90d_direction", "up")),
+ ("revisions", "eps_rev_down", "analysts cut the earnings estimate over the last 90 days", direction("eps_rev_90d_direction", "down")),
+ ("revisions", "rev_rev_up", "analysts raised the sales estimate over the last 90 days", direction("rev_est_rev_90d_direction", "up")),
+ ("revisions", "rev_rev_down", "analysts cut the sales estimate over the last 90 days", direction("rev_est_rev_90d_direction", "down")),
+ ("revisions", "guide_raised", "gave a higher outlook at the last report (raised its own full-year numbers, or guided above what analysts expected)", direction("guidance_direction", "raised")),
+ ("revisions", "guide_lowered", "lowered its own guidance at the last report", direction("guidance_direction", "lowered")),
  ("pays its own way", "eps_pos", "earns a profit (earnings per share above zero over twelve months)", flag("eps_ttm_positive")),
  ("pays its own way", "fcf_pos", "brings in more cash than it spends (free cash flow above zero)", cmp_("fcf_ttm_usd_b", ">", 0)),
  ("pays its own way", "net_cash", "holds more cash than debt", cmp_("net_cash_usd_b", ">", 0)),
@@ -207,18 +207,18 @@ CONDITIONS = [
  ("pays its own way", "om_up", "operating margin is higher than a year ago", up_vs("operating_margin_pct", "operating_margin_year_ago_pct")),
  ("pays its own way", "gm_up", "gross margin is higher than a year ago", up_vs("gross_margin_pct", "gross_margin_year_ago_pct")),
  ("new shares", "diluting", "share count is up more than 3% in a year", cmp_("shares_change_yoy_pct", ">", 3)),
- ("new shares", "shrinking", "share count is DOWN on a year ago (buybacks)", cmp_("shares_change_yoy_pct", "<", 0)),
+ ("new shares", "shrinking", "share count is down on a year ago (buybacks)", cmp_("shares_change_yoy_pct", "<", 0)),
  ("new shares", "raised_capital", "raised money (shares, convertibles or sizeable debt) since 1 July", flag("raised_capital_90d")),
- ("new shares", "overhang", "new shares hit or are about to hit the market (lock-up, share sale, convertible, heavy insider selling)", flag("supply_overhang")),
+ ("new shares", "overhang", "more stock coming up for sale (insiders freed to sell after a listing, a new share sale, debt that turns into shares, heavy selling by executives)", flag("supply_overhang")),
  ("new shares", "buyback", "is buying back its own stock", flag("buyback_active")),
  ("customers", "conc_high", "leans on a few customers (one at 20%+ of sales, or the top three at 50%+)", lambda n: None if n.get("concentration_level") in (None, "unknown") else n["concentration_level"] == "high"),
  ("price", "has_fwd_pe", "has forward earnings to be priced on (a forward P/E exists)", lambda n: None if not n["has_record"] else n["forward_pe"] is not None),
- ("price", "pe_premium", "forward P/E is ABOVE its comps' median", lambda n: None if n["comps"]["pe_vs_comps"] is None else n["comps"]["pe_vs_comps"] > 0),
- ("price", "evs_premium", "EV/sales is ABOVE its comps' median", lambda n: None if n["comps"]["evs_vs_comps"] is None else n["comps"]["evs_vs_comps"] > 0),
+ ("price", "pe_premium", "costs more per dollar of next year's expected profit than its typical comp (forward P/E above its comps' median)", lambda n: None if n["comps"]["pe_vs_comps"] is None else n["comps"]["pe_vs_comps"] > 0),
+ ("price", "evs_premium", "company value to sales is above its comps' median (EV/sales)", lambda n: None if n["comps"]["evs_vs_comps"] is None else n["comps"]["evs_vs_comps"] > 0),
  ("size and path", "cap_25", "worth $25 billion or more", lambda n: None if not n["cap_now_b"] else n["cap_now_b"] >= 25),
- ("size and path", "rose_in_fall", "ROSE between 30 June and 15 September while the chip fund fell 17%", cmp_("r_selloff", ">", 0)),
+ ("size and path", "rose_in_fall", "rose between 30 June and 15 September while the chip fund fell 17%", cmp_("r_selloff", ">", 0)),
  ("size and path", "fell_30", "was down 30% or more at its worst between 30 June and 15 September", cmp_("worst_in_selloff", "<=", -0.30)),
- ("size and path", "comps_up_1m", "its comps' median is also up over the last month", lambda n: None if n["comps"]["peers_r1m_median"] is None else n["comps"]["peers_r1m_median"] > 0),
+ ("size and path", "comps_up_1m", "its comparable companies are also up over the last month (their median)", lambda n: None if n["comps"]["peers_r1m_median"] is None else n["comps"]["peers_r1m_median"] > 0),
 ]
 def fisher(a, b, c, d):
     """two-sided Fisher exact p for the table [[a, b], [c, d]]"""
@@ -385,7 +385,7 @@ quality = {"studied": len(names), "with_record": sum(n["has_record"] for n in na
            "comps_rule_vs_live_5oct": cs["check_against_live_5oct"]}
 
 recheck = {"summary": AUD["summary"], "prices": AUD["prices"], "pages_not_loaded": AUD["estimate_pages_that_would_not_load"], "estimate_pairs": AUD["estimate_pairs"], "guidance": AUD["guidance"],
-           "guidance_kind": GK, "market_value": AUD["market_value"], "cbrs": AUD["cbrs"],
+           "guidance_kind": GK, "market_value": AUD["market_value"], "cbrs": AUD["cbrs"], "out_of_sample": AUD.get("out_of_sample"),
            "rerank": {k: RERANK[k] for k in ("what", "leaders_kept", "leaders_left", "leaders_entered", "laggards_kept", "laggards_left", "laggards_entered", "named")}}
 # the Cerebras picture: its closes since the listing, and the shares freed from lock-up (first-hand, data/audit-firsthand.json)
 cbx = (RC.get("CBRS") or {}).get("closes") or {}

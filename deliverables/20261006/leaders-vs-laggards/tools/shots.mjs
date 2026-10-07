@@ -25,8 +25,8 @@ try {
       await page.waitForTimeout(60);
       await page.screenshot({ path: path.join(OUT, `ld1-${width}-s${i + 1}.png`) });
     }
-    // two places a section heading does not land on: the Cerebras picture (2c) and the market-value paragraph of the opinion
-    for (const [name, sel, starts] of [["cbrs", "h3", "2c"], ["opinion-cbrs", ".opinion h4", "Cerebras: the stock"], ["opinion-mv", ".opinion h4", "Market value"]]) {
+    // places a section heading does not land on: the Cerebras picture (2c), two parts of the opinion, and two parts of the re-check
+    for (const [name, sel, starts] of [["cbrs", "h3", "2c"], ["opinion-cbrs", ".opinion h4", "Cerebras (CBRS)"], ["opinion-mv", ".opinion h4", "Market value"], ["recheck-cbrs", "h3", "11b"], ["recheck-estimates", "h3", "11c"], ["oos", "h3", "11g"]]) {
       const y = await page.evaluate(([sel, starts]) => { const e = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().toLowerCase().startsWith(starts.toLowerCase())); return e ? Math.round(e.getBoundingClientRect().top + window.scrollY) : null; }, [sel, starts]);
       if (y == null) { errors.push("no element for the " + name + " shot"); continue; }
       await page.evaluate((y) => window.scrollTo(0, Math.max(0, y - 46)), y); await page.waitForTimeout(60);
