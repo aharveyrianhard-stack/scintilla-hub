@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 537888b) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 780a3cb) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -11641,6 +11641,18 @@ function renderNews(cohort) {                            // paints from the per-
   if (sl) sl.textContent = S.tq || cohort;
 }
 const newsInScope = (n) => scopeItems([n], S.coh, S.tq, S.fav, COHSETS).length > 0;   // realtime gate
+/* RM1 (7 Oct 2026) — A LIVE HEADLINE JOINS A LIST THE WAY A PULL WOULD HAVE DELIVERED IT: in date order, and the list
+   stays the newest NEWS_LIMIT. Every arriving headline was pushed onto every list that had ever been opened and nothing
+   was ever taken off: a pull holds 120, but the table gains 5,800 to 8,700 headlines a day (MEASURED 7 Oct; 1,800 to
+   2,600 of them for the FAVORITES names), each arrival re-sorted the whole list, and with the NEWS room on screen each
+   one repainted every headline in it. A list read fresh already holds exactly these rows, so nothing shown changes on
+   the day; only a list left open no longer grows without end. */
+function newsCachePush(items, row, order, limit) {
+  items.push(row);
+  items.sort(order);
+  if (items.length > limit) items.length = limit;
+  return items;
+}
 function newsRoomHTML() {
   /* FIX 5 (R37) — restore the cohort tabs in NEWS so headlines can be scoped by
      cohort (FAV/ALL/AI HW/…). Same shared strip + data-act="coh" wiring the board
@@ -26952,7 +26964,7 @@ if (sb) {
       return ta < tb ? 1 : -1;                              // newest first
     };
     for (const [key, ent] of NEWS_CACHE)                    // FIX A3 — feed every cached scope the item belongs to
-      if (newsItemInKey(p.new, key)) { ent.items.push(p.new); ent.items.sort(tsDesc); }
+      if (newsItemInKey(p.new, key)) newsCachePush(ent.items, p.new, tsDesc, NEWS_LIMIT);   // RM1 — and keep it the newest NEWS_LIMIT
     if (el("newsList") && S.sec === "NEWS" && newsInScope(p.new))
       renderNews(S.coh);                                    // re-render in true order (list + rail + dedupe)
   }).subscribe();
@@ -27116,6 +27128,7 @@ loadSentiment(); setInterval(loadSentiment, 300000);
       g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.32);
       o.connect(g); g.connect(ac.destination);
       o.start(ac.currentTime); o.stop(ac.currentTime+0.34);
+      scAudioDone(ac, o, 1500);   /* RM1 — the sound channel is closed when the note ends (see scAudioDone) */
     }catch(e){}
   }
 
@@ -27391,11 +27404,32 @@ function updateLive(){
     }
   }catch(e){}
 }
+/* RM1 (7 Oct 2026) — A SOUND CHANNEL THAT IS OPENED IS CLOSED. The news chime and the feed-down alarm each opened a
+   new AudioContext and left it open. A browser never takes an open one back: it keeps its own real-time thread and
+   its buffers until the page goes away. MEASURED headless (deliverables/20261007/rm1-memory): 40 chimes left 40
+   contexts alive after a forced collection - about 1.2 threads and 1 to 2 MB each, and together 11% of one core
+   while silent - and closing each as its note ended gave all of it back. The chime can ring every four minutes
+   all day, so an open Hub gathered them by the hundred.
+   The channel is closed when the last note ends, or after `afterMs` if it never plays (a browser that has not been
+   clicked yet holds sound back; the old code would then ring minutes late, on the first click). Once only. */
+function scAudioDone(ac, lastNote, afterMs) {
+  var closed = false;
+  var close = function () {
+    if (closed) return;
+    closed = true;
+    try { if (ac && ac.state !== "closed" && typeof ac.close === "function") ac.close(); } catch (e) {}
+  };
+  try { if (lastNote) lastNote.onended = close; } catch (e) {}
+  setTimeout(close, afterMs);
+  return close;
+}
 function scAlert(msg){
   try{
     var ac = new (window.AudioContext||window.webkitAudioContext)();
     if(ac.state==="suspended" && ac.resume){ ac.resume(); }
-    [0,0.2,0.4].forEach(function(t){ var o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.0001, ac.currentTime+t); g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime+t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+t+0.16); o.start(ac.currentTime+t); o.stop(ac.currentTime+t+0.17); });
+    var last = null;
+    [0,0.2,0.4].forEach(function(t){ var o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.0001, ac.currentTime+t); g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime+t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+t+0.16); o.start(ac.currentTime+t); o.stop(ac.currentTime+t+0.17); last = o; });
+    scAudioDone(ac, last, 2500);   /* RM1 — closed after the third beep */
   }catch(e){}
   try{ document.title = "🔴 FEED DOWN · SCINTILLA"; }catch(e){}
   try{ console.warn("SCINTILLA ALERT:", msg); }catch(e){}
@@ -28226,6 +28260,118 @@ function hubSelfUpdatePlan(seenEtag, nowEtag, idleMs, videoPlaying, typing) {
   if (idleMs < HUB_SELF_UPDATE_IDLE_MS) return { reload: false, adopt: false, reason: "in use" };
   return { reload: true, adopt: false, reason: "reload" };
 }
+/* RM1 (7 Oct 2026) — THE NIGHT RELOAD: a stopgap, and how to switch it off.
+   Alan, 7 Oct: "When I leave Scintilla open and the Station open, it takes a lot of RAM in Activity Monitor after a
+   while. When I quit and come back, it's perfectly fine... at least a calendar of overnight quitting and restarting
+   would be nice." The leaks found are fixed on this branch; whatever a browser still gathers over days is cleared by
+   loading the page again, which is all a quit-and-reopen does for the Hub.
+   THE RULE: between 3 and 5 in the morning, this computer's clock, a Hub that has been open four hours or more loads
+   itself again - once, because a page that has just loaded is not four hours old. A Hub that has been open thirty
+   hours (the Mac slept through its night) does the same at its next quiet moment.
+   ITS NEIGHBOURS, kept exactly: it rides K3's own three-minute check and happens only when K3 would be allowed to
+   reload for a new build at that moment (hubSelfUpdatePlan: two minutes without a hand on the page, no video
+   playing, nobody typing), and only when the server has just answered that check - so the page is never reloaded
+   into an error page. R19 and K3 themselves are untouched.
+   WHAT IS KEPT: the lists and stars live on the server; the company tab and the compare tab are remembered on this
+   browser already; the room, its sub-tab, the board's list, the company that was open (and EXPAND), and where each
+   panel was scrolled to are carried over the one reload in this window's session store (hubKeepPlace, two minutes).
+   OFF: open the Hub once with ?nightreload=0 (remembered on that browser; ?nightreload=1 turns it back on), or set
+   HUB_NIGHT_RELOAD_DEFAULT_ON to false for every browser. */
+const HUB_NIGHT_RELOAD_DEFAULT_ON = true;
+const HUB_NIGHT_RELOAD_RULE = Object.freeze({ fromHour: 3, toHour: 5, minOpenMs: 4 * 3600000, overdueMs: 30 * 3600000 });
+const HUB_KEEP_PLACE_MAX_MS = 120000;
+function hubNightReloadDue(on, openMs, hour, rule) {
+  if (!on) return { due: false, why: "switched off" };
+  if (!(openMs >= rule.minOpenMs)) return { due: false, why: "open less than four hours" };
+  if (hour >= rule.fromHour && hour < rule.toHour) return { due: true, why: "the night hour" };
+  if (openMs >= rule.overdueMs) return { due: true, why: "open through a night it slept through" };
+  return { due: false, why: "not the night hour" };
+}
+/* the switch: the address says so once, and this browser remembers it */
+function hubNightReloadSwitch(search, remembered, fallback) {
+  const m = /[?&]nightreload=([^&#]*)/.exec(String(search || ""));
+  if (m) return { on: m[1] !== "0", remember: m[1] !== "0" ? "1" : "0" };
+  return { on: remembered === "1" ? true : remembered === "0" ? false : !!fallback, remember: null };
+}
+/* what a kept place may contain, read back defensively: a snapshot from another build or an old one is dropped */
+function hubPlaceKept(saved, now) {
+  if (!saved || typeof saved !== "object" || !(now - Number(saved.at) < HUB_KEEP_PLACE_MAX_MS)) return null;
+  const word = (v) => (typeof v === "string" && /^[A-Za-z0-9_.-]{1,24}$/.test(v) ? v : null);
+  const scroll = [];
+  for (const row of Array.isArray(saved.scroll) ? saved.scroll.slice(0, 16) : [])
+    if (Array.isArray(row) && typeof row[0] === "string" && row[0].length < 300 && (Number(row[1]) > 0 || Number(row[2]) > 0))
+      scroll.push([row[0], Math.max(0, Number(row[1]) || 0), Math.max(0, Number(row[2]) || 0)]);
+  return { sec: word(saved.sec), coh: word(saved.coh), pinned: word(saved.pinned), expanded: saved.expanded === true,
+    socTab: word(saved.socTab), sentiTab: word(saved.sentiTab), econView: word(saved.econView),
+    pageY: Math.max(0, Number(saved.pageY) || 0), scroll };
+}
+const HUB_LOADED_AT = Date.now();
+const HUB_KEEP_PLACE_KEY = "hub.nightreload.place";
+let HUB_NIGHT_RELOAD_ON = HUB_NIGHT_RELOAD_DEFAULT_ON;
+try {
+  let kept = null; try { kept = localStorage.getItem("hub.nightreload"); } catch (_) {}
+  const sw = hubNightReloadSwitch(typeof location !== "undefined" ? location.search : "", kept, HUB_NIGHT_RELOAD_DEFAULT_ON);
+  HUB_NIGHT_RELOAD_ON = sw.on;
+  if (sw.remember != null) { try { localStorage.setItem("hub.nightreload", sw.remember); } catch (_) {} }
+} catch (_) {}
+/* a short address for a scrolled panel: its id, or its place under the nearest ancestor that has one */
+function hubScrollPath(node) {
+  const parts = [];
+  for (let n = node; n && n.nodeType === 1 && n !== document.body && parts.length < 8; n = n.parentElement) {
+    if (n.id) { parts.unshift("#" + (window.CSS && CSS.escape ? CSS.escape(n.id) : n.id)); return parts.join(" > "); }
+    let i = 1; for (let p = n.previousElementSibling; p; p = p.previousElementSibling) if (p.tagName === n.tagName) i++;
+    parts.unshift(n.tagName.toLowerCase() + ":nth-of-type(" + i + ")");
+  }
+  return null;
+}
+function hubKeepPlace() {
+  try {
+    const scroll = [];
+    const all = document.querySelectorAll("body *");
+    for (let i = 0; i < all.length && scroll.length < 16; i++) {
+      const n = all[i];
+      if (!(n.scrollTop > 0 || n.scrollLeft > 0) || n.tagName === "IFRAME") continue;
+      const path = hubScrollPath(n);
+      if (path && !scroll.some((row) => row[0] === path)) scroll.push([path, Math.round(n.scrollTop), Math.round(n.scrollLeft)]);
+    }
+    sessionStorage.setItem(HUB_KEEP_PLACE_KEY, JSON.stringify({ at: Date.now(), sec: S.sec, coh: S.coh,
+      pinned: LEFT_STATE === "PINNED" && LEFT_T ? LEFT_T : null, expanded: CO_EXPANDED === true,
+      socTab: S.socTab, sentiTab: S.sentiTab, econView: S.econView || null,
+      pageY: Math.round(window.scrollY || 0), scroll }));
+  } catch (_) {}
+}
+/* After the reload: the same buttons Alan would press, pressed for him - so every room opens by its own rules. */
+function hubRestorePlace() {
+  let kept = null;
+  try { kept = hubPlaceKept(JSON.parse(sessionStorage.getItem(HUB_KEEP_PLACE_KEY) || "null"), Date.now()); sessionStorage.removeItem(HUB_KEEP_PLACE_KEY); } catch (_) {}
+  if (!kept) return;
+  const press = (sel) => { try { const n = document.querySelector(sel); if (n) { n.click(); return true; } } catch (_) {} return false; };
+  const steps = [
+    () => { if (kept.coh && kept.coh !== S.coh) press('[data-act="coh"][data-key="' + kept.coh + '"]'); },
+    () => {
+      if (kept.sec === "COMPANY" && kept.pinned) { try { openCo(kept.pinned); } catch (_) {} return; }
+      if (kept.sec && kept.sec !== "DASHBOARD" && kept.sec !== "COMPANY" && kept.sec !== S.sec) press('[data-act="mtab"][data-sec="' + kept.sec + '"]');
+    },
+    () => {
+      if (kept.sec === "COMPANY" && kept.expanded && !CO_EXPANDED) press('[data-act="coexpand"]');
+      if (kept.sec === "SOCIAL" && kept.socTab && kept.socTab !== S.socTab) press('[data-act="soctab"][data-tab="' + kept.socTab + '"]');
+      if (kept.sec === "SENTIMENT" && kept.sentiTab && kept.sentiTab !== S.sentiTab) press('[data-act="sentitab"][data-tab="' + kept.sentiTab + '"]');
+      if (kept.sec === "ECONOMIC" && kept.econView && kept.econView !== (S.econView || "RELEASES")) press('[data-act="ecview"][data-v="' + kept.econView + '"]');
+    }
+  ];
+  steps.forEach((step, i) => setTimeout(() => { try { step(); } catch (_) {} }, 350 * i));
+  /* a panel is as long as its rows: wait for each to fill, up to 20 s, then leave it where it is */
+  const left = kept.scroll.slice(); let pageY = kept.pageY, tries = 0;
+  const timer = setInterval(() => {
+    for (let i = left.length - 1; i >= 0; i--) {
+      let n = null; try { n = document.querySelector(left[i][0]); } catch (_) {}
+      if (n && n.scrollHeight - n.clientHeight >= left[i][1] && n.scrollWidth - n.clientWidth >= left[i][2]) { n.scrollTop = left[i][1]; n.scrollLeft = left[i][2]; left.splice(i, 1); }
+    }
+    if (pageY > 0 && document.documentElement.scrollHeight - window.innerHeight >= pageY) { window.scrollTo(0, pageY); pageY = 0; }
+    if ((!left.length && !pageY) || ++tries >= 40) clearInterval(timer);
+  }, 500);
+}
+try { setTimeout(hubRestorePlace, 1200); } catch (_) {}
 /* R19 — PWA SELF-UPDATE (Alan: installed home-screen app doesn't update).
    ETag of "/" sampled on load; on resume (visibilitychange → visible after a
    hidden spell, ≤ once per 5 min) re-sample — a changed etag means a fresh build
@@ -28283,6 +28429,12 @@ function hubSelfUpdatePlan(seenEtag, nowEtag, idleMs, videoPlaying, typing) {
           const plan = hubSelfUpdatePlan(SC_ETAG_SEEN, etag, Date.now() - lastActive, videoPlaying, typing);
           if (plan.adopt) SC_ETAG_SEEN = etag;
           else if (plan.reload) location.reload();
+          /* RM1 — the night reload: due by the clock, the server just answered, and K3's own rule would let a new
+             build reload this page at this moment. Then, and only then; nothing is remembered for a later round. */
+          else if (r.ok && hubNightReloadDue(HUB_NIGHT_RELOAD_ON, Date.now() - HUB_LOADED_AT, new Date().getHours(), HUB_NIGHT_RELOAD_RULE).due &&
+                   hubSelfUpdatePlan("open", "night", Date.now() - lastActive, videoPlaying, typing).reload) {
+            hubKeepPlace(); location.reload();
+          }
         } catch (err) {}
       }).catch(() => {});
     } catch (err) {}
