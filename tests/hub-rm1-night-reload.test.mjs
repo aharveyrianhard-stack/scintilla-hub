@@ -176,6 +176,7 @@ test("the place is restored by pressing the Hub's own controls, and kept in this
   for (const control of ['[data-act="coh"][data-key="', '[data-act="mtab"][data-sec="', '[data-act="soctab"][data-tab="', '[data-act="sentitab"][data-tab="', '[data-act="ecview"][data-v="', '[data-act="coexpand"]'])
     assert.ok(block.includes(control), control + " is pressed, not re-implemented");
   assert.match(block, /openCo\(kept\.pinned\)/, "the open company comes back through openCo, like a click on its row");
+  assert.match(block, /if \(home && S\.sec !== "DASHBOARD" && S\.sec !== "COMPANY"\) press\('\[data-act="mtab"\]\[data-sec="DASHBOARD"\]'\);/, "a #room in the address does not take the dashboard's place");
   assert.match(block, /sessionStorage\.removeItem\(HUB_KEEP_PLACE_KEY\)/, "used once");
   const keep = page.slice(page.indexOf("function hubKeepPlace()"), page.indexOf("function hubRestorePlace()"));
   assert.match(keep, /sessionStorage\.setItem\(HUB_KEEP_PLACE_KEY/); assert.doesNotMatch(keep, /localStorage/, "nothing about a place outlives the window");
