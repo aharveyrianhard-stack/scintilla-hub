@@ -124,6 +124,19 @@ test("the line travels with the number: the card and the knockout's row carry th
   const tab = readFileSync(ROOT + "/deliverables/20261007/comps-engine/tab.mjs", "utf8"); assert.ok(/NOT A TARGET/.test(tab) && /r\.not_a_target/.test(tab) && /r\.outlier_cases/.test(tab));
   for (const word of ["buildSet", "conclusion6", "readSet", "snapshotFromCohort", "measureWeights", "scorePeers"]) assert.ok(!tab.includes(word), "the tab still computes nothing: " + word); });
 
+test("the engine's cards are the ones the allocation tool keeps: same card date as the morning's cards, a later re-priced stamp", () => {
+  const morning = J(ROOT + "/deliverables/20261007/one-basis/data/cards.json").as_of, engine = CARDS.as_of;
+  assert.ok(engine.repriced && engine.basis, "the engine's cards carry both stamps");
+  /* the tool's own rule (loadCards): newest card date, then newest re-priced stamp, then the order of its list */
+  const pick = [{ who: "morning", as_of: morning.card_date, repriced: morning.repriced, order: 2 }, { who: "engine", as_of: engine.card_date, repriced: engine.repriced, order: 0 }].sort((a, b) => String(b.as_of || "").localeCompare(String(a.as_of || "")) || String(b.repriced || "").localeCompare(String(a.repriced || "")) || a.order - b.order)[0];
+  assert.equal(pick.who, "engine", `card dates ${morning.card_date} / ${engine.card_date}; re-priced ${morning.repriced} / ${engine.repriced}`); });
+test("PEG is the PEG ratio everywhere it is printed: forward P/E ÷ growth, for the company and for every peer; the yardstick says when it counts less growth", () => {
+  for (const t of TWELVE) { const r = name(t), g = r.growth.next_to_following_pct; if (r.peg.value != null && g > 0) assert.ok(Math.abs(r.peg.value - r.forward.pe / g) < 0.012, `${t}: ${r.peg.value} against ${(r.forward.pe / g).toFixed(3)}`);
+    assert.equal(CARDS.cards[t].fundamentals.peg, r.peg.value, t + " card"); assert.equal(IDX.names[t].peg, r.peg.value, t + " index");
+    for (const p of r.peers) if (p.peg != null && p.growth_eps > 0 && p.pe_fwd > 0) assert.ok(Math.abs(p.peg - p.pe_fwd / p.growth_eps) < 0.03, `${t} · ${p.ticker}: ${p.peg} against ${(p.pe_fwd / p.growth_eps).toFixed(3)}`);
+    const y = r.yardsticks.peg; if (y && y.capped) { assert.ok(y.own > y.own_plain, t + ": on counted growth the ratio is higher"); assert.equal(y.own_plain, r.peg.value, t); } else if (y && y.own != null) assert.equal(y.own, r.peg.value, t + ": under the cap the two are one number"); }
+  const tab = readFileSync(ROOT + "/deliverables/20261007/comps-engine/tab.mjs", "utf8"); assert.ok(/growth counted to \$\{esc\(y\.growth_cap_pct\)\}%/.test(tab), "the yardstick row says what it counts"); });
+
 /* ---- 7 · plain words ---- */
 test("what Alan reads carries no internal codes: the cases, the not-a-target lines and the tab's own text", () => {
   const bad = /\b(CP\d|C6b?|C5b?|FD1|RL1|v[12]|rung|MAD|z-score|jackknife|cellRule|selfOutlier|fx)\b|line vs reading|\bevenings?\b/;
