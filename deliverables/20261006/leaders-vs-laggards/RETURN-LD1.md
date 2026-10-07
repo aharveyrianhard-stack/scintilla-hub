@@ -14,7 +14,7 @@ An earlier run of this brief, on the afternoon of 6 Oct, built the study page an
 ## What was re-read first-hand, and what it found
 
 - **Prices.** I pulled every close again from the chart API, through 6 Oct. All 580 saved price figures match. The ranking, re-run from its saved inputs, came out the same file byte for byte.
-- **Profit estimates, 90 days ago against now** (18 of the 52 names). The 8 pairs the first run had saved match to the cent. 4 directions that rested only on analysts' notes are confirmed by a measured pair. 6 names that had no reading now have one (Palo Alto flat, CrowdStrike flat, Reddit up, Cipher down, Eos down, Riot down). 5 pages would not load after three tries.
+- **Profit estimates, 90 days ago against now** (19 of the 52 names). The 8 pairs the first run had saved match to the cent. 5 directions that rested only on analysts' notes are confirmed by a measured pair. 6 names that had no reading now have one (Palo Alto flat, CrowdStrike flat, Reddit up, Cipher down, Eos down, Riot down). 4 pages would not load after four tries.
 - **Guidance**, against the company's own release: 5 of 5 match.
 - **Twelve statistics pages** (six leaders, six laggards, drawn with a fixed seed), six figures each: 66 of 72 within 5%, and all 47 yes/no readings they decide (profit, cash coming in, share count up, cash against debt) come out the same.
 - **Cerebras, fact by fact**, against its filing, its 12 Aug release, the lock-up article and the insider table: 17 facts, all confirmed. Two were extended: the lock-up schedule (corrected in two details) and the insider sales (five sales the first run could not see).
@@ -199,8 +199,8 @@ On "pushed the indexes higher": I did not measure the indexes themselves. Inside
 ## Not done or not verified
 
 - **The house database was not read.** In the first run two permission checks declined backend reads. Those stand; I did not retry them or look for another way in. So the 90-day estimate history the database keeps is not in this study, and the company figures come from public web pages.
-- I re-read a part, not the whole: 18 of 52 profit estimates, 5 of 52 guidance calls, 12 of 52 statistics pages, and Cerebras in full. The other figures stand on the first run's two AI readers.
-- Five estimate pages would not load (FormFactor, Super Micro, NuScale, Entegris, Centrus). Of the six names that enter the top 25 on 6 Oct, Rambus and Zeta would not load, and none of the six was read in full.
+- I re-read a part, not the whole: 19 of 52 profit estimates, 5 of 52 guidance calls, 12 of 52 statistics pages, and Cerebras in full. The other figures stand on the first run's two AI readers.
+- Four estimate pages would not load (FormFactor, Super Micro, NuScale, Centrus). Of the six names that enter the top 25 on 6 Oct, Rambus and Zeta would not load, and none of the six was read in full.
 - The reason given for the hard-disk makers' fall (Toshiba doubling output) rests on one news headline. The Cerebras item about OpenAI and Nvidia is market talk reported by one site.
 - This shows what went with leading over one three-month stretch, on groups picked on price after the fact. It does not prove cause.
 
