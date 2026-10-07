@@ -66,7 +66,7 @@ const G = {}; ["SPDR", "ISHARES", "VANGUARD", "EQWT"].forEach((f, k) => FUNDS[f]
 Object.assign(G, { SPY: 0.82, QQQ: 0.85, RSP: 0.14, QQQE: 0.73 });
 const cardsOf = (html) => [...html.matchAll(/<section class="sc-cmpx__card([^"]*)" data-cmpx="([A-Z]+)"[^>]*>([\s\S]*?)<\/section>/g)].map((m) => ({ cls: m[1], id: m[2], html: m[3] }));
 
-test("one screen: nine views side by side, the consolidated sector reading first, BREADTH second, then every old tab", () => {
+test("one screen: nine views at once, the consolidated sector reading first, BREADTH second, then every old tab", () => {
   const w = world({ geiger: G }); w.api.SC_BLEND.at = 1;
   const cards = cardsOf(w.api.cmpxCardsHTML());
   assert.deepEqual(cards.map((c) => c.id), ["BLEND", "BOWTIE", "SPDR", "ISHARES", "VANGUARD", "EQWT", "COHORTS", "MEMBERS", "INDEXES"]);
@@ -75,9 +75,11 @@ test("one screen: nine views side by side, the consolidated sector reading first
   const screen = w.api.cohCompareScreenHTML();
   assert.match(screen, /^<div class="sc-cmpx__bar" id="cmpxBar">[\s\S]*<div class="sc-cmpx__scroll" id="cmpxScroll">[\s\S]*<details class="sc-pagespecs/);
   assert.doesNotMatch(screen, /data-gwxcmp|data-gwxfam/, "no COHORTS | SECTORS switch and no family chips: nothing is a tab any more");
+  /* HC2 (7 Oct) — the row that scrolled sideways is a column that scrolls up and down (Alan: "I don't want to swipe left to
+     right — scrolling up to down"); tests/hc2-compare-stacked.test.mjs holds the layout, this holds that the row is gone */
   const css = page.match(/\.sc-cmpx__scroll\{[^}]*\}/)[0];
-  assert.match(css, /display:flex/); assert.match(css, /overflow-x:auto/); assert.match(css, /overflow-y:hidden/);
-  assert.match(page.match(/\.sc-cmpx__card\{[^}]*\}/)[0], /flex:0 0 auto[\s\S]*width:calc\(var\(--cmpx-n,11\) \* var\(--cmpx-col,30px\) \+ 10px\)/, "a card is as wide as its columns need; the row scrolls instead of squeezing it");
+  assert.match(css, /display:flex; flex-flow:row wrap/); assert.match(css, /overflow-x:hidden/); assert.match(css, /overflow-y:auto/);
+  assert.doesNotMatch(page.match(/\.sc-cmpx__card\{[^}]*\}/)[0], /width:calc\(var\(--cmpx-n/, "a card is as wide as the panel: its columns share that width, and nothing scrolls sideways");
 });
 
 test("a card draws the rows its tab drew, whatever the stored tab says — and puts the stored tab back", () => {
@@ -125,7 +127,8 @@ test("cards are compact; State Street (and each fund or cohort card) unfolds to 
   assert.equal(spdr().cls, "", "compact by default");
   assert.match(spdr().html, /data-act="cmpxexp" data-v="SPDR" aria-pressed="false"/);
   assert.match(page, /\.sc-cmpx__card:not\(\.is-exp\) \.sc-cohstrip__read, \.sc-cmpx__card:not\(\.is-exp\) \.sc-cohstrip__tm,/, "compact = label, value, bar: the word and the pair are folded away");
-  assert.match(page, /\.sc-cmpx__card\.is-exp\{ --cmpx-col:46px; \}/, "unfolded = the full strip's column");
+  /* HC2 — unfolded, a card keeps the panel's width (it was a wider card in a row that scrolled): where a column could not hold the word, the bars take two rows */
+  assert.match(fn("cmpxPerRow"), /return \(n > CMPX_ROW_MAX \|\| exp\) \? Math\.ceil\(n \/ 2\) : n;/, "unfolded = room for the word and the pair");
   for (const id of ["BLEND", "BOWTIE"]) { assert.equal(w.api.cmpxCanExpand(id), false); assert.doesNotMatch(cardsOf(w.api.cmpxCardsHTML()).find((c) => c.id === id).html, /cmpxexp/); }
   for (const id of ["SPDR", "ISHARES", "VANGUARD", "EQWT", "COHORTS", "MEMBERS", "INDEXES"]) assert.equal(w.api.cmpxCanExpand(id), true);
   w = world({ geiger: G, stored: "SPDR,COHORTS" }); w.api.SC_BLEND.at = 1;                    // the next visit
@@ -344,29 +347,29 @@ test("a replayed day shows what the stored days hold: a trend-only reading is na
   assert.match(live.api.scBlendRows()[0].full, /: breadth [+−]0\.\d\d$/);
 });
 
-test("a repaint redraws the cards only, and the row keeps where it was scrolled to", () => {
+test("a repaint redraws the cards only, and the list keeps where it was scrolled to", () => {
   const w = world({ geiger: G }); w.api.SC_BLEND.at = Date.now();
   /* first paint: the whole screen */
   w.els.cohCompare = w.cohComp;
   w.api.cohComparePaint();
   assert.match(w.cohComp.innerHTML, /id="cmpxBar"[\s\S]*id="cmpxScroll"[\s\S]*PAGE SPECS/);
   /* later paints: a browser throws the scroll back to 0 when the content is replaced; the painter puts it back */
-  const sc = w.mk("cmpxScroll", { _x: 780, _h: "old", get scrollLeft() { return this._x; }, set scrollLeft(v) { this._x = v; }, set innerHTML(v) { this._h = v; this._x = 0; }, get innerHTML() { return this._h; } });
+  const sc = w.mk("cmpxScroll", { _x: 780, _h: "old", get scrollTop() { return this._x; }, set scrollTop(v) { this._x = v; }, set innerHTML(v) { this._h = v; this._x = 0; }, get innerHTML() { return this._h; } });
   const shell = w.cohComp.innerHTML;
   w.api.cohComparePaint();
-  assert.equal(sc.scrollLeft, 780); assert.match(sc.innerHTML, /^<section class="sc-cmpx__card/);
+  assert.equal(sc.scrollTop, 780); assert.match(sc.innerHTML, /^<section class="sc-cmpx__card/);
   assert.equal(w.cohComp.innerHTML, shell, "the replay handle and PAGE SPECS are left standing");
-  /* a REBUILD of the pane (a cohort click remounts it) starts a new row at 0: the place the reader scrolled to is remembered and put back */
+  /* a REBUILD of the pane (a cohort click remounts it) starts a new list at 0: the place the reader scrolled to is remembered and put back */
   const again = world({ geiger: G }); again.api.SC_BLEND.at = Date.now();
-  assert.equal(again.heard.scroll.length, 1, "the page listens for the row's own scroll");
-  again.heard.scroll[0]({ target: { id: "somethingElse", scrollLeft: 55 } });
-  again.heard.scroll[0]({ target: { id: "cmpxScroll", scrollLeft: 2040 } });          // the reader scrolls to the COHORTS card
-  const fresh = again.mk("cmpxScroll", { scrollLeft: 0 });                              // …clicks a cohort; the pane is rebuilt
+  assert.equal(again.heard.scroll.length, 1, "the page listens for the list's own scroll");
+  again.heard.scroll[0]({ target: { id: "somethingElse", scrollTop: 55 } });
+  again.heard.scroll[0]({ target: { id: "cmpxScroll", scrollTop: 2040 } });          // the reader scrolls to the COHORTS card
+  const fresh = again.mk("cmpxScroll", { scrollTop: 0 });                              // …clicks a cohort; the pane is rebuilt
   again.api.cmpxRestoreScroll();
-  assert.equal(fresh.scrollLeft, 2040);
-  again.heard.scroll[0]({ target: { id: "cmpxScroll", scrollLeft: 0 } });              // back at the first card by hand: nothing is forced
-  fresh.scrollLeft = 0; again.api.cmpxRestoreScroll(); assert.equal(fresh.scrollLeft, 0);
-  assert.match(fn("cohComparePaint"), /cc\.innerHTML = cohCompareScreenHTML\(\); cmpxRestoreScroll\(\);/, "a first paint into a new pane puts the row back too");
+  assert.equal(fresh.scrollTop, 2040);
+  again.heard.scroll[0]({ target: { id: "cmpxScroll", scrollTop: 0 } });              // back at the first card by hand: nothing is forced
+  fresh.scrollTop = 0; again.api.cmpxRestoreScroll(); assert.equal(fresh.scrollTop, 0);
+  assert.match(fn("cohComparePaint"), /cc\.innerHTML = cohCompareScreenHTML\(\); cmpxRestoreScroll\(\);/, "a first paint into a new pane puts the list back too");
   /* every place that used to write the strip goes through the one painter */
   assert.doesNotMatch(page, /innerHTML\s*=\s*cohortCompareStripHTML\(\)/);
   assert.ok((page.match(/cohComparePaint\(\)/g) || []).length >= 9);
