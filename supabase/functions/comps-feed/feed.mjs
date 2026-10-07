@@ -42,7 +42,7 @@
 //     for a foreign reporter. Only when a company has no profile figures, or its profile row is more than
 //     PROFILE_FRESH_DAYS old, does the fundamentals row stand in, and the basis says so.
 //   · pe          = that price ÷ EPS of the last twelve months (the fundamentals row's, the four newest quarters).
-//   · fwd_pe      = that price ÷ the consensus EPS of the nearest FISCAL YEAR ending today or later (annual rows only).
+//   · fwd_pe      = that price ÷ the next four quarterly consensus EPS (the dashboard's rule, 7 Oct); nearest fiscal year only as fallback.
 //   · ps          = that market value ÷ sales of those twelve months, both in dollars.
 //   · gross_m, net_m = gross profit, net income ÷ sales, the same twelve months.
 //   · pb, de      = the newest balance on file (a balance is a moment, so the newest row of either kind is right).
@@ -94,7 +94,7 @@ export function queries(syms, today) {
     fundamentals: `fundamentals?select=ticker,price,market_cap,trailing_pe,eps_ttm,revenue_ttm,updated_ts&ticker=${inq}&order=ticker.asc`,
     history: `fundamentals_history?select=ticker,period,fiscal_year,fiscal_date,revenue,gross_profit,net_income&ticker=${inq}&fiscal_date=gte.${since}&order=ticker.asc,fiscal_date.desc,period.asc`,
     ratios: `ratios_history?select=ticker,period,fiscal_date,pe,pb,debt_to_equity,dividend_yield&ticker=${inq}&fiscal_date=gte.${since}&order=ticker.asc,fiscal_date.desc,period.asc`,
-    estimates: `analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg&period=eq.annual&ticker=${inq}&fiscal_date=gte.${today}&order=ticker.asc,fiscal_date.asc`,
+    estimates: `analyst_estimates?select=ticker,period,fiscal_date,est_eps_avg&period=in.(annual,quarter)&ticker=${inq}&fiscal_date=gte.${today}&order=ticker.asc,fiscal_date.asc,period.asc`,
     profiles: `company_profile?select=ticker,price,market_cap,updated_ts&ticker=${inq}&order=ticker.asc`,
     filers: `filer_currency?select=ticker,reported_currency&ticker=${inq}&order=ticker.asc`,
     fx: `fx_rates?select=pair,date,rate&date=gte.${daysBefore(today, 30)}&date=lte.${today}&order=pair.asc,date.desc`,
@@ -162,6 +162,17 @@ export function forwardYear(estimates, today) {
   return e.length ? { eps: num(e[0].est_eps_avg), fiscal_date: iso(e[0].fiscal_date) } : null;
 }
 
+/** 7 Oct 2026 — ONE FORWARD P/E EVERYWHERE (Alan: "it has to be the same source of truth"). The Hub dashboard's rule:
+    the next four quarterly consensus EPS from today, summed (index.html applyEstimates / fwdTrailPE); when fewer than four
+    future quarters are on file, the nearest fiscal year (forwardYear) stands in. A quarter with no EPS is skipped, as there. */
+export function forwardEps(estimates, today) {
+  const q = (estimates || []).filter((r) => r && r.period === "quarter" && r.fiscal_date && iso(r.fiscal_date) >= today && num(r.est_eps_avg) != null)
+    .sort((a, b) => iso(a.fiscal_date).localeCompare(iso(b.fiscal_date))).slice(0, 4);
+  if (q.length === 4) return { eps: q.reduce((sum, r) => sum + num(r.est_eps_avg), 0), fiscal_date: iso(q[3].fiscal_date), basis: "next four quarters" };
+  const y = forwardYear(estimates, today);
+  return y ? { ...y, basis: "nearest fiscal year (fewer than four quarters on file)" } : null;
+}
+
 /** A margin over the very twelve months of its sales: flow ÷ sales when both rest on the same months, else on the last
     fiscal year both carry. Never a quarter's profit over a year's sales. */
 export function margin(rows, key) {
@@ -195,7 +206,7 @@ export function feedRow(sym, t, today, rates = []) {
   const mcap = today$ ? num(p.market_cap) : num(f.market_cap) == null ? null : dollars ? num(f.market_cap) : usd != null ? num(f.market_cap) * usd : null;
   const epsTtm = nz(f.eps_ttm), eps$ = epsTtm == null ? null : dollars ? epsTtm : usd != null ? epsTtm * usd : null;
   const rev = flow(hist, "revenue"), g = revenueGrowth(hist), revNow = rev.now ?? num(f.revenue_ttm), rev$ = revNow == null ? null : dollars ? revNow : usd != null ? revNow * usd : null;
-  const fy1 = forwardYear(t.estimates, today), ratFY = rat.find(isFY) || null, ratNew = rat[0] || null;
+  const fy1 = forwardEps(t.estimates, today), ratFY = rat.find(isFY) || null, ratNew = rat[0] || null;
   let pe = price != null && eps$ != null ? price / eps$ : null;
   if (pe == null && dollars) pe = nz(f.trailing_pe) ?? (ratFY ? nz(ratFY.pe) : null);
   return {
@@ -212,7 +223,7 @@ export function feedRow(sym, t, today, rates = []) {
     rev_growth: g.value,
     updated: num(f.updated_ts) != null ? new Date(num(f.updated_ts) * 1000).toISOString() : null,
     basis: { currency: ccy, rate: fx && !dollars ? fx : null, withheld: !dollars && usd == null, price_from: price == null ? null : today$ ? "company_profile (today's price and market value together)" : "fundamentals row", market_value_from: mcap == null ? null : today$ ? "company_profile (today's price × shares)" : "fundamentals row (the last fiscal period end's)",
-      price_at: today$ ? pDay : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, balance: ratNew ? iso(ratNew.fiscal_date) : null },
+      price_at: today$ ? pDay : null, sales: rev.basis ?? (revNow != null ? "fundamentals row" : null), sales_to: rev.to, growth: g.basis, forward_year: fy1 ? fy1.fiscal_date : null, forward_basis: fy1 ? fy1.basis : null, balance: ratNew ? iso(ratNew.fiscal_date) : null },
   };
 }
 
