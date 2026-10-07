@@ -74,6 +74,6 @@ test("a wide negative gap still says the index is carried by its biggest names; 
 });
 test("the page wires them in: the feed's pair is kept, the strip and the bow tie row call the two functions", () => {
   assert.match(src, /SC_PROV_TM\[t\] = \{ tr: num\(m\[t\]\.trend\), mo: num\(m\[t\]\.momentum\) \}/);
-  assert.match(src, /const g = scinStripTM\(r\.key\);/);
+  assert.match(src, /const g = r\.blend \? \{ tr: null, mo: null, n: 0 \} : scinStripTM\(r\.key\);/);   /* HC1 (6 Oct) — a consolidated bar has no single pair; every other column still reads scinStripTM */
   assert.match(src, /full:scBowtieLine\(p\[2\], p\[0\], p\[1\], ew, cw, tOf\(p\[0\]\), tOf\(p\[1\]\)\)/);
 });
