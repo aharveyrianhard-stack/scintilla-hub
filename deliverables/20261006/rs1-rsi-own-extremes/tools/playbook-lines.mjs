@@ -18,13 +18,16 @@
    lows SPY 41.8, QQQ 44.0"; a closing-high rule with a 3% minimum does not see QQQ's September dip at all.)
 
    RUN (no key: the chart API is read with the Hub's origin; nothing is written anywhere but the two files named):
-     node deliverables/20261006/rs1-rsi-own-extremes/tools/playbook-lines.mjs --as-of 2026-10-05 */
+     node deliverables/20261006/rs1-rsi-own-extremes/tools/playbook-lines.mjs                          the newest finished close
+     node deliverables/20261006/rs1-rsi-own-extremes/tools/playbook-lines.mjs --as-of 2026-10-05 --tag 20261005
+   --tag NAME saves to data/playbook-lines-NAME.json / .txt, so one close can be kept beside the newest. */
 import fs from "node:fs";
-import { rsiOwnRow, wilderRsi, percentileOf, rsiOwnSpan, SEVEN_DAY } from "../../../../supabase/functions/rsi-own-daily/rsi-own.mjs";
+import { rsiOwnRow, wilderRsi, percentileOf, rsiOwnSpan, SEVEN_DAY, DAILY_BARS } from "../../../../supabase/functions/rsi-own-daily/rsi-own.mjs";
 import { swings, cleanBars } from "../../../../research/statistics/s9-research.mjs";
 
 const arg = (k, d = null) => { const i = process.argv.indexOf("--" + k); return i > 0 ? process.argv[i + 1] : d; };
 const AS_OF = arg("as-of", null);
+const TAG = arg("tag", "");
 const OUT = new URL("../data/", import.meta.url);
 const CHART = "https://scintilla-massive-chart-api.fly.dev";
 
@@ -57,16 +60,22 @@ const get = async (p) => {
   throw new Error("chart retries exhausted");
 };
 const day = (ms) => new Date(ms).toISOString().slice(0, 10);
-const r1 = (x) => Math.round(x * 10) / 10;
+/* Two decimals are kept in the record and a number is rounded ONCE, where it is said. Rounding to one decimal first
+   and to a whole number after said "68" for the dollar's 67.45 while the board, rounding once, shows 67. */
+const r2 = (x) => Math.round(x * 100) / 100;
+const f1 = (x) => (x == null ? "-" : Number(x).toFixed(1));
+/* "7 points", "1 point", and a gap under half a point is "less than a point" (never "0 points") */
+const pts = (g) => { const n = Math.round(Math.abs(g)); return n < 1 ? "less than a point" : n === 1 ? "1 point" : n + " points"; };
 const median = (xs) => { const a = [...xs].sort((p, q) => p - q), m = a.length >> 1; return a.length ? (a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2) : null; };
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const say = (iso) => +iso.slice(8) + " " + MON[+iso.slice(5, 7) - 1] + (iso.slice(0, 4) === (AS_OF || "").slice(0, 4) || !AS_OF ? "" : " " + iso.slice(0, 4));
+const THIS_YEAR = (AS_OF || new Date().toISOString()).slice(0, 4);
+const say = (iso) => +iso.slice(8) + " " + MON[+iso.slice(5, 7) - 1] + (iso.slice(0, 4) === THIS_YEAR ? "" : " " + iso.slice(0, 4));
 /* a percentile in words, never "0th" or "100%" */
 const where = (pct) => pct <= 0 ? "the lowest of the window" : pct >= 100 ? "the highest of the window"
   : pct < 50 ? "lower than " + Math.min(99, Math.round(100 - pct)) + "% of its days" : "higher than " + Math.min(99, Math.round(pct)) + "% of its days";
 
 async function one(I) {
-  const raw = await get(`/candles?symbol=${encodeURIComponent(I.t)}&tf=1d&limit=1300`);
+  const raw = await get(`/candles?symbol=${encodeURIComponent(I.t)}&tf=1d&limit=${DAILY_BARS}`);   // the same bars the nightly table is built from
   const served = (raw.series || raw.candles || []);
   const sevenDay = SEVEN_DAY.includes(I.t);
   /* the same bars the ruler reads: nothing after the close being read, no weekend prints (except Bitcoin's) */
@@ -86,7 +95,7 @@ async function one(I) {
     let m = null, mk = null;
     for (let k = a.k; k <= b.k; k++) if (rsi[k] != null && (m == null || rsi[k] < m)) { m = rsi[k]; mk = k; }
     if (m == null) continue;
-    lows.push({ top: dates[a.k], low: dates[b.k], depth_pct: r1((clean[b.k].l / clean[a.k].h - 1) * 100), rsi_low: r1(m), rsi_low_on: dates[mk], pct: percentileOf(row.grid, m) });
+    lows.push({ top: dates[a.k], low: dates[b.k], depth_pct: r2((clean[b.k].l / clean[a.k].h - 1) * 100), rsi_low: r2(m), rsi_low_on: dates[mk], pct: percentileOf(row.grid, m) });
   }
   /* the dip still running: the last swing is a high, no swing low is confirmed after it, and price has not been back
      above that high — the lowest RSI since that high. (Price already above the high is a new advance, not a dip.) */
@@ -98,15 +107,15 @@ async function one(I) {
       if (+clean[k].h > lastSw.price) above = true;
       if (rsi[k] != null && (m == null || rsi[k] < m)) { m = rsi[k]; mk = k; }
     }
-    if (m != null && !above) running = { since: dates[lastSw.k], rsi_low: r1(m), rsi_low_on: dates[mk], pct: percentileOf(row.grid, m), is_today: mk === L };
+    if (m != null && !above) running = { since: dates[lastSw.k], rsi_low: r2(m), rsi_low_on: dates[mk], pct: percentileOf(row.grid, m), is_today: mk === L };
   }
   const lowRsis = lows.map((p) => p.rsi_low), lowPcts = lows.map((p) => p.pct);
   return {
     ...I, ok: true, as_of: row.as_of, window_from: row.window_from, sessions: row.sessions, eligible: row.eligible, span: rsiOwnSpan(row.window_from, row.as_of),
-    rsi: r1(row.rsi), pct: row.pct, p10: r1(row.p10), p20: r1(row.p20), p50: r1(row.p50), p80: r1(row.p80), p90: r1(row.p90),
-    to_90th_points: r1(row.p90 - row.rsi), to_90th_percentile_points: r1(90 - row.pct),
+    rsi: row.rsi, pct: row.pct, p10: row.p10, p20: row.p20, p50: row.p50, p80: row.p80, p90: row.p90,
+    to_90th_points: r2(row.p90 - row.rsi), to_90th_percentile_points: r2(90 - row.pct),
     pullbacks: lows.length, pullback_rsi_min: lows.length ? Math.min(...lowRsis) : null, pullback_rsi_max: lows.length ? Math.max(...lowRsis) : null,
-    pullback_rsi_median: lows.length ? r1(median(lowRsis)) : null, pullback_pct_median: lows.length ? r1(median(lowPcts)) : null,
+    pullback_rsi_median: lows.length ? r2(median(lowRsis)) : null, pullback_pct_median: lows.length ? r2(median(lowPcts)) : null,
     pullback_pct_min: lows.length ? Math.min(...lowPcts) : null, pullback_pct_max: lows.length ? Math.max(...lowPcts) : null,
     last_pullback: lows.length ? lows[lows.length - 1] : null, running, lows,
     weekend_bars_dropped: got.weekend_bars_dropped || 0,
@@ -121,8 +130,8 @@ function line(x) {
       : (x.pct < 50 ? `lower than ${Math.min(99, Math.round(100 - x.pct))}%` : `higher than ${Math.min(99, Math.round(x.pct))}%`) + ` of its own ${x.span}`) +
     (x.pct <= 10 ? ` — inside its own bottom tenth (${Math.round(x.p10)} or lower)` : "") + ".";
   const gap = x.to_90th_points;
-  const top = gap > 0 ? ` Its own top tenth starts at ${Math.round(x.p90)}: today is ${Math.round(gap)} points below it.`
-    : ` Its own top tenth starts at ${Math.round(x.p90)}: today is ${Math.round(-gap)} points above it, inside that top tenth.`;
+  const top = gap > 0 ? ` Its own top tenth starts at ${Math.round(x.p90)}: today is ${pts(gap)} below it.`
+    : ` Its own top tenth starts at ${Math.round(x.p90)}: today is ${pts(gap)} above it, inside that top tenth.`;
   let pull = "";
   if (x.side === "high") pull = " (For the volatility index the meaningful extreme is the spike, not the pullback low, so no pullback clause.)";
   else if (!x.pullbacks) pull = ` No completed pullback in its own ${x.span}.`;
@@ -142,8 +151,9 @@ function line(x) {
 const rows = [];
 for (const I of SET) { try { rows.push(await one(I)); } catch (e) { rows.push({ ...I, ok: false, reason: String(e.message || e).slice(0, 60) }); } }
 const lines = rows.map(line);
-fs.writeFileSync(new URL("playbook-lines.json", OUT), JSON.stringify({ made: new Date().toISOString(), as_of_asked: AS_OF, ruler: "rsi-own.mjs ro-1: Wilder RSI(14), the two calendar years of finished sessions before the close", pullback_rule: "s9-research swings(h, l, 10) on cleaned wicks; RSI low = lowest daily RSI between swing high and next swing low; lows inside the window only", rows, lines }, null, 1));
-fs.writeFileSync(new URL("playbook-lines.txt", OUT), lines.join("\n\n") + "\n");
+const NAME = "playbook-lines" + (TAG ? "-" + TAG : "");
+fs.writeFileSync(new URL(NAME + ".json", OUT), JSON.stringify({ made: new Date().toISOString(), as_of_asked: AS_OF, ruler: "rsi-own.mjs ro-1: Wilder RSI(14), the two calendar years of finished sessions before the close", pullback_rule: "s9-research swings(h, l, 10) on cleaned wicks; RSI low = lowest daily RSI between swing high and next swing low; lows inside the window only", rows, lines }, null, 1));
+fs.writeFileSync(new URL(NAME + ".txt", OUT), lines.join("\n\n") + "\n");
 console.log(lines.join("\n\n"));
 console.log("\n--- table ---");
-for (const x of rows) if (x.ok) console.log(`${x.t.padEnd(7)} rsi ${String(x.rsi).padStart(5)} pct ${String(x.pct).padStart(5)} | 10th ${x.p10} 90th ${x.p90} | to 90th ${x.to_90th_points} pts | pullbacks ${x.pullbacks}: rsi ${x.pullback_rsi_min}..${x.pullback_rsi_max} med ${x.pullback_rsi_median} = pct med ${x.pullback_pct_median} | last ${x.last_pullback ? x.last_pullback.low + " " + x.last_pullback.rsi_low + " (" + x.last_pullback.pct + ")" : "-"} | running ${x.running ? x.running.rsi_low + " on " + x.running.rsi_low_on + " (" + x.running.pct + ")" : "-"} | n ${x.sessions}`);
+for (const x of rows) if (x.ok) console.log(`${x.t.padEnd(7)} rsi ${f1(x.rsi).padStart(5)} pct ${f1(x.pct).padStart(5)} | 10th ${f1(x.p10)} 90th ${f1(x.p90)} | to 90th ${f1(x.to_90th_points)} pts | pullbacks ${x.pullbacks}: rsi ${f1(x.pullback_rsi_min)}..${f1(x.pullback_rsi_max)} med ${f1(x.pullback_rsi_median)} = pct med ${f1(x.pullback_pct_median)} | last ${x.last_pullback ? x.last_pullback.low + " " + f1(x.last_pullback.rsi_low) + " (" + f1(x.last_pullback.pct) + ")" : "-"} | running ${x.running ? f1(x.running.rsi_low) + " on " + x.running.rsi_low_on + " (" + f1(x.running.pct) + ")" : "-"} | n ${x.sessions}`);

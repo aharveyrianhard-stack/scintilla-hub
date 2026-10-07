@@ -7,7 +7,7 @@
    THE AFTER PICTURE NEEDS A TABLE THAT IS NOT IN THE DATABASE YET. public.rsi_own_percentiles is created by a migration
    the coordinator applies; until then the live database answers 404 and the page (correctly) stays on 30 / 70. So in
    "after" this script answers that ONE read from ../data/rsi-own-dry-run.json — the rows the loader's dry run produced
-   from the live chart API for the 5 Oct close — in the shape the database would send. Every other read is live.
+   from the live chart API for the newest finished close — in the shape the database would send. Every other read is live.
    Every non-GET request is aborted and counted, never sent. Pictures → ../pictures, the record → rec-<mode>-<width>.json */
 import fs from "node:fs";
 import path from "node:path";
@@ -99,7 +99,11 @@ try {
   out.shots.screen = await shot("screen-nflx", {});
   const rowBox = await page.evaluate(() => { const r = document.querySelector('#boardScroll [data-act="row"][data-t="NFLX"]').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
   const pad = phone ? 5 : 6;
-  out.shots.rows = await shot("nflx-rows", { clip: { x: Math.max(0, rowBox.x - 2), y: Math.max(0, rowBox.y - rowBox.h * pad), width: Math.min(width - Math.max(0, rowBox.x - 2), rowBox.w + 4), height: rowBox.h * (pad * 2 + 1) } });
+  const cropTop = Math.max(0, rowBox.y - rowBox.h * pad), cropH = rowBox.h * (pad * 2 + 1);
+  out.shots.rows = await shot("nflx-rows", { clip: { x: Math.max(0, rowBox.x - 2), y: cropTop, width: Math.min(width - Math.max(0, rowBox.x - 2), rowBox.w + 4), height: cropH } });
+  /* every row inside that crop, as the picture shows it — so the page's caption is read from here, never typed */
+  out.crop_rows = await page.evaluate(([top, h]) => [...document.querySelectorAll("#boardScroll .sc-board__row[data-t]")].filter((r) => { const b = r.getBoundingClientRect(); return b.y >= top - 1 && b.y + b.height <= top + h + 1; })
+    .map((r) => { const c = r.querySelector(".sc-rsi"); return { t: r.getAttribute("data-t"), rsi: c ? c.textContent.trim() : null, color: c ? getComputedStyle(c).color : null, breathes: !!(c && c.classList.contains("is-xt")), hover: c ? (c.getAttribute("data-own") || null) : null }; }), [cropTop, cropH]);
   out.cells = {};
   for (const t of WATCH) out.cells[t] = await cell(t);
   /* 2 · the board sorted by RSI, lowest first: the whole green end of the column in one picture */
