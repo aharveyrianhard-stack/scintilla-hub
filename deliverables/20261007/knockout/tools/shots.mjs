@@ -21,14 +21,14 @@ try {
       await page.screenshot({ path: path.join(OUT, `${w}-${String(i + 1).padStart(2, "0")}-${SECTIONS[i]}.png`), fullPage: true, clip: { x: 0, y: Math.max(0, b.y + (await page.evaluate(() => window.scrollY))), width: w, height: Math.min(b.height, cap) } });
     }
     /* the name finder works: type a name, count the rows left */
-    await page.fill("#find", "micron"); const found = await page.$$eval("#all tbody tr", (rs) => rs.filter((r) => r.style.display !== "none").length);
+    await page.fill("#find", "micron"); const found = await page.$$eval("#allnames tbody tr", (rs) => rs.filter((r) => r.style.display !== "none").length);
     await (await page.$("#all")).scrollIntoViewIfNeeded(); const fb = await (await page.$("#all")).boundingBox();
     await page.screenshot({ path: path.join(OUT, `${w}-08b-all-found-micron.png`), fullPage: true, clip: { x: 0, y: fb.y + (await page.evaluate(() => window.scrollY)), width: w, height: Math.min(fb.height, 700) } });
     await page.fill("#find", "");
     await page.evaluate(() => { document.querySelector("details.sc-pagespecs").open = true; });
     await (await page.$("details.sc-pagespecs")).screenshot({ path: path.join(OUT, `${w}-99-page-specs-open.png`) });
     facts[w] = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, height: document.documentElement.scrollHeight,
-      sections: document.querySelectorAll("body > section").length, champion_rows: document.querySelectorAll("#champions tbody tr").length, name_rows: document.querySelectorAll("#all tbody tr").length,
+      sections: document.querySelectorAll("body > section").length, champion_rows: document.querySelectorAll("#champions tbody tr").length, name_rows: document.querySelectorAll("#allnames tbody tr").length,
       smallest_font_px: Math.min(...[...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().width > 0 && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).map((e) => parseFloat(getComputedStyle(e).fontSize))),
       scnav: !!document.querySelector("nav.scnav button[data-go=back]") && !!document.querySelector("nav.scnav button[data-go=close]") && document.querySelector("nav.scnav").getBoundingClientRect().height > 10,
       too_wide: [...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1).slice(0, 6).map((e) => e.tagName + "." + (e.className && e.className.baseVal !== undefined ? "svg" : e.className) + " " + Math.round(e.getBoundingClientRect().right)),

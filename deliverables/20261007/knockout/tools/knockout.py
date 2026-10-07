@@ -48,7 +48,7 @@ def name_row(t):
            "comps_thin": bool(a.get("thin")) if a.get("band") else False, "comps_fragile": bool(a.get("fragile")) if a.get("band") else False, "comps_no_peer_set": bool(a.get("no_peer_set")),
            "comps_priced_on": a.get("priced_on"), "comps_before": (c.get("before") or {}).get("upside_pct"), "comps_peers_say": a.get("upside_from_peers") if a.get("no_peer_set") else None,
            "g1_rev": r1(f.get("rev_g1")), "g1_eps": r1(f.get("eps_g1")), "g2_rev": r1(f.get("rev_g2")), "g2_eps": r1(f.get("eps_g2")), "g1_eps_as_shown": r1(f.get("eps_g1_as_shown")), "eps_note": f.get("eps_note"),
-           "one_off": (f.get("one_off") or {}).get("words") or [], "currency": f.get("currency"), "thin_estimates": bool(f.get("thin_estimates")), "venture": bool(f.get("venture")), "eps_note2": f.get("eps_note2"),
+           "base_basis": "row" if (f.get("fy0") or {}).get("basis", "").startswith("the analysts") else "street" if (f.get("fy0") or {}).get("basis", "").startswith("its four") else "filed", "one_off": (f.get("one_off") or {}).get("words") or [], "currency": f.get("currency"), "thin_estimates": bool(f.get("thin_estimates")), "venture": bool(f.get("venture")), "eps_note2": f.get("eps_note2"),
            "g1_rev_unranked": r1(f.get("rev_g1_unranked")), "g1_eps_unranked": r1(f.get("eps_g1_unranked")), "dip_years": f.get("dip_years") or [],
            "revisions": r1(rv.get("reading")), "revisions_on": rv.get("on"), "revisions_days": rv.get("days"), "cash": r2(f.get("fcf_yield")), "cash_why": f.get("fcf_why"), "next_report": f.get("next_report"),
            "geiger": r2(g.get("live")), "pctl": None if g.get("pctl") is None else round(g["pctl"]), "pctl_n": g.get("n"), "p50": r2(g.get("p50")), "p70": r2(g.get("p70")), "read": (g.get("read") or {}).get("words"), "kind": (g.get("read") or {}).get("kind"),
@@ -175,6 +175,8 @@ for t, n in NAMES.items():
     n["in_tree"] = bool(anyc(t)); n["r2"] = None if not judged else any(BR[c]["scores"][t]["passes"] for c in judged)
     n["r3"] = None if n["pctl"] is None else (not n["hot"])
     n["finalist_in"] = [c for c in anyc(t) if t in BR[c]["finalists"]]; n["champion_in"] = [c for c in anyc(t) if BR[c]["champion"] == t]
+    # the branches its own verdict rests on: its business branches (a club by place or size only when it has no other)
+    n["verdict_branches"] = bs; n["finalist_where_it_counts"] = [c for c in bs if t in BR[c]["finalists"]]; n["champion_where_it_counts"] = [c for c in bs if BR[c]["champion"] == t]
     n["verdict"] = ("not in a branch of the tree" if not n["in_tree"] else "not judged: fewer than two readings" if n["r2"] is None else "fails round 2 (fundamentals)" if not n["r2"] else "passes fundamentals; timing says wait" if n["hot"] else "passes both")
     h = n["home"]
     n["why"] = None if not h else (reason(t, h) if BR[h]["scores"][t]["passes"] else weak(t, h))
@@ -188,7 +190,7 @@ for c in sorted(cohorts, key=lambda c: BR[c]["rank"]):
     if b["champion"]: champions.append({"branch": c, "t": b["champion"]})
 # ---------------------------------------------------------------- open the loop
 allL = set(lists["RADAR"]) | set(lists["FAVORITES"]) | set(lists["LIKED"])
-blind = sorted([t for t, n in NAMES.items() if n["finalist_in"] and not n["lists"]], key=lambda t: (0 if NAMES[t]["champion_in"] else 1, min(BR[c]["rank"] for c in NAMES[t]["finalist_in"]), t))
+blind = sorted([t for t, n in NAMES.items() if n["finalist_where_it_counts"] and not n["lists"]], key=lambda t: (0 if NAMES[t]["champion_where_it_counts"] else 1, min(BR[c]["rank"] for c in NAMES[t]["finalist_where_it_counts"]), t))
 tunnel = []
 for t in sorted(allL):
     n = NAMES.get(t)
