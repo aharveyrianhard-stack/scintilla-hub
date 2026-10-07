@@ -41,7 +41,7 @@ details.sql{margin:8px 0}details.sql summary{cursor:pointer;color:var(--bright);
 <p>“we don’t have in the economic section a left to right slider like we have on the event section … I think we should”</p>
 <div class="pair">
 <figure><img src="shots/before-economic-1680.jpg" alt="BEFORE, live today: region tabs, category chips, the month grid. No slider." loading="lazy"><figcaption>BEFORE, live today: region tabs, category chips, the month grid. No slider.</figcaption></figure>
-<figure><img src="shots/after-economic-1680.jpg" alt="AFTER, on the branch: the slider sits under the day bar, exactly where the earnings room has its own." loading="lazy"><figcaption>AFTER, on the branch: the slider sits under the day bar, exactly where the earnings room has its own.</figcaption></figure>
+<figure><img src="shots/after-economic-1680.jpg" alt="AFTER, on the branch: the slider sits under the day bar, exactly where the earnings room has its own. On the right the rail is scrolled to its new cards: the curve as a picture, then the auctions." loading="lazy"><figcaption>AFTER, on the branch: the slider sits under the day bar, exactly where the earnings room has its own. On the right the rail is scrolled to its new cards: the curve as a picture, then the auctions.</figcaption></figure>
 </div>
 <div class="pair" style="margin-top:12px">
 <figure><img src="shots/after-economic-1680-slider.jpg" alt="The slider, close. One bar is one day; the number is how many releases; the star marks a day with the Fed’s decision, payrolls, CPI, core PCE or GDP." loading="lazy"><figcaption>The slider, close. One bar is one day; the number is how many releases; the star marks a day with the Fed’s decision, payrolls, CPI, core PCE or GDP.</figcaption></figure>
@@ -295,6 +295,7 @@ with cur_mark as (
          row_number() over (partition by h.ticker order by h.session_et desc) as rn
   from public.ibkr_option_volume_15m h
   join cur c on c.ticker = h.ticker and h.hhmm = c.hhmm and h.session_et &lt; c.session_et
+                and h.session_et &gt;= c.session_et - 60      -- 20 sessions sit inside 60 days; the bound keeps a year of marks out of every read
   where h.call_vol is not null and h.put_vol is not null and (h.call_vol + h.put_vol) &gt; 0
 ), usual as (
   select ticker, avg(call_vol) as usual_call_vol, avg(put_vol) as usual_put_vol, count(*)::int as usual_sessions
@@ -342,11 +343,11 @@ drop table if exists public.ibkr_option_volume_15m;</pre></details>
 <h2>11 · TESTS</h2>
 <table class="mid">
 <tr><th>WHERE</th><th class="r">BEFORE</th><th class="r">AFTER</th><th>NEW FAILURES</th></tr>
-<tr><td>Hub</td><td class="r">PENDING</td><td class="r">PENDING</td><td>PENDING</td></tr>
+<tr><td>Hub</td><td class="r">2,181 tests · 7 fail</td><td class="r">2,203 tests · 7 fail</td><td>none: the same 7 names</td></tr>
 <tr><td>Station</td><td class="r">1,108 tests · 27 fail</td><td class="r">1,114 tests · 27 fail</td><td>none: the same 27 names</td></tr>
 <tr><td>Put/call writer</td><td class="r">110 tests · 0 fail</td><td class="r">116 tests · 0 fail</td><td>none</td></tr>
 </table>
-<p class="small">Failing tests are compared by name against the same commit without this work, not by count. Three existing tests were re-pinned on purpose, each with a dated note saying why: the writer’s close now writes five tables; the Station’s list of controls gains one switch; the Station’s list of direct reads gains one list of names with volume counts (no price).</p>
+<p class="small">Failing tests are compared by name against the same commit without this work, not by count. Four existing tests were re-pinned on purpose, each with a dated note saying why and naming what stands beside it: the Hub’s count of calendar reads goes from two to three (the surprise strips’ one read, behind its own switch; the economic room’s own module still holds two); the writer’s close now writes five tables; the Station’s list of controls gains one switch; the Station’s list of direct reads gains one list of names with volume counts (no price).</p>
 
 <h2>12 · FOR THE COORDINATOR · THE ORDER</h2>
 <pre>NOTHING BELOW HAS BEEN RUN. Each step is independent of the others unless it says so.
@@ -385,7 +386,7 @@ D · CONSENSUS HISTORY BEFORE JUNE 2024 (optional; the strips work without it)
 
 <details class="sc-pagespecs"><summary>PAGE SPECS</summary><div>
 <p>Pictures: headless Chromium, one page at a time, every non-GET request blocked and counted. BEFORE pictures are the live Hub and Station. AFTER pictures are the live address answered with the branch’s page (tools/shoot.mjs --map), so every read on screen is the real one, except the two tables that do not exist yet (--data), answered from data/treasury-auctions.json (the Treasury’s own rows, read 7 Oct 13:26 ET) and data/putcall-names-now-20261007-1330.json (the view’s SQL run read-only over the stored readings).</p>
-<p>The Hub block lives in tools/hm2-block.js and tools/hm2-style.css and is placed by tools/inject-hm2.py through seven one-line hooks; --remove gives the page back to the byte. One switch, HM2_ON; the put/call tape has its own, HM2_PC_ON. The Station row has PC_TAPE_DEFAULT_ON = false.</p>
+<p>The Hub block lives in tools/hm2-block.js and tools/hm2-style.css and is placed by tools/inject-hm2.py through seven one-line hooks; --remove gives the page back to the byte. It sits above the economic room’s own module, never inside it: that module is still pinned to three tables and two calendar reads. The slider asks through the room’s one window reader; the strips add one read of their own, recorded in the room’s guard test with its neighbours. Nothing in the block reads or paints unless its own element is on the page, and the room’s mount never waits on it. One switch, HM2_ON; the put/call tape has its own, HM2_PC_ON. The Station row has PC_TAPE_DEFAULT_ON = false.</p>
 <p>Sources: econ_calendar (FMP economic calendar, existing job) · treasury_rates (the Treasury’s daily par curve, existing job) · treasury_auctions (TreasuryDirect TA_WS, new) · ibkr_option_volume_15m and putcall_names_now (IBKR option volume, new, written by putcall-aggregate).</p>
 </div></details>
 </main><!-- scnav · one way back and one way out on every Hub sub-page. Source: scripts/scnav-snippet.html, placed by

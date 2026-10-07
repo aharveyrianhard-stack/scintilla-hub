@@ -18,6 +18,7 @@ import { auctionRows, searchUrl, SOURCE } from "./auctions.mjs";
 const SB = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const VERSION = "treasury-auctions-v1";
+const FIRST_FILL_FROM = "2018-01-01";
 const J = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json" } });
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -27,7 +28,10 @@ Deno.serve(async (req: Request) => {
   const q = new URL(req.url).searchParams;
   const days = Math.min(Math.max(Number(q.get("days") ?? 45) || 45, 1), 400);
   const now = Date.now();
-  const from = /^\d{4}-\d{2}-\d{2}$/.test(q.get("from") ?? "") ? String(q.get("from")) : iso(new Date(now - days * 86400e3));
+  /* this door needs no token (it reads a free source and writes one table by name), so it is kept small: a caller
+     can ask for history no further back than the first fill's own start — never the whole 1979-onward archive */
+  const asked = /^\d{4}-\d{2}-\d{2}$/.test(q.get("from") ?? "") ? String(q.get("from")) : null;
+  const from = asked ? (asked < FIRST_FILL_FROM ? FIRST_FILL_FROM : asked) : iso(new Date(now - days * 86400e3));
   const to = iso(new Date(now + 45 * 86400e3));
   const read: any[] = [], failed: string[] = [];
   for (const type of ["Note", "Bond"]) {

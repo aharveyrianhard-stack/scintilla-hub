@@ -56,6 +56,7 @@ with cur_mark as (
          row_number() over (partition by h.ticker order by h.session_et desc) as rn
   from public.ibkr_option_volume_15m h
   join cur c on c.ticker = h.ticker and h.hhmm = c.hhmm and h.session_et < c.session_et
+                and h.session_et >= c.session_et - 60      -- 20 sessions sit inside 60 days; the bound keeps a year of marks out of every read
   where h.call_vol is not null and h.put_vol is not null and (h.call_vol + h.put_vol) > 0
 ), usual as (
   select ticker, avg(call_vol) as usual_call_vol, avg(put_vol) as usual_put_vol, count(*)::int as usual_sessions

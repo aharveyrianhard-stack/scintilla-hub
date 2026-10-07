@@ -233,6 +233,11 @@ test("the table and its way back: additive, anon read, and the rollback drops ex
   assert.match(rollback, /cron\.unschedule\(jobname\) from cron\.job where jobname in \('treasury-auctions-results', 'treasury-auctions-daily'\)/, "and the two schedules, if they were ever made");
   assert.match(cron, /cron\.schedule\('treasury-auctions-results', '\*\/5 17-18 \* \* 1-5'/); assert.match(cron, /cron\.schedule\('treasury-auctions-daily', '10 12 \* \* 1-5'/);
   for (const col of Object.keys(auctionRow(TD({})))) assert.match(mig, new RegExp("\\n  " + col + "\\s"), "the module writes " + col + "; the table has it");
+  const fn = read("../supabase/functions/treasury-auctions/index.ts");
+  assert.match(fn, /treasury_auctions\?on_conflict=cusip,auction_date/, "the function writes this one table, by its own key");
+  assert.equal((fn.match(/\/rest\/v1\//g) || []).length, 1, "and no other");
+  assert.match(fn, /const from = asked \? \(asked < FIRST_FILL_FROM \? FIRST_FILL_FROM : asked\)/, "an open door is a small one: no history before the first fill's start");
+  assert.match(fn, /if \(!rows\.length\) return J\(\{ \.\.\.out, ok: false,/, "a source that answered nothing is said out loud, never an empty success");
 });
 
 /* ---- 4 · the surprise strips ------------------------------------------------------------------------ */
