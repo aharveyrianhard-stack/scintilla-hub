@@ -1,0 +1,93 @@
+<h4>WHAT THIS PAGE IS</h4>
+<p>Four pieces of work from the night of 7 October 2026, on a branch. Nothing here is live: no deploy, no table written, the allocation tool and the Hub read exactly as they did yesterday. Every "after" on this page is what the same data says once the fix is switched on.</p>
+
+<h4>1 · THE FEED — WHAT WAS WRONG</h4>
+<p>The allocation tool's knockout takes its figures from one small program on the database called <code>comps-feed</code>. It was last changed on 20 July. On 7 October it told the live tool that Micron's sales were shrinking 59% and gave every name a forward P/E of zero. In one sentence: <b>the feed never says which period it wants, so it divided Micron's last quarter by its full year, read a single quarter's estimate as a year's, and in a full batch lost every estimate to the database's 1,000-row page — then printed the blank as zero.</b></p>
+<ul>
+<li><b>Sales growth.</b> The statements table holds quarters and full years side by side. The feed took the two newest rows, whatever they were. At a year-end the last quarter and the full year carry the same date, and the database hands them back in no fixed order. So Micron read 54.2bn ÷ 133.2bn − 1 = −59% in one request and +146% in the next. On any other week it was one quarter against the quarter before. It was never a year against a year. Micron grew 256%.</li>
+<li><b>Forward P/E.</b> The estimates table also holds quarters. Asked alone, Micron's forward P/E came out at 27.8 times: its price over one quarter's earnings. Asked in a batch of sixty names, as the tool asks, there are about 7,100 estimate rows; the database serves the first 1,000, oldest first, and those end in 2005. No future year was ever seen.</li>
+<li><b>Blank printed as zero.</b> The line that prints a number turned "nothing" into 0. That is why every forward P/E read 0, and why 762 names with no statements read "growth exactly 0%".</li>
+<li><b>P/S and margins</b> came from the newest ratio row, usually a single quarter: one quarter's sales under a full market value (Western Digital 49.6 times) and one quarter's margin (Alphabet 94%, a quarter of paper gains).</li>
+<li><b>Market value.</b> The stored market value is the one at the last quarter-end, not today's. The program that writes it says so in its own notes. Against today's it is more than 10% off for 243 of the 437 companies that report in dollars.</li>
+<li><b>Other currencies.</b> A company that reports in another currency was divided as if it reported in dollars (TSMC's P/E read 1.1).</li>
+</ul>
+<p>The figures answered differently from one request to the next. The same deployed program, asked three ways within twenty minutes, gave Micron −59% and +146%, and Western Digital a P/S of 49.6 and 14.4. Those answers are kept in the test file so the cause can be shown again.</p>
+
+<h4>1 · THE FEED — THE FIX</h4>
+<p>The new version keeps the same output, column for column, so neither the allocation tool nor the Station's copy needs a change. Each figure now means what the Hub's COMPS tab means by it:</p>
+<ul>
+<li>Sales, gross profit and net income are twelve months: the newest four quarters in a row, or the last full year when four quarters are not on file. Never a quarter against a year.</li>
+<li>Growth is those twelve months over the twelve before; failing that, the last full year over the one before.</li>
+<li>When the four quarters on file for a year add up to more than that year's own row, the year row was restated after a business was sold or spun off, and some quarter still carries it. Western Digital's 2025 full-year row is the drives business alone (9.5bn), but one of its 2025 quarters still carries SanDisk, so the quarters add to 11.4bn. A restatement of that kind only ever takes sales out, so the smaller figure is the like-for-like one: those quarters are not summed and the full-year rows are used. Western Digital's growth is then +36%, not +13%. Today the rule catches four companies: Western Digital, AppLovin, American Tower and Honeywell.</li>
+<li>Forward P/E is today's price over the estimate for the financial year in progress, yearly rows only.</li>
+<li>Price and market value are today's, taken together from the company profile, which is refreshed every morning.</li>
+<li>A company reporting in another currency has its earnings and sales put in dollars at the stored rate. With no rate on file the multiple is left blank, never mixed.</li>
+<li>A figure that is not held is blank, never zero. The pages already read a blank as "not held".</li>
+<li>Every read is in a fixed order and is read to its end, so the answer no longer depends on how many names are asked for.</li>
+</ul>
+<p>Micron's trailing and forward P/E now come out at 14.09 and 6.02, the same as the COMPS tab to the digit. Checked for all 26 card names: the fixed feed's trailing P/E, forward P/E and P/S equal the COMPS tab's own (on today's market values) to two decimals, and its sales growth equals the tab's for 25 of the 26. The one that differs is the restated year: Western Digital (+36% here, +13% on the tab).</p>
+
+<h4>1 · WHERE THE NUMBERS ON THE FEED PANELS COME FROM</h4>
+<p>"As the live tool was told": the live allocation tool, run in a hidden browser at @@TAKEN@@ on 7 October, its own requests to the deployed feed. "On the fixed feed": the same tool in the same minute, with only the feed's answers swapped for what the new code returns from the same tables. Nothing was deployed to do this. The knockout score is the tool's own, unchanged: price, growth, margin and leverage against the name's business line. The tool priced 1,211 symbols; 387 of them have an estimate on file.</p>
+<p>What the fix does to the knockout: Micron's score goes from 0.75 to 1.00 and ties SanDisk at the top of memory; the Geiger sends SanDisk through as the more washed-out, which is what CP1's own re-run on the COMPS tab's figures said. One champion changes: in AI cloud and hosting, CoreWeave now ties Nebius and goes through on timing. Western Digital's score falls from 0.96 to 0.81 because its growth was read as +245%.</p>
+
+<h4>2 · THE FISCAL-YEAR JOIN</h4>
+<p>An analyst estimate is stored under the date the financial year ends. The data provider moves that date. Micron's fiscal 2027 was dated 28 August 2027 in the copy kept on 11 August, and 3 September 2027 in every copy since 2 October, because fiscal 2026 turned out to end on 3 September. Costco, Cisco and Lumentum moved by one day in the same weeks: 4 names of 455.</p>
+<p>The earlier lane reported that the Hub's ESTIMATES box could not join Micron's copies. <b>It can, and it does.</b> Since 2 October that box has matched the nearest year-end within 45 days. Run on today's rows — and checked on the page that is live — it shows Micron's FY+1 estimate going from 154.67 to 173.77, +12%. Nothing in the Hub page was changed.</p>
+<p>The reader that did lose the copy was the decision cards'. It looked the copies up by the exact date, so Micron's card said "+1.7% since 2 October, three copies" when the database holds four copies and the change since 11 August is +12.4% (and +24.5% for the year after). That reader is fixed. The other 25 cards read the same as before.</p>
+<p>Is this the feed's cause? No. The feed reads the current estimates table, which holds no duplicate year for any of 457 names, and its −59% comes from the statements table, where no date moved. The two share only a habit: treating a date as if it named a year.</p>
+
+<h4>3 · THE FOREIGN MEMORY PEERS</h4>
+<p><b>SK hynix, Samsung and Kioxia still have no figures.</b> They come from the data provider FMP, whose key is kept off this Mac; a lane's attempt to upload a script to a throw-away machine was refused on 6 October and was not retried; and this session has no connector to FMP. The two ready commands are in the panel. Route A takes raw answers saved by the coordinator's connector; route B is the job that already exists.</p>
+<p>Route A needs, for each of 000660.KS, 005930.KS, 285A.T (and SKHY, SK hynix's US line, as a fallback): the profile, the quote, the last eight quarterly income statements, the last two quarterly balance sheets, the newest quarterly key metrics, the yearly analyst estimates, and the two "TTM" ratio answers; and once each, the daily KRWUSD and JPYUSD closes since 2024. The tool tells each answer by what is in it, and lists anything that did not arrive.</p>
+<p>What was built for the day the figures arrive: the three are asked for on their home exchanges, where the price and the market value come in won and yen. The existing one-currency rule was built for a foreign company with a US line, whose price is already in dollars. Read as they come, a won price would be divided by dollar earnings. The price and market value of a home listing are now put in dollars first, at the rate on the quote's day; with no rate the company is left out and named. This was tested on the provider's own TSMC figures restated as a home listing: read as it comes, the P/E is about 32 times too high; in dollars first, every multiple equals the dollar line's.</p>
+<p><b>Does +99% for Micron stand?</b> Not as a number, and for two reasons that do not need the foreign figures.</p>
+<ul>
+<li>The COMPS tab works out each company's share count as stored market value ÷ price. The stored market value is the last quarter-end's and the price is later, so the share count is off by however far the price has moved: Micron's 9% low, Western Digital's 25% high. On today's market values, with the same rule and the same closes, Micron reads <b>+72%</b>, SanDisk −4%, Western Digital +10%, Seagate −46%. This is a switch, off by default, like CP1's.</li>
+<li>The +72% is the middle of twelve readings from three companies that disagree. On SanDisk alone, the only other memory maker we hold, Micron reads +56%. On the two disk-drive makers alone it reads +119% and +282%. So the centre leans on disk drives. Three more memory makers will move it; which way depends on figures we do not have.</li>
+</ul>
+<p>The row of dots shows those twelve readings: each dot is what Micron would be worth if it carried one multiple of one peer. The three empty rows are the seats waiting for figures.</p>
+
+<h4>4 · GROWTH FROM ONE FORECAST YEAR TO THE NEXT</h4>
+<p>The growth credit lets a faster grower sit above its peers. As built, growth was measured from last year's reported earnings. AbbVie's reported earnings carried write-offs, so measured from them AbbVie "grows" 70% a year and Pfizer 42% — nearly as fast as Lilly, and the credit could not tell them apart. The approved change measures growth from the first forecast year to the furthest forecast year inside three and a half years. AbbVie becomes 12% a year and Pfizer −8%.</p>
+<p>Result: Lilly −36% → −31%; Vistra +22% → +25%. It is a switch, off by default; CP1's twelve switches answer exactly as CP1 reported.</p>
+<p><b>What it cannot see</b> is the year in progress, because that year is its starting point. Micron's year turned on 4 September and its earnings are more than doubling this year; measured from one forecast year to the next, Micron's own growth reads 11% a year. The order inside memory turns over: Micron +99% → +89%, SanDisk +12% → −7%, Western Digital −10% → +10%, Seagate −46% → −15%. A forecast year can also carry a one-off: Alphabet reads 0.9% a year and Merck 55%.</p>
+<p>A proposal sits beside it, also off: start from the year just reported, on the analysts' own basis. Lilly −26%, Vistra +35%, Micron +106%. Alphabet then reads 18.8% a year and Amazon 22.5%, which is what the estimates-and-guidance study found on a clean base.</p>
+
+<h4>WHAT COULD BE WRONG</h4>
+<ul>
+<li>The tables were being refreshed while this ran: ten companies' statements every six hours, thirty companies' estimates every four. Nebius, IREN and Coherent were refreshed at 02:07 ET and read differently from CP1's run an hour earlier. Each before → after on this page comes from one run, so the two sides are like for like.</li>
+<li>Net margin is as filed. Alphabet's and Amazon's twelve months carry large paper gains on stakes, and Western Digital's carry its SanDisk shares. The knockout's "margin" reading uses it. That is the tool's choice of measure, not the feed's error.</li>
+<li>Vistra's sales read −28%. That is the filed figure: its sales swing with the value of its hedges.</li>
+<li>The stored EBITDA carries the same paper gains: Alphabet's June quarter reads 147bn of EBITDA against 41bn of operating income, Amazon's 102bn against 28bn. Their EV/EBITDA on the COMPS tab is flattered by it. Micron's newest quarter has the opposite gap (its EBITDA is stored equal to operating income, about 2% of the year short). Neither was changed here.</li>
+<li>Seagate has full years only in the statements table, no quarters, so its figures are the last full year's.</li>
+<li>The list of companies reporting outside dollars is 16 names from the 3 October sweep. A new one that is in neither that list nor the currency table would still be read as dollars.</li>
+<li>The feed's price and market value are as fresh as the profile table, refreshed once a day at 02:25 ET.</li>
+<li>The restated-year rule only acts when the quarters add up to more than the year row. When only some quarters of a year were restated it cannot tell which: Crown Castle (−23%) and Kimberly-Clark (−8%) are read as filed and may still mix the sold business in.</li>
+<li>Hut 8's filed "revenue" carries the swings in the value of its bitcoin (two quarters are negative). The feed passes on what is filed: −91%.</li>
+<li>A forward P/E in the thousands (a company expected to earn a cent) is printed as it is; the pages' own outlier rules deal with it.</li>
+</ul>
+
+<h4>WHAT WAS NOT DONE</h4>
+<ul>
+<li>The feed was not deployed. It is one command for the coordinator, with the old version kept byte for byte beside it as the way back.</li>
+<li>No figure for SK hynix, Samsung or Kioxia, as above.</li>
+<li>The decision cards and their page were not rebuilt; only the tool that reads the copies was fixed.</li>
+<li>The COMPS tab's drawing was not changed.</li>
+<li>The allocation repository was not touched: the fault is not there.</li>
+<li>The earlier lane's flag tool on another branch still groups copies by exact date; it was not changed from here.</li>
+<li>No Hermes report (blocked for an earlier lane and not retried) and no Linear or Notion update.</li>
+</ul>
+
+<h4>HOW EACH PIECE IS SWITCHED ON — NOTHING IS ON TODAY</h4>
+<ul>
+<li><b>The feed.</b> One command for the coordinator, from the Hub checkout on this branch: <code>supabase functions deploy comps-feed --project-ref wadinxqplrggagkvrdag --no-verify-jwt</code>. Then check what is live: <code>curl -s "https://wadinxqplrggagkvrdag.supabase.co/functions/v1/comps-feed?syms=MU&amp;format=json"</code> must answer <code>comps-feed-v6</code> with Micron's forward year 2027-09-03 and a forward P/E near 6. The way back: the old program is kept byte for byte as <code>supabase/functions/comps-feed/index.ts.ROLLBACK-v5-20260720</code>; put it back as <code>index.ts</code> and deploy again. The allocation tool and the Station need no change.</li>
+<li><b>The cards' revision line.</b> Already in the card tool; it takes effect the next time the cards are built.</li>
+<li><b>Today's market values in comps.</b> The reader takes one option, <code>marketValueFrom: "profile"</code>; the COMPS tab and the card job pass it once Alan says so.</li>
+<li><b>Growth from one forecast year to the next.</b> The caller passes <code>FD1_ALL</code> in place of <code>CP1_ALL</code> (or <code>FD1_ALL_LAST</code> for the proposal).</li>
+<li><b>The foreign peers.</b> The facts file dropped beside the comps code is picked up by itself.</li>
+</ul>
+
+<h4>HOW IT WAS CHECKED</h4>
+<p>@@TESTS@@</p>
+<p>Charts: one hue in two shades, and before and after also differ in shape (a ring and a dot). The pair was run through the dataviz skill's checker as a two-step ramp on this panel and passes; its colour checks for many-coloured palettes do not apply to a grey page. Every value in a chart is also in a table or in the row beside it.</p>

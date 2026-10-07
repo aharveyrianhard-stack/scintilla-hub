@@ -6,13 +6,22 @@
    named candidates not in) · THE RANGE (one bold band: low – centre – high, today's price, the upside; WEIGH A / B / C
    beside it with the minimized field) · the weights as a row of numbers · THE FIELD going down (16 cyan bars, no frames;
    outliers hollow at the edge with an arrow and their value, one click keeps one) · the table, closed · PAGE SPECS.
-   No descriptions in the content: labels, units and numbers only; every sentence sits in PAGE SPECS. */
+   No descriptions in the content: labels, units and numbers only; every sentence sits in PAGE SPECS.
+   C6 (5 Oct): outliers across the columns (outliers.mjs). A cell far from its column's median carries a small mark and
+   still counts; a peer marked in 3+ columns (or 40% of its columns) is an OUTLIER: greyed at the bottom of the set and
+   of the table with its count, out of every median and of the price, one click keeps it; the range prints the centre
+   with / without outliers.
+   C6b (5 Oct): only the valuation multiples vote (trailing and forward P/E as one vote; 3+ votes, or half the votes the
+   peer has and at least two). Growth, margin, capex and leverage marks are information: a fainter cell, never a vote.
+   Under the set's header: how many peers share the company's business; when fewer than half do, the set is named
+   "mostly different business" and the rule does not cut the peers that share it. */
 import { inputs as c4inputs, readSet, snapshotFromCohort } from "../../20261001/comps-mechanic/read.mjs";
 import { SOURCE_WORDS } from "../../20261001/comps-mechanic/peers.mjs";
 import { ROWS, SHORT, TABLE } from "../../20261001/comps-template/cohort.mjs";
 import { decisionRow, FLAG_WORDS } from "../../20260930/comps-tab/comps-tab.mjs";
 import { buildSet, lineWords, N_DEFAULT, NS, SIM_MIN, LINE_MIN, SIZE_WEIGHT, SEATS_PER_LINE } from "./lines.mjs";
-import { conclusion, isOff, isKept, median, quantile, WAY_WORDS, wayOf, OUTLIER_K, OUTLIER_MIN_N, PEG_YEARS_MAX } from "./field.mjs";
+import { isOff, isKept, median, quantile, WAY_WORDS, wayOf, PEG_YEARS_MAX } from "./field.mjs";
+import { conclusion6, isFlagged, isVote, VOTES, CUT, MIN_N, MIN_FLAGS, SHARE, SHARE_MIN_FLAGS } from "../../20261005/comps-c6/outliers.mjs";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const SVG = "http://www.w3.org/2000/svg";
@@ -123,6 +132,15 @@ export const CSS = `
 .cm5 .chip,.cm5 .btn{font:inherit;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;padding:4px 8px;background:rgba(0,212,255,.06);border:0;color:var(--ink3);cursor:pointer}
 .cm5 .chip:hover,.cm5 .btn:hover{color:var(--ink)}.cm5 .btn.on{color:#061015;background:var(--crk)}
 .cm5 .in{font:inherit;font-size:10.5px;background:var(--panel2);color:var(--ink);border:0;padding:4px 7px;min-width:160px;flex:1 1 160px}
+.cm5 table.t td.fl,.cm5 table.t td.fl .cell{color:var(--crk);font-weight:600}.cm5 table.t td.fl{background:rgba(0,212,255,.12)}.cm5 .fl i{font-style:normal;font-size:8px;margin-left:3px;vertical-align:1px}
+.cm5 table.p tr.o6 td,.cm5 table.t tr.o6 td{color:var(--dim);background:rgba(134,138,170,.07)}.cm5 table.p tr.o6 td.tk,.cm5 table.t tr.o6 td.tk{color:var(--ink3)}
+.cm5 table.p tr.o6 .sim i{background:var(--dim)}.cm5 table.t tr.o6 td.fl{color:var(--crk);background:rgba(0,212,255,.08)}
+.cm5 .o6n{display:inline-block;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-left:6px}.cm5 .o6n b{color:var(--crk);font-weight:600}
+.cm5 .o6n.s{display:none}.cm5.narrow .o6n.s{display:inline-block}.cm5 .o6n.l{margin-left:0}
+.cm5 .tog.o6{color:var(--dim)}
+.cm5 table.t td.fl.inf,.cm5 table.t td.fl.inf .cell{font-weight:400}.cm5 table.t td.fl.inf,.cm5 table.t tr.o6 td.fl.inf{background:rgba(0,212,255,.04)}
+.cm5 .biz{font-size:10px;color:var(--ink3);letter-spacing:.06em;margin:0 0 8px;text-transform:uppercase}.cm5 .biz b{color:var(--ink);font-weight:700}.cm5 .biz.warn b{color:var(--crk)}.cm5 .biz span{margin-right:14px}
+.cm5 .wwo{font-size:10px;color:var(--ink3);letter-spacing:.06em;margin:0 0 8px}.cm5 .wwo b{color:var(--ink);font-weight:700;font-size:12px}.cm5 .wwo span{margin-right:14px;white-space:nowrap}
 .cm5 .words{font-size:10px;color:var(--ink3);line-height:1.55;margin:6px 0 0}
 .cm5 .err{padding:8px 10px;color:var(--bear);font-size:10.5px}
 .cm5 .loading{color:var(--ink3);font-size:10px;padding:12px 2px;letter-spacing:.2em}
@@ -194,7 +212,7 @@ async function loadSet(S) {
 
 function render(S) {
   const { T, set } = S;
-  const C = conclusion(S.snap, S.decisions, S.estimates, S.opts.today, S.way); S.C = C;
+  const C = conclusion6(S.snap, S.decisions, S.estimates, S.opts.today, S.way, { set: S.set }); S.C = C;
   const snap = C.snap, w = wayOf(C.ways, S.way), peers = S.members.filter((t) => t !== T);
   const h = [];
   /* the set */
@@ -202,10 +220,11 @@ function render(S) {
   h.push(`<div class="sec"><div class="hd"><b>comparables</b><span>${esc(set.own_industry || "industry unknown")}${snap.sector ? " · " + esc(snap.sector) : ""} · ${esc(CAP(set.own_market_cap))}</span><span class="ctl"><span>keep</span>${NS.map((v) => `<button type="button" data-cm="n" data-v="${v}" class="${S.n === v ? "on" : ""}">${v}</button>`).join("")}</span></div>
     <div class="lines" title="${esc(L.from)}">${linesBar.map(([l, v]) => `<i style="flex:${Math.max(0.02, v)}" title="${esc(l)} ${Math.round(v * 100)}%"></i>`).join("")}</div>
     <div class="linew">${linesBar.map(([l, v]) => `<b>${esc(l)}</b> ${Math.round(v * 100)}%`).join(" · ")} <span style="color:var(--mute)">· ${esc(L.source)}</span></div>
-    ${setTableHTML(S)}</div>`);
+    ${bizHTML(C.c6.business)}${setTableHTML(S)}</div>`);
   /* the range */
   const lw = (ww) => ww && ww.ok ? esc(P0(ww.mid)) : "—";
-  h.push(`<div class="sec"><div class="hd"><b>the range</b><span>way ${esc(S.way)} · ${C.peersOn.length} of ${peers.length} peers in · ${C.outliers.filter((o) => o.excluded).length} outlier cells out</span></div>
+  h.push(`<div class="sec"><div class="hd"><b>the range</b><span>way ${esc(S.way)} · ${C.peersOn.length} of ${peers.length} peers in · ${C.c6.outliers.length} outlier${C.c6.outliers.length === 1 ? "" : "s"} out · ${C.c6.flaggedCells} cells marked</span></div>
+    <div class="wwo" id="cm5Wwo"><span>with outliers <b>${esc(P0(C.c6.centre.with))}</b></span><span>without outliers <b>${esc(P0(C.c6.centre.without))}</b></span></div>
     <div class="rg"><div><div id="cm5Band"><svg></svg></div></div>
     <div><div class="sw"><span class="k">weigh</span>${WAYS3.map((k) => `<button type="button" data-cm="way" data-w="${k}" class="${S.way === k ? "on" : ""}" title="${esc(WAY_WORDS[k].plain)}">${k} ${lw(wayOf(C.ways, k))}</button>`).join("")}</div><div class="mini" id="cm5Mini"></div></div></div>
     ${weightsHTML(S)}</div>`);
@@ -220,13 +239,22 @@ function render(S) {
 }
 
 /* ---- the set ------------------------------------------------------------------------------------------ */
+/* C6b 4 · how many peers share the company's business; under half, the set is named (labels only, the sentence is in PAGE SPECS) */
+function bizHTML(b) {
+  if (!b) return "";
+  const n = `<span><b>${b.same.length} of ${b.n}</b> peers share ${esc(b.line || "the business")}</span>`;
+  return b.mostlyDifferent ? `<div class="biz warn" id="cm5Biz"><span><b>peer set mostly different business</b></span>${n}<span>fix the peers, not the outliers</span></div>` : `<div class="biz" id="cm5Biz">${n}</div>`;
+}
 function setTableHTML(S) {
-  const { set, T, C } = S, sel = C.sel, names = S.snap.names || {};
-  const row = (r) => { const off = sel.peers.has(r.ticker), top = r.shared.slice(0, 2); return `<tr class="${off ? "off" : ""}"><td><button type="button" class="tog${off ? "" : " on"}" data-cm="peer" data-t="${esc(r.ticker)}" title="${off ? "put back" : "turn off"}">${off ? "□" : "■"}</button></td><td class="tk" title="${esc(names[r.ticker] || "")}">${esc(r.ticker)}</td><td><span class="sim" title="similarity ${r.sim.toFixed(2)}"><i style="width:${Math.round(Math.min(1, r.sim) * 100)}%"></i></span>${r.sim.toFixed(2)}</td><td>${top.length ? top.map((s) => `${esc(s.line)} <span style="color:var(--mute)">${Math.round(s.own * 100)}·${Math.round(s.peer * 100)}%</span>`).join(", ") : esc(r.why.replace(/^same family \(([^)]+)\): (.*)$/, "$2 · $1 family"))}${r.seat ? `<span class="seat">seat</span>` : ""}</td><td><span class="src" title="${esc(r.line_from)}">${esc(r.line_source)}</span>${r.sources.map((s) => `<span class="src" title="${esc(SOURCE_WORDS[s] || s)}">${s === "MASSIVE" ? "mas" : s.toLowerCase()}</span>`).join("")}</td><td class="r">${esc(CAP(r.market_cap))}</td><td class="r">${esc(RATIO(r.ratio))}</td></tr>`; };
+  const { set, T, C } = S, sel = C.sel, names = S.snap.names || {}, c6 = C.c6, sc = c6.score;
+  const row = (r) => { const o6 = c6.ruleOff.has(r.ticker), k6 = c6.kept.includes(r.ticker), n6 = c6.notCut.includes(r.ticker), off = !o6 && sel.peers.has(r.ticker), top = r.shared.slice(0, 2), w6 = o6 ? "outlier" : k6 ? "kept" : "same business · not cut";
+    const mark = o6 || k6 || n6 ? `<span class="o6n s" title="${esc(sc[r.ticker].flags.map((f) => f.short + " " + Math.abs(f.d).toFixed(1) + " spreads " + (f.side === "high" ? "above" : "below")).join(" · "))}"><b>${w6}</b> · ${sc[r.ticker].n} of ${sc[r.ticker].have}</span>` : "", long = o6 || k6 || n6 ? `<span class="o6n l"><b>${w6}</b> · ${esc(sc[r.ticker].words)}</span>` : "";
+    const tog = o6 || k6 ? `<button type="button" class="tog${o6 ? " o6" : " on"}" data-cm="keeppeer" data-t="${esc(r.ticker)}" title="${o6 ? "keep in the medians and the price" : "let the rule leave it out again"}">${o6 ? "◇" : "◆"}</button>` : `<button type="button" class="tog${off ? "" : " on"}" data-cm="peer" data-t="${esc(r.ticker)}" title="${off ? "put back" : "turn off"}">${off ? "□" : "■"}</button>`;
+    return `<tr class="${o6 ? "o6" : off ? "off" : ""}"${o6 ? ` data-o6="${esc(r.ticker)}"` : ""}><td>${tog}</td><td class="tk" title="${esc(names[r.ticker] || "")}">${esc(r.ticker)}${mark}</td><td><span class="sim" title="similarity ${r.sim.toFixed(2)}"><i style="width:${Math.round(Math.min(1, r.sim) * 100)}%"></i></span>${r.sim.toFixed(2)}</td><td>${long ? long : top.length ? top.map((s) => `${esc(s.line)} <span style="color:var(--mute)">${Math.round(s.own * 100)}·${Math.round(s.peer * 100)}%</span>`).join(", ") : esc(r.why.replace(/^same family \(([^)]+)\): (.*)$/, "$2 · $1 family"))}${r.seat ? `<span class="seat">seat</span>` : ""}</td><td><span class="src" title="${esc(r.line_from)}">${esc(r.line_source)}</span>${r.sources.map((s) => `<span class="src" title="${esc(SOURCE_WORDS[s] || s)}">${s === "MASSIVE" ? "mas" : s.toLowerCase()}</span>`).join("")}</td><td class="r">${esc(CAP(r.market_cap))}</td><td class="r">${esc(RATIO(r.ratio))}</td></tr>`; };
   const notin = set.named_not_in.filter((d) => !/not served|same company/.test(d.why)).slice(0, 12), unserved = set.named_not_in.filter((d) => /not served/.test(d.why)).length;
   return `<div class="tw"><table class="p"><thead><tr><th></th><th>peer</th><th>shares</th><th>the business they share · ${esc(T)}·peer</th><th>decided by · named by</th><th class="r">market value</th><th class="r">size vs ${esc(T)}</th></tr></thead><tbody>
     <tr class="me"><td></td><td class="tk">${esc(T)}</td><td></td><td>${esc(lineWords(set.own_lines))}</td><td><span class="src">${esc(set.lines_source)}</span></td><td class="r">${esc(CAP(set.own_market_cap))}</td><td class="r">1×</td></tr>
-    ${set.kept.map(row).join("")}</tbody></table></div>
+    ${[...set.kept.filter((r) => !c6.ruleOff.has(r.ticker)), ...c6.outliers.map((t) => set.kept.find((r) => r.ticker === t)).filter(Boolean)].map(row).join("")}</tbody></table></div>
     ${notin.length || unserved ? `<div class="notin">Not in: ${notin.map((d) => `<b>${esc(d.ticker)}</b> ${esc(d.why)}`).join(" · ")}${unserved ? ` · ${unserved} named but not served on the Hub` : ""}.</div>` : ""}`;
 }
 
@@ -365,26 +393,33 @@ function drawPosRow(svg, vals, own, c, width) {
 
 /* ---- the full table (closed) ---------------------------------------------------------------------------- */
 function tableHTML(S) {
-  const { T, C } = S, snap = C.snap, sel = C.sel, peers = S.members.filter((t) => t !== T);
+  const { T, C } = S, snap = C.snap, sel = C.sel, c6 = C.c6, sc = c6.score, all = S.members.filter((t) => t !== T), peers = [...all.filter((t) => !c6.ruleOff.has(t)), ...c6.outliers.filter((t) => all.includes(t))];
+  const fl = (t, c) => { if (!isFlagged(c6, t, c.key)) return ""; const x = c6.cols[c.key].cells[t]; return `<i title="${esc(Math.abs(x.d).toFixed(1))} spreads ${x.side === "high" ? "above" : "below"} the column's median ${esc(F(c.fmt, c6.cols[c.key].median))}${isVote(c.key) ? " · counts toward outlier" : " · information only"}">${x.side === "high" ? "▲" : "▼"}</i>`; };
   const groups = [...new Set(TABLE.map((c) => c.group))];
   const head1 = `<tr><th class="l"></th><th class="l">peer</th>${groups.map((g) => `<th class="grp" colspan="${TABLE.filter((c) => c.group === g).length}">${esc(g)}</th>`).join("")}<th class="l"></th></tr>`;
   const head2 = `<tr><th></th><th class="l"></th>${TABLE.map((c) => `<th>${esc(c.label)}</th>`).join("")}<th class="l">reason</th></tr>`;
   const val = (c, v) => v == null ? "—" : F(c.fmt, v);
   const cell = (t, c) => {
     const v = snap.table.peers[t] ? snap.table.peers[t][c.key] : null;
-    if (!ROWS.includes(c.key)) return `<td>${esc(val(c, v))}</td>`;
-    const row = C.rows.find((r) => r.key === c.key), vv = (row.values || {})[t] || { multiple: null }, off = isOff(sel, t, c.key), peerOff = sel.peers.has(t);
+    const mark = fl(t, c);
+    if (!ROWS.includes(c.key)) return `<td${mark ? ` class="fl${isVote(c.key) ? "" : " inf"}"` : ""}>${esc(val(c, v))}${mark}</td>`;
+    const row = C.rows.find((r) => r.key === c.key), vv = (row.values || {})[t] || { multiple: null }, o6 = c6.ruleOff.has(t), off = !o6 && isOff(sel, t, c.key), peerOff = !o6 && sel.peers.has(t);
+    if (vv.multiple != null && (mark || o6)) return `<td${mark ? ' class="fl"' : ""}>${o6 ? esc(X(vv.multiple)) : `<button type="button" class="cell${off || peerOff ? " off" : ""}" data-cm="cell" data-t="${esc(t)}" data-k="${c.key}" title="${off ? "put back" : "turn off on " + esc(SHORT[c.key]) + " only"}">${esc(X(vv.multiple))}</button>`}${mark}</td>`;
     if (vv.multiple == null) return `<td><span class="cell none" title="${esc(vv.why || "")}">—</span></td>`;
     const o = (row.outliers && row.outliers.flagged || []).find((f) => f.ticker === t), kept = o && isKept(C.kept, t, c.key);
     const flag = o ? `<span class="flag" title="${esc(Math.abs(o.z).toFixed(1))} MAD ${o.side === "high" ? "above" : "below"} the pack${kept ? " · kept" : " · out of the centre"}">${kept ? "kept" : "out"}</span>` : "";
     return `<td><button type="button" class="cell${off || peerOff ? " off" : ""}${o ? " o" + (kept ? " kept" : "") : ""}" data-cm="${o ? "keep" : "cell"}" data-t="${esc(t)}" data-k="${c.key}" title="${o ? (kept ? "let the rule exclude it again" : "keep this outlier in the centre") : off ? "put back" : "turn off on " + esc(SHORT[c.key]) + " only"}">${esc(X(vv.multiple))}</button>${flag}</td>`;
   };
   const meRow = `<tr class="me"><td></td><td class="tk l">${esc(T)}</td>${TABLE.map((c) => `<td>${esc(val(c, snap.table.company[c.key]))}</td>`).join("")}<td class="l"></td></tr>`;
-  const body = peers.map((t) => { const off = sel.peers.has(t), d = sel.list.filter((x) => x.peer === t); const reason = d.map((x) => (x.measure === "ALL" ? "" : SHORT[x.measure] + ": ") + (x.reason || "no reason yet")).join(" · ");
-    const r = `<tr class="${off ? "off" : ""}" data-peer="${esc(t)}"><td><button type="button" class="tog${off ? "" : " on"}" data-cm="peer" data-t="${esc(t)}">${off ? "□" : "■"}</button></td><td class="tk l">${esc(t)}</td>${TABLE.map((c) => cell(t, c)).join("")}<td class="l">${esc(reason)}</td></tr>`;
+  const body = peers.map((t) => { const o6 = c6.ruleOff.has(t), k6 = c6.kept.includes(t), off = !o6 && sel.peers.has(t), d = sel.list.filter((x) => x.peer === t); const reason = o6 || k6 ? (o6 ? "outlier · " : "kept · ") + sc[t].words : d.map((x) => (x.measure === "ALL" ? "" : SHORT[x.measure] + ": ") + (x.reason || "no reason yet")).join(" · ");
+    const tog = o6 || k6 ? `<button type="button" class="tog${o6 ? " o6" : " on"}" data-cm="keeppeer" data-t="${esc(t)}" title="${o6 ? "keep in the medians and the price" : "let the rule leave it out again"}">${o6 ? "◇" : "◆"}</button>` : `<button type="button" class="tog${off ? "" : " on"}" data-cm="peer" data-t="${esc(t)}">${off ? "□" : "■"}</button>`;
+    const r = `<tr class="${o6 ? "o6" : off ? "off" : ""}" data-peer="${esc(t)}"${o6 ? ` data-o6="${esc(t)}"` : ""}><td>${tog}</td><td class="tk l">${esc(t)}</td>${TABLE.map((c) => cell(t, c)).join("")}<td class="l">${esc(reason)}</td></tr>`;
     return S.reasonFor && S.reasonFor.peer === t ? r + reasonRowHTML(S, t) : r; }).join("");
   const stat = (label, k) => `<tr class="stat"><td></td><td class="l">${label}</td>${TABLE.map((c) => ROWS.includes(c.key) ? `<td>${esc(X(C.rows.find((r) => r.key === c.key).band[k]))}</td>` : "<td></td>").join("")}<td></td></tr>`;
-  return `<div class="tw"><table class="t"><thead>${head1}${head2}</thead><tbody>${meRow}${body}${stat("median", "median")}${stat("25th", "q1")}${stat("75th", "q3")}</tbody></table></div>${decisionsHTML(S)}`;
+  const fmed = (CC, c) => { if (ROWS.includes(c.key)) return CC.rows.find((r) => r.key === c.key).band.median; const vs = CC.peersOn.map((t) => snap.table.peers[t] ? snap.table.peers[t][c.key] : null).filter((v) => v != null && Number.isFinite(v)); return vs.length ? median(vs) : null; };
+  const medRow = (label, CC, cls) => `<tr class="stat" data-med="${cls}"><td></td><td class="l">${label}</td>${TABLE.map((c) => `<td>${esc(val(c, fmed(CC, c)))}</td>`).join("")}<td></td></tr>`;
+  const meds = c6.outliers.length ? medRow("median · without outliers", C, "without") + medRow("median · with outliers", c6.withOutliers, "with") : medRow("median", C, "without");
+  return `<div class="tw"><table class="t"><thead>${head1}${head2}</thead><tbody>${meRow}${body}${meds}${stat("25th", "q1")}${stat("75th", "q3")}</tbody></table></div>${decisionsHTML(S)}`;
 }
 function reasonRowHTML(S, t) {
   const R = S.reasonFor, chips = [FLAG_WORDS.op, FLAG_WORDS.far, FLAG_WORDS.nm];
@@ -400,15 +435,18 @@ function decisionsHTML(S) {
 function pageSpecsHTML(S) {
   const { set, T, C } = S, mw = C.measureWeights, pw = C.peerWeights, segFrom = S.inp.segments_from || "fixture";
   const wlist = ROWS.map((k) => `${SHORT[k]} ${Math.round((mw.weights[k] || 0) * 100)}%`).join(" · ");
-  const outs = C.outliers.length ? C.outliers.map((o) => `${o.ticker} ${X(o.multiple)} on ${SHORT[o.key]} (${Math.abs(o.z).toFixed(1)} MAD ${o.side === "high" ? "above" : "below"})${o.kept ? ", kept by you" : ""}`).join("; ") : "none in this set";
+  const c6 = C.c6, biz = c6.business, fw = (t) => [...c6.score[t].flags, ...c6.score[t].info].map((f) => `${f.short} ${F(c6.cols[f.key].fmt, f.v)} against a median of ${F(c6.cols[f.key].fmt, c6.cols[f.key].median)}`).join(", ");
+  const flaggedPeers = [...c6.outliers, ...c6.kept], outs = flaggedPeers.length ? flaggedPeers.map((t) => `${t}, ${c6.score[t].words} (${fw(t)})${c6.kept.includes(t) ? ", kept by you" : ""}`).join("; ") : "no outlier";
+  const one = c6.peers.filter((t) => c6.score[t].marks && !c6.score[t].outlier).map((t) => `${t} (${fw(t)})`).join("; ");
   return `<details class="sc-pagespecs"><summary>PAGE SPECS</summary><div>
 <p><b>Edits are saved for every screen.</b> Every switch on this tab (a peer off, a cell off, an outlier kept, a put-back) writes one dated row to <b>public.comps_decisions</b> in the Hub's database${S.mode === "db" ? " (connected now)" : " (this browser only right now: the database could not be reached, the rows are kept locally and sent when it can)"}; the latest row per peer and measure wins and nothing is erased, so the same set shows on every device.</p>
 <p><b>The set.</b> Business similarity decides membership; size only ranks within it. ${esc(T)}'s revenue lines come from ${esc(set.lines_from)} (${esc(segFrom === "public.revenue_segments" ? "the Hub's revenue_segments table" : "FMP's revenue-by-segment, pulled on Fly 3 Oct 2026, served as a dated file until the revenue_segments table is loaded")}); a segment moves to another line only through a stated keyword (cloud, advertising, e-commerce, physical stores, consulting, data-center chips, memory, foundry, consumer banking, investment banking &amp; markets, wealth, payments, upstream, downstream, chemicals, midstream, medical devices), everything else stays on the company's FMP industry line. A peer is in when at least ${Math.round(SIM_MIN * 100)} cents of each revenue dollar sit in a line it shares with ${esc(T)} (a line in the same family counts half). Every line ${esc(T)} has at ${Math.round(LINE_MIN * 100)}% or more of revenue seats its ${SEATS_PER_LINE} best peers first (marked SEAT), then the rest fill the ${set.n} by similarity less a soft size term: ${SIZE_WEIGHT} for every 10× of market value, never a gate; a name FMP's peers or Massive's related companies also list earns 0.03. "Decided by" says what set each peer's lines: <b>segments</b> (FMP revenue by product), <b>industry</b> (FMP industry only), <b>hand</b> (a stated rule where FMP's industry misleads, e.g. Amazon and Alibaba as e-commerce, not "Specialty Retail"). The shares column is the similarity, 0 to 1. ${set.counts.members} of ${set.counts.served} served companies pass; the named candidates that do not are listed with their reason. One share class per company.</p>
-<p><b>Outliers, caught by the system.</b> On each measure the peers' multiples are put on a log scale; a peer further than ${OUTLIER_K} MAD (median absolute deviation, scaled) from the median is a candidate for elimination: out of that measure's centre by default, drawn hollow at the edge of the bar with an arrow and its value, so the scale is set by the pack and not by the outlier. One click on it (or on its cell in the table) keeps it; kept outliers are drawn filled. The rule needs at least ${OUTLIER_MIN_N} peers on the measure. In this set: ${esc(outs)}.</p>
+<p><b>Outliers, on price only.</b> An outlier is a peer whose price is strange next to the group, not a peer that grows fast. In each of the sixteen columns a peer's distance from the column's median is measured in units of the column's typical spread (the median absolute deviation; the six multiples on a log scale), and a cell further than ${CUT} such units is marked ▲ or ▼ and still counts. Only the valuation multiples vote — ${esc(VOTES.map((v) => v.short).join(", "))}, with trailing and forward P/E as one vote — and a peer marked on ${MIN_FLAGS} or more of them, or on at least ${Math.round(SHARE * 100)}% of the ones it has (and at least ${SHARE_MIN_FLAGS}), is an outlier: greyed at the bottom of the set and of the table with its count, left out of every median and of the price, never deleted, and one click on its ◇ keeps it in. Marks on growth, margins, balance sheet and capex are information (the fainter cells) and never count. A column needs at least ${MIN_N} peers to judge anyone. The line above the range gives the centre with every peer in and without the outliers; the band is drawn without them. In this set: ${esc(outs)}.${one ? " Marked, still counted: " + esc(one) + "." : ""}</p>
+<p><b>Same business?</b> ${biz ? `${biz.same.length} of ${biz.n} peers have at least ${Math.round(SIM_MIN * 100)}% of their revenue in a line they share exactly with ${esc(T)} (${esc(biz.line || "")}); the rest are in only as the same family. ` : ""}When fewer than half do, the set is named "mostly different business": that is a problem with the peers, not with outliers, so the outlier rule does not cut the peers that do share the business${c6.notCut.length ? ` (here: ${esc(c6.notCut.join(", "))})` : ""} — the fix is the peer set.</p>
 <p><b>The range (way C, the default).</b> Every peer's implied price on every measure that prices ${esc(T)} is one point, weighted by its measure's weight and its peer's weight. The <b>centre is the weighted median</b> of all those points, low and high the weighted 25th and 75th; the midpoint of low and high is printed beside the centre so the two are never confused. Way A is the range of the six measure medians (centre = the median of those medians); way B the middle-half band (centre = the same median of medians). The upside is from today's price to the centre.</p>
 <p><b>The weights, measured here.</b> Measures → price: ${esc(wlist)} — each measure's weight is a sector prior (${esc(mw.cls)}: the practitioner literature, forward earnings first, EV multiples little for a bank) × coverage (the share of peers carrying the multiple) × fit (1 ÷ (1 + the median pricing error of the measure inside this set: each peer priced at the peers' median is off by |median ÷ own − 1|)). Fundamentals → peer match: ${esc(pw.basis)}; a peer whose growth, margins, balance sheet and capex sit close to ${esc(T)}'s in percentile rank counts more (weight = exp(−½ (gap ÷ 0.5)²)). Nothing better is measured yet for the fundamentals; when a history of which measure explained this industry's prices exists, it replaces the prior.</p>
 <p><b>PEG.</b> Forward P/E ÷ forward EPS growth, the growth being the compound annual rate from trailing EPS to the FMP consensus EPS three fiscal years out (the furthest year inside ${PEG_YEARS_MAX} years; consensus to consensus for a foreign filer whose statements are not in dollars) — the same analyst_estimates rows the ESTIMATES tab draws. When it cannot be computed the cell shows "—".</p>
-<p><b>The field.</b> Sixteen measures in five groups. Valuation rows price ${esc(T)} at its peers' multiples: the filled cyan bar runs from the lowest peer to the highest (outliers excluded), the brighter block is the middle half, the cyan tick the median, the white line ${esc(T)} today; the figure on the right is the move from today's price to the price at the peers' median. Growth, margins, balance sheet and capex rows place ${esc(T)} among the peers the same way, with the median and ${esc(T)}'s own figure. The minimized field beside WEIGH is the same sixteen rows, small. Plain numbers throughout: negatives in parentheses, no plus signs. Prices from the chart API (${esc(S.snap.price_from || "quotes")}); figures from the Hub's fundamentals, estimates, history and balance tables; foreign filers converted to USD from filer_currency and fx_rates.</p>
+<p><b>The field.</b> Sixteen measures in five groups. Valuation rows price ${esc(T)} at its peers' multiples: the filled cyan bar runs from the lowest peer to the highest (outlier peers excluded), the brighter block is the middle half, the cyan tick the median, the white line ${esc(T)} today; the figure on the right is the move from today's price to the price at the peers' median. Growth, margins, balance sheet and capex rows place ${esc(T)} among the peers the same way, with the median and ${esc(T)}'s own figure. The minimized field beside WEIGH is the same sixteen rows, small. Plain numbers throughout: negatives in parentheses, no plus signs. Prices from the chart API (${esc(S.snap.price_from || "quotes")}); figures from the Hub's fundamentals, estimates, history and balance tables; foreign filers converted to USD from filer_currency and fx_rates.</p>
 </div></details>`;
 }
 
@@ -422,11 +460,12 @@ function wire(S) {
     const b = e.target.closest("[data-cm]"); if (!b) return;
     const a = b.dataset.cm;
     if (a === "peer" || a === "cell" || a === "putback") {
-      const t = b.dataset.t, measure = a === "peer" ? "ALL" : b.dataset.k, sel = S.C.sel, off = a === "putback" ? false : !isOff(sel, t, measure);
+      const t = b.dataset.t, measure = a === "peer" ? "ALL" : b.dataset.k, sel = { peers: S.C.sel.userPeers, cells: S.C.sel.cells }, off = a === "putback" ? false : !isOff(sel, t, measure);
       if (a === "cell" && sel.peers.has(t)) return;
       await storeDecision(S, decisionRow({ company: S.T, peer: t, measure, off, reason: off ? "" : "put back" }));
       S.reasonFor = off && a === "cell" ? { peer: t, measure, reason: "" } : null; if (S.reasonFor) S.open.table = true; render(S);
     } else if (a === "keep") { const t = b.dataset.t, k = b.dataset.k, kept = isKept(S.C.kept, t, k); await storeDecision(S, decisionRow({ company: S.T, peer: t, measure: k, off: false, reason: kept ? "unkeep: back to the rule" : "keep: outlier on " + SHORT[k] })); S.open.table = true; render(S); }
+    else if (a === "keeppeer") { const t = b.dataset.t, kept = S.C.c6.kept.includes(t); await storeDecision(S, decisionRow({ company: S.T, peer: t, measure: "ALL", off: false, reason: kept ? "unkeep: back to the rule" : "keep: outlier, " + S.C.c6.score[t].words })); render(S); }
     else if (a === "putall") { for (const d of S.C.sel.list) await storeDecision(S, decisionRow({ company: S.T, peer: d.peer, measure: d.measure, off: false, reason: "put back" })); S.reasonFor = null; render(S); }
     else if (a === "chip") { const inp = S.root.querySelector('[data-cm="reason"]'); if (inp) inp.value = b.dataset.r; }
     else if (a === "savereason") { const inp = S.root.querySelector('[data-cm="reason"]'), R = S.reasonFor; if (!R) return; await storeDecision(S, decisionRow({ company: S.T, peer: R.peer, measure: R.measure, off: true, reason: inp ? inp.value.trim() : "" })); S.reasonFor = null; render(S); }

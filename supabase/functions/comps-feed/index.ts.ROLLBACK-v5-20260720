@@ -1,0 +1,37 @@
+// comps-feed v2: forward P/E fixed (analyst_estimates period='annual', nearest FUTURE fiscal_date). SCINTILLA database only, no FMP calls.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const SB_URL = Deno.env.get('SUPABASE_URL') || '';
+const SB_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const CORS = { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' };
+const n = (x: any) => (x == null || !isFinite(Number(x))) ? '' : Number(x);
+Deno.serve(async (req) => {
+  const u = new URL(req.url);
+  const syms = (u.searchParams.get('syms') || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 60);
+  const head = 'sym,mktcap,pe,fwd_pe,ps,pb,gross_m,net_m,de,div_yld,rev_growth,updated';
+  if (!syms.length) return new Response(head, { headers: CORS });
+  const sb = createClient(SB_URL, SB_KEY);
+  const [fund, rat, est, hist] = await Promise.all([
+    sb.from('fundamentals').select('ticker,price,market_cap,trailing_pe,eps_ttm,revenue_ttm').in('ticker', syms),
+    sb.from('ratios_history').select('ticker,fiscal_date,pe,ps,pb,gross_margin,net_margin,debt_to_equity,dividend_yield').in('ticker', syms).order('fiscal_date', { ascending: false }),
+    sb.from('analyst_estimates').select('ticker,fiscal_date,est_eps_avg').in('ticker', syms).order('fiscal_date', { ascending: true }),
+    sb.from('fundamentals_history').select('ticker,fiscal_date,period,revenue').in('ticker', syms).order('fiscal_date', { ascending: false })
+  ]);
+  const F: Record<string, any> = {}; for (const r of (fund.data || [])) F[r.ticker] = r;
+  const R: Record<string, any> = {}; for (const r of (rat.data || [])) if (!R[r.ticker]) R[r.ticker] = r;
+  const today = new Date().toISOString().slice(0, 10);
+  const E: Record<string, number> = {}; // nearest FUTURE annual est EPS
+  for (const r of (est.data || [])) { if (r.fiscal_date > today && E[r.ticker] == null && r.est_eps_avg != null) E[r.ticker] = Number(r.est_eps_avg); }
+  const H: Record<string, number[]> = {}; for (const r of (hist.data || [])) { (H[r.ticker] = H[r.ticker] || []).push(Number(r.revenue)); }
+  const rows = [head];
+  const updated = new Date().toISOString();
+  for (const s of syms) {
+    const f = F[s] || {}, r = R[s] || {};
+    const price = f.price, fwdEps = E[s];
+    const fwdPe = (price && fwdEps && fwdEps > 0) ? price / fwdEps : '';
+    const rev = H[s] || [];
+    const growth = (rev.length >= 2 && rev[1]) ? (rev[0] / rev[1] - 1) : '';
+    rows.push([s, n(f.market_cap), n(f.trailing_pe ?? r.pe), n(fwdPe), n(r.ps), n(r.pb), n(r.gross_margin), n(r.net_margin), n(r.debt_to_equity), n(r.dividend_yield), n(growth), updated].join(','));
+  }
+  return new Response(rows.join('\n'), { headers: CORS });
+});
+

@@ -5884,6 +5884,13 @@ function applyEstimates(fpeEst) {
 /* every F P/E cell on screen, from the latest known price — the late estimates and a pull that ran before a price
    was in both end here (the price tick alone never repaints a name that is not trading, e.g. after hours) */
 function fpeRepaint() {
+  /* CP3 — the same late answer fills the foreign reporters' REVENUE cells (revUsd): the paired rate arrives after the first paint */
+  for (const r of (S.rows || [])) {
+    if (!r.revCcy) continue;
+    const usd = revUsd(r.t, null, r.revCcy, r.revLocal); if (usd == null) continue;
+    r.rev = usd; const cell = el("lrv_" + r.t);
+    if (cell && cell.parentNode) { const box = document.createElement("span"); box.innerHTML = revCellHTML(r.t, r.rev, r.revAsOf, r.revCcy, r.revLocal, r.revZero); cell.parentNode.replaceChild(box.firstChild, cell); }
+  }
   for (const r of (S.rows || [])) {
     const p = r.price != null ? r.price : (PRICES[r.t] != null ? PRICES[r.t] : null);
     r.fpe = fpeVal(r.t, p);
@@ -5905,7 +5912,10 @@ const NTM_STORED_MAX_AGE_MS = 14 * 86400e3;
    EUR 1.136-1.138, CAD 0.696; PDD, which has no paired quarter, by magnitude: ~115B quarterly revenue estimate is CNY).
    EST_CCY holds a SERVED value (fundamentals.reported_currency, once fmp-fundamentals writes it AND a follow-up selects it);
    a served value outranks the measured set. Selecting that column before it exists would 400 the whole fundamentals read. */
-const EST_CCY_MEASURED = { TSM: "TWD", BABA: "CNY", BIDU: "CNY", JD: "CNY", LI: "CNY", NIO: "CNY", EH: "CNY", PDD: "CNY", ASML: "EUR", SPOT: "EUR", CCJ: "CAD" };
+/* C5b (3 Oct) — FMP's statements name 16 non-USD reporters among the served companies (income-statement reportedCurrency, every
+   served symbol: deliverables/20261003/comps-c5b/reporting-currency-fmp-2026-10-03.json). GDS, XPEV (CNY), NOK (EUR), TECK (CAD)
+   and EVTL (GBP) were missing here, so the board divided their own-currency EPS by a dollar price (GDS trailing P/E ~2x). */
+const EST_CCY_MEASURED = { TSM: "TWD", BABA: "CNY", BIDU: "CNY", JD: "CNY", LI: "CNY", NIO: "CNY", EH: "CNY", PDD: "CNY", GDS: "CNY", XPEV: "CNY", ASML: "EUR", SPOT: "EUR", NOK: "EUR", CCJ: "CAD", TECK: "CAD", EVTL: "GBP" };
 const EST_CCY = {};   // ticker -> served reporting currency (stays empty until fundamentals.reported_currency is served and selected)
 function ccyCode(c) {
   const k = String(c == null ? "" : c).trim().toUpperCase();
@@ -6283,7 +6293,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         /* THE VALUE CARRIES ITS SOURCE TIME: company_profile.updated_ts, epoch SECONDS, written by fmp-backfill job=profile
            together with market_cap. null = the store has no source time for this row (said so on screen, never guessed). */
         mcAsOf: (function () { const ts = num(pf[m.ticker] && pf[m.ticker].updated_ts); return (ts != null && ts > 0) ? ts : null; })(),
-        rev:    REVTTM[m.ticker] ? REVTTM[m.ticker].v : null,     // H-FRONT — fundamentals.revenue_ttm in USD; null = blank (and sorts lowest)
+        rev:    REVTTM[m.ticker] ? (REVTTM[m.ticker].v != null ? REVTTM[m.ticker].v : revUsd(m.ticker, null, REVTTM[m.ticker].ccy, REVTTM[m.ticker].local)) : null,     // H-FRONT — fundamentals.revenue_ttm in USD; CP3: a foreign reporter's, converted at the paired rate when there is one; null = blank (and sorts lowest)
         revAsOf: REVTTM[m.ticker] ? REVTTM[m.ticker].at : null,
         revCcy: REVTTM[m.ticker] ? REVTTM[m.ticker].ccy : null,   // non-USD reporter: withheld from the dollar column, currency named
         revLocal: REVTTM[m.ticker] ? REVTTM[m.ticker].local : null,
@@ -7777,9 +7787,23 @@ function revTitle(v, asOf, ccy, local, zero) {
   if (num(v) == null || !(num(v) > 0)) return "revenue not on file (fundamentals.revenue_ttm)";
   return "trailing-twelve-month revenue · fundamentals.revenue_ttm" + when;
 }
+/* CP3 (7 Oct) — "RATIOS ARE RATIOS, DO THE CURRENCY" (Alan, on TSMC's "in TWD"). A foreign reporter's revenue is put in dollars
+   at THE SAME RATE ITS FORWARD P/E USES: the supplier's own paired rate (EST_FX — its dollar estimate over its local one for the same
+   quarter, confirmed by revenue). The cell then reads "≈$140.3B" and its title says the rate and the local figure. With no agreeing
+   pair it stays as it was — "in TWD", withheld and named — never a local figure under a dollar sign. revUsd() is the one place
+   that answers the dollar figure (the cell, the sort value and the repaint all ask it). */
+function revUsd(t, v, ccy, local) {
+  if (!ccy) return num(v);
+  const fx = (typeof estFx === "function") ? estFx(t) : null, n = num(local);
+  return (fx && num(fx.f) > 0 && n != null && n > 0) ? n * num(fx.f) : null;
+}
 function revCellHTML(t, v, asOf, ccy, local, zero) {
-  const text = ccy ? "in " + ccy : fmtRevCell(v);
-  return '<span class="sc-rev' + (ccy ? " is-ccy" : "") + '" id="lrv_' + esc(t) + '" title="' + esc(revTitle(v, asOf, ccy, local, zero)) + '">' + esc(text) + "</span>";
+  const usd = (ccy && typeof revUsd === "function") ? revUsd(t, v, ccy, local) : null, fx = (ccy && usd != null && typeof estFx === "function") ? estFx(t) : null;   // self-contained: the tests cut this function out alone
+  const text = ccy ? (usd != null ? "≈" + fmtRevCell(usd) : "in " + ccy) : fmtRevCell(v);
+  const title = (ccy && usd != null) ? "≈ trailing-twelve-month revenue, converted · " + fmtRevLocal(local, ccy) + " × " + num(fx.f).toPrecision(4) + " = " + fmtRevCell(usd) +
+    " · the rate is the supplier's own for the quarter to " + fx.q + " (its USD estimate ÷ its " + ccy + " one, confirmed by revenue) — the rate the forward P/E uses · fundamentals.revenue_ttm"
+    : revTitle(v, asOf, ccy, local, zero);
+  return '<span class="sc-rev' + (ccy && usd == null ? " is-ccy" : "") + '" id="lrv_' + esc(t) + '" title="' + esc(title) + '">' + esc(text) + "</span>";
 }
 /* A STORED MARKET CAP IS SHOWN WITH ITS SOURCE DATE, NEVER ERASED. company_profile.market_cap is the provider's profile
    figure (its own shares x its own price at write time), stored by fmp-backfill job=profile with updated_ts in epoch
@@ -19749,15 +19773,17 @@ function statsBalHTML(data) {   // BALANCE — the latest fiscal year's balance 
   let nd = B ? num(B.net_debt) : null;
   if (nd == null && cash != null && debt != null) nd = debt - cash;   // net debt = debt − cash
   const bsrc = B ? "balance_history FY" + B.fiscal_year + " (FMP)" : "", rows = [];
-  if (cash != null) rows.push(stRow("cash &amp; equiv", "$" + fmtBig(cash), "cash and equivalents · " + bsrc));
-  if (debt != null) rows.push(stRow("total debt", "$" + fmtBig(debt), bsrc));
+  /* C5b — statements are in the REPORTING currency: a foreign reporter's figures carry its code, never a dollar sign */
+  const cs = estNonUsd(data.t) ? estCcy(data.t) + " " : "$";
+  if (cash != null) rows.push(stRow("cash &amp; equiv", cs + fmtBig(cash), "cash and equivalents · " + bsrc));
+  if (debt != null) rows.push(stRow("total debt", cs + fmtBig(debt), bsrc));
   if (nd != null) rows.push(nd < 0
-    ? stRow("net debt", "($" + fmtBig(Math.abs(nd)) + ") net cash", "debt minus cash: more cash than debt · " + bsrc, true)
-    : stRow("net debt", "$" + fmtBig(nd), "debt minus cash · " + bsrc));
+    ? stRow("net debt", "(" + cs + fmtBig(Math.abs(nd)) + ") net cash", "debt minus cash: more cash than debt · " + bsrc, true)
+    : stRow("net debt", cs + fmtBig(nd), "debt minus cash · " + bsrc));
   if (debt != null && eq != null && eq !== 0)
     rows.push(stRow("debt / equity", Math.abs(debt / eq).toFixed(2), "total debt ÷ total equity · " + bsrc, debt / eq < 0));
   /* the year's income and cash flow, in dollars, with a loss in brackets */
-  const money = (v) => (v < 0 ? "(" : "") + "$" + fmtBig(Math.abs(v)) + (v < 0 ? ")" : "");
+  const money = (v) => (v < 0 ? "(" : "") + cs + fmtBig(Math.abs(v)) + (v < 0 ? ")" : "");
   const isrc = L ? "fundamentals_history FY" + L.fiscal_year + " (FMP)" : "";
   [["revenue", L ? num(L.revenue) : null, isrc], ["net income", L ? num(L.net_income) : null, isrc], ["ebitda", L ? num(L.ebitda) : null, isrc],
    ["free cash flow", C ? num(C.free_cf) : null, C ? "cashflow_history FY" + C.fiscal_year + " (FMP)" : ""]]
@@ -19795,10 +19821,13 @@ function statsActivityHTML(data, row) {   // ACTIVITY &amp; DATES — today's vo
   if (C && !fund) {
     const dv = num(C.dividends_paid), bb = num(C.buybacks), fyl = "FY" + String(C.fiscal_year).slice(2);
     const mc = num(p.market_cap) != null ? num(p.market_cap) : num((data._fund || {}).market_cap);
-    const yld = (dv != null && dv !== 0 && mc != null && mc > 0) ? Math.abs(dv) / mc * 100 : null;   /* under 0.1% two decimals, so a small yield never prints as "0.0%" (MU: 0.05%) */
-    if (dv != null) rows.push(stRow("dividends " + esc(fyl), dv === 0 ? "none" : "$" + fmtBig(Math.abs(dv)) + (yld != null ? " · " + (yld < 0.1 ? yld.toFixed(2) : yld.toFixed(1)) + "% yield" : ""),
-      "dividends paid in fiscal " + C.fiscal_year + " · cashflow_history.dividends_paid (FMP) · the yield ≈ the year's dividends ÷ today's market cap"));
-    if (bb != null) rows.push(stRow("buybacks " + esc(fyl), bb === 0 ? "none" : "$" + fmtBig(Math.abs(bb)), "shares bought back in fiscal " + C.fiscal_year + " · cashflow_history.buybacks (FMP)"));
+    /* C5b — dividends_paid is in the REPORTING currency, the market cap in dollars: for a foreign reporter no yield is formed
+       (BABA's yuan dividends over its dollar value read ~7x too high) and the amount carries its currency code */
+    const nonUsdCf = estNonUsd(data.t), cs = nonUsdCf ? estCcy(data.t) + " " : "$";
+    const yld = (!nonUsdCf && dv != null && dv !== 0 && mc != null && mc > 0) ? Math.abs(dv) / mc * 100 : null;   /* under 0.1% two decimals, so a small yield never prints as "0.0%" (MU: 0.05%) */
+    if (dv != null) rows.push(stRow("dividends " + esc(fyl), dv === 0 ? "none" : cs + fmtBig(Math.abs(dv)) + (yld != null ? " · " + (yld < 0.1 ? yld.toFixed(2) : yld.toFixed(1)) + "% yield" : ""),
+      "dividends paid in fiscal " + C.fiscal_year + " · cashflow_history.dividends_paid (FMP)" + (nonUsdCf ? " · in " + estCcy(data.t) + ", the reporting currency: no yield against the dollar market cap" : " · the yield ≈ the year's dividends ÷ today's market cap")));
+    if (bb != null) rows.push(stRow("buybacks " + esc(fyl), bb === 0 ? "none" : cs + fmtBig(Math.abs(bb)), "shares bought back in fiscal " + C.fiscal_year + " · cashflow_history.buybacks (FMP)"));
   }
   return stBlock("ACTIVITY &amp; DATES", rows);
 }
@@ -21113,7 +21142,7 @@ function compsTabMount() {
   const t = box.dataset.t;
   if (!t || box.dataset.mounted === t) return;
   box.dataset.mounted = t;
-  const load = COMPS_TAB_MOD || (COMPS_TAB_MOD = import("/deliverables/20261001/comps-mechanic/tab.mjs"));   /* C4 (1 Oct, 10:00): the comparable set on one stated rule (FMP + Massive + industry + industry funds, a size band, the nearest N), and the tab redrawn as one clean screen */   /* C3b (1 Oct, 08:40): the table on top, the peer set a switch, the ways as pictures */   /* C3 (1 Oct) — the template after Alan's review: the conclusion first, the company as an overlay, the original table behind a disclosure, foreign filers converted */
+  const load = COMPS_TAB_MOD || (COMPS_TAB_MOD = import("/deliverables/20261003/comps-c5/tab.mjs"));   /* C5 (3 Oct): business similarity decides the set (FMP revenue segments → lines), size only ranks; outliers caught per measure (median ± 3·MAD on logs), hollow at the edge, one click keeps; the price from the whole field (every peer × measure point, stated weights); PEG from forward consensus growth; WEIGH A/B/C beside the minimized field, one bold band; descriptions in PAGE SPECS */   /* C4 (1 Oct, 10:00): the comparable set on one stated rule (FMP + Massive + industry + industry funds, a size band, the nearest N), and the tab redrawn as one clean screen */   /* C3b (1 Oct, 08:40): the table on top, the peer set a switch, the ways as pictures */   /* C3 (1 Oct) — the template after Alan's review: the conclusion first, the company as an overlay, the original table behind a disclosure, foreign filers converted */
   load.then((m) => {
     const live = document.getElementById("scCompsTab");
     if (!live || live.dataset.t !== t) return;

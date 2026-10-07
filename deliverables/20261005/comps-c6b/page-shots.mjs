@@ -1,0 +1,8 @@
+/* C6b · headless pictures of the report page itself (file://, no network writes): node page-shots.mjs → shots/page-1680.png, page-390.png */
+import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url"; import { createRequire } from "node:module";
+const require = createRequire("/Users/alanharvey/SCINTILLA 0.5/visual-supervisor/package.json"); const { chromium } = require("playwright-core");
+const HERE = path.dirname(fileURLToPath(import.meta.url)), browser = await chromium.launch({ headless: true });
+try { for (const w of [1680, 390]) { const ctx = await browser.newContext({ viewport: { width: w, height: w < 500 ? 844 : 1050 } }), page = await ctx.newPage(); let nonGet = 0; await page.route("**/*", (r) => { if (r.request().method() !== "GET") { nonGet++; return r.abort(); } r.continue(); });
+  await page.goto(pathToFileURL(path.join(HERE, "COMPS-C6B.html")).href, { waitUntil: "load" }); await page.evaluate(() => document.querySelectorAll("img").forEach((i) => (i.loading = "eager"))); await page.waitForTimeout(1500);
+  const f = await page.evaluate(() => ({ imgs: document.images.length, broken: [...document.images].filter((i) => !i.naturalWidth).map((i) => i.getAttribute("src")), overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, nav: !!document.querySelector("[data-scnav-slot] a, [data-scnav-slot] button, .scnav") }));
+  await page.screenshot({ path: path.join(HERE, "shots", `page-${w}.png`), fullPage: w > 500 ? false : false }); console.log(JSON.stringify({ w, nonGet, ...f })); await ctx.close(); } } finally { await browser.close(); }
