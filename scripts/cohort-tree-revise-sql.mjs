@@ -10,8 +10,9 @@
 //
 // WHAT IT DOES. TR1 loaded the tree into two tables no page reads (public.cohort_tree, 91 rows;
 // public.cohort_tree_members, 771 rows). scripts/cohort-tree-revise.mjs turns that tree into the one Alan asked for
-// on 6 Oct (105 nodes, 781 member rows) and says, row by row, what differs (diff{}). This script turns diff{} into
-// SQL. Nothing below is typed by hand: every id, every "before" value and every count comes from the two generators.
+// on 6 Oct — his afternoon notes and his evening steering — and says, row by row, what differs (diff{}). This script
+// turns diff{} into SQL. Nothing below is typed by hand: every id, every "before" value and every count comes from
+// the two generators (run it with no flag to see today's counts).
 //
 // THIS SCRIPT NEVER TOUCHES THE DATABASE. It writes SQL; the coordinator applies it:
 //   supabase db query --linked --project-ref wadinxqplrggagkvrdag -f supabase/migrations/20261006_tr2_tree_revision.sql
@@ -52,6 +53,7 @@ const lit = (v, type) => v == null ? 'null' : type === 'text' ? q(v) : String(v)
 // a VALUES list; the first row carries the casts so Postgres knows each column's type even where a cell is null
 const values = (rows, types) => rows.map((r, i) => '    (' + r.map((v, j) => lit(v, types[j]) + (i === 0 ? `::${types[j]}` : '')).join(',') + ')').join(',\n')
 const inList = (ids) => ids.map(q).join(',')
+const num = (v) => v == null ? 'null' : String(v)
 
 export function sqlFiles ({ base, rev, diff }) {
   const B = Object.fromEntries(base.nodes.map(n => [n.cohort, n]))
@@ -89,9 +91,12 @@ export function sqlFiles ({ base, rev, diff }) {
 -- WHAT IT DOES, IN WORDS: FRONTIER goes (its four cohorts hang from what the companies make); the index layer sits
 -- between THE MARKET and everything else; eleven sector nodes take the 44 sector funds from TR1's four by-family
 -- sets; CONSUMER STAPLES becomes a sub-heading with seven cohorts; Alan's on-Hub picks are recorded per node.
+-- And his evening steering: the online marketplaces also sit in INTERNET & CONSUMER PLATFORMS (software AND consumer);
+-- AI POWERTRAIN holds the grid and electrical build-out names and has four groups under it, regulated utilities kept
+-- out; GROWTH, MOMENTUM and LOW VOLATILITY are a branch under FACTORS with members assigned by rule.
 --   ${base.nodes.length} nodes → ${rev.nodes.length}  (+${added.length} new, −${removed.length} removed, ${changed.length} changed)      ${base.members.length} member rows → ${rev.members.length}  (${moves.length} moved, +${adds.length} new, none lost)
---   ${rev.links.length} fund-to-cohort links and ${rev.candidates.length} candidate names go to two NEW tables.
--- WRITES ONLY: public.cohort_tree, public.cohort_tree_members (TR1's two; no page reads them) and three new tables.
+--   ${rev.links.length} fund-to-cohort links, ${rev.candidates.length} candidate names and ${rev.tags.length} name tags go to three NEW tables.
+-- WRITES ONLY: public.cohort_tree, public.cohort_tree_members (TR1's two; no page reads them) and four new tables.
 -- The table the Hub's cohort tabs are built from is not read, written or named. No page reads hub_pick.
 -- ONE TRANSACTION. Safe to run twice (the second run says "already applied" and changes nothing). REFUSES, changing
 -- nothing, unless the two tables are as TR1 left them where the revision touches them.
@@ -156,16 +161,36 @@ create table if not exists public.cohort_tree_tr2_removed (
   loaded_at       timestamptz not null,
   stashed_at      timestamptz not null default now()
 );
+create table if not exists public.cohort_tree_name_tags (
+  ticker              text primary key,
+  as_of               date not null,
+  tags                text,
+  growth_ntm_rev_pct  numeric(9,1),
+  growth_basis        text,
+  ret_6m_pct          numeric(9,1),
+  momentum_rank       numeric(5,1),
+  usual_day_pct       numeric(7,2),
+  usual_day_vs_market numeric(7,2),
+  usual_day_rank      numeric(5,1),
+  held_by             text,
+  note                text,
+  source              text not null default '${SOURCE}',
+  loaded_at           timestamptz not null default now()
+);
+comment on table public.cohort_tree_name_tags is 'TR2 6 Oct 2026: growth, momentum and low volatility as mechanical tags, one row per company of the tree, with the numbers behind each tag and which style or factor funds hold the name. The three branch lists under FACTORS in cohort_tree are built from the same file. A snapshot as of as_of: it goes stale and is refreshed by re-running the tagger. Not read by the Hub.';
 comment on table public.cohort_tree_tr2_removed is 'TR2 6 Oct 2026: the ${removed.length} cohort_tree rows the revision removed, kept whole (with their original source and loaded_at) so the rollback can put them back exactly. Not read by the Hub.';
 alter table public.cohort_tree_fund_links enable row level security;
 alter table public.cohort_tree_candidates enable row level security;
 alter table public.cohort_tree_tr2_removed enable row level security;
+alter table public.cohort_tree_name_tags enable row level security;
+drop policy if exists cohort_tree_name_tags_read on public.cohort_tree_name_tags;
+create policy cohort_tree_name_tags_read on public.cohort_tree_name_tags for select to anon, authenticated using (true);
 drop policy if exists cohort_tree_fund_links_read on public.cohort_tree_fund_links;
 create policy cohort_tree_fund_links_read on public.cohort_tree_fund_links for select to anon, authenticated using (true);
 drop policy if exists cohort_tree_candidates_read on public.cohort_tree_candidates;
 create policy cohort_tree_candidates_read on public.cohort_tree_candidates for select to anon, authenticated using (true);
-grant select on public.cohort_tree_fund_links, public.cohort_tree_candidates to anon, authenticated;
-grant select, insert, update, delete on public.cohort_tree_fund_links, public.cohort_tree_candidates to service_role;
+grant select on public.cohort_tree_fund_links, public.cohort_tree_candidates, public.cohort_tree_name_tags to anon, authenticated;
+grant select, insert, update, delete on public.cohort_tree_fund_links, public.cohort_tree_candidates, public.cohort_tree_name_tags to service_role;
 -- the stash is not for reading: row level security on, no policy, nothing granted to the two public roles
 revoke all on public.cohort_tree_tr2_removed from anon, authenticated;
 grant select, insert, update, delete on public.cohort_tree_tr2_removed to service_role;
@@ -204,8 +229,8 @@ ${values(beforeRows, T3)}
 ${moveRows('fwd')}
   ) as v(ticker, role, from_cohort, to_cohort) on x.cohort = v.from_cohort and x.ticker = v.ticker and x.role = v.role;
   if k <> ${moves.length} then raise exception 'TR2 refused, nothing changed: expected the ${moves.length} member rows to move where TR1 put them, found %', k; end if;
-  if exists (select 1 from public.cohort_tree_tr2_removed) or exists (select 1 from public.cohort_tree_fund_links) or exists (select 1 from public.cohort_tree_candidates) then
-    raise exception 'TR2 refused, nothing changed: one of the three new tables already holds rows';
+  if exists (select 1 from public.cohort_tree_tr2_removed) or exists (select 1 from public.cohort_tree_fund_links) or exists (select 1 from public.cohort_tree_candidates) or exists (select 1 from public.cohort_tree_name_tags) then
+    raise exception 'TR2 refused, nothing changed: one of the four new tables already holds rows';
   end if;
   select count(*) into pending_at_entry from public.cohort_tree_members where status = 'pending_admission';
 
@@ -265,6 +290,10 @@ ${rev.links.map(l => `    (${q(l.fund)},${q(l.fund_node)},${q(l.family)},${q(l.c
   insert into public.cohort_tree_candidates (cohort,ticker,in_sp500,sp500_weight_pct,basis,gap) values
 ${rev.candidates.map(c => `    (${q(c.cohort)},${q(c.ticker)},${c.in_sp500 ? 'true' : 'false'},${c.sp500_weight_pct ?? 'null'},${q(c.basis)},${q(c.gap)})`).join(',\n')};
 
+  -- the ${rev.tags.length} name tags: growth, momentum, low volatility, one row per company, with the numbers behind each
+  insert into public.cohort_tree_name_tags (ticker,as_of,tags,growth_ntm_rev_pct,growth_basis,ret_6m_pct,momentum_rank,usual_day_pct,usual_day_vs_market,usual_day_rank,held_by,note) values
+${rev.tags.map(t => `    (${q(t.ticker)},${q(t.as_of)},${q(t.tags)},${num(t.growth_ntm_rev_pct)},${q(t.growth_basis)},${num(t.ret_6m_pct)},${num(t.momentum_rank)},${num(t.usual_day_pct)},${num(t.usual_day_vs_market)},${num(t.usual_day_rank)},${q(t.held_by)},${q(t.note)})`).join(',\n')};
+
   -- PROOF. Anything else and the whole transaction is refused.
   set constraints all immediate;   -- the parent and member keys TR1 left "checked at commit" are checked here
   select count(*) into n from public.cohort_tree;
@@ -292,6 +321,12 @@ ${rev.candidates.map(c => `    (${q(c.cohort)},${q(c.ticker)},${c.in_sp500 ? 'tr
   if k <> ${rev.links.length} then raise exception 'TR2 proof: expected ${rev.links.length} links, found %', k; end if;
   select count(*) into k from public.cohort_tree_candidates;
   if k <> ${rev.candidates.length} then raise exception 'TR2 proof: expected ${rev.candidates.length} candidates, found %', k; end if;
+  select count(*) into k from public.cohort_tree_name_tags;
+  if k <> ${rev.tags.length} then raise exception 'TR2 proof: expected ${rev.tags.length} name tags, found %', k; end if;
+  select count(*) into k from public.cohort_tree_name_tags g where not exists (select 1 from public.cohort_tree_members x where x.ticker = g.ticker and x.role = 'member');
+  if k <> 0 then raise exception 'TR2 proof: % name tags are on a ticker that is not a company of the tree', k; end if;
+  select count(*) into k from public.cohort_tree_members x join public.cohort_tree_members u on u.ticker = x.ticker and u.role = 'member' and u.cohort = 'REGULATED_UTILITIES' where x.cohort = 'AI_POWERTRAIN' and x.role = 'member';
+  if k <> 0 then raise exception 'TR2 proof: % regulated utilities sit in AI POWERTRAIN', k; end if;
   select count(*) into k from public.cohort_tree_members where status = 'pending_admission';
   if k <> pending_at_entry then raise exception 'TR2 proof: % rows were pending at entry, % are now', pending_at_entry, k; end if;
 end $$;
@@ -302,7 +337,7 @@ commit;
 -- do not edit by hand.
 -- The exact inverse of 20261006_tr2_tree_revision.sql, row by row: the ${adds.length} added member rows go, the ${moves.length} moved rows
 -- go back, the ${removed.length} removed nodes return from the stash with their original source and loaded_at, the ${changed.length} changed
--- nodes get TR1's values back, the ${added.length} added nodes go. Then it drops what the forward file created: three tables,
+-- nodes get TR1's values back, the ${added.length} added nodes go. Then it drops what the forward file created: four tables,
 -- one check, five columns. ONE TRANSACTION. Not applied → it says so and does nothing; safe to run twice.
 -- It leaves status, spine_fund and spine_fund_next of every row the revision did not change exactly as it finds
 -- them: if TR1's after-admission step has run, the result is TR1's tree after that step.
@@ -325,6 +360,9 @@ begin
   delete from public.cohort_tree_candidates;
   get diagnostics k = row_count;
   if k <> ${rev.candidates.length} then raise exception 'TR2 rollback refused, nothing changed: expected ${rev.candidates.length} candidates, found %', k; end if;
+  delete from public.cohort_tree_name_tags;
+  get diagnostics k = row_count;
+  if k <> ${rev.tags.length} then raise exception 'TR2 rollback refused, nothing changed: expected ${rev.tags.length} name tags, found %', k; end if;
 
   -- the ${adds.length} member rows the revision added
   delete from public.cohort_tree_members x using (values
@@ -384,6 +422,7 @@ ${values(beforeRows, T3)}
   -- drop what the forward file created, and nothing else
   drop table public.cohort_tree_fund_links;
   drop table public.cohort_tree_candidates;
+  drop table public.cohort_tree_name_tags;
   drop table public.cohort_tree_tr2_removed;
   alter table public.cohort_tree drop constraint if exists cohort_tree_hub_pick_check;
   alter table public.cohort_tree drop column if exists layer, drop column if exists parent_why, drop column if exists hub_pick, drop column if exists hub_pick_source, drop column if exists hub_pick_note;
@@ -442,8 +481,8 @@ commit;
 
 // Everything the CLI and the tests need, built once from the two generators.
 export function build () {
-  const { base, holdings, consumer } = loadInputs()
-  const rev = reviseTree({ base, holdings, consumer })
+  const inputs = loadInputs(); const { base } = inputs
+  const rev = reviseTree(inputs)
   const diff = diffTrees(base, rev)
   return { base, rev, diff, errors: validateRevision(base, rev), files: sqlFiles({ base, rev, diff }), tr1: tr1SqlFiles(base) }
 }
@@ -455,7 +494,8 @@ export const sha = (s) => createHash('sha256').update(s).digest('hex')
 // different, fixed time on every row: fingerprints from separate runs can be compared, and a row that came back
 // with another row's loaded_at would show. A fingerprint is md5 over every TR1 column of every row, source and
 // loaded_at included.
-async function runInPglite (dir, { files, tr1, rev, base }) {
+async function runInPglite (dir, { files, tr1, rev, base, diff }) {
+  const PENDING = base.members.filter(m => m.status === 'pending_admission').length      // TR1's ten funds
   const require = createRequire(join(dir, 'package.json'))
   const { PGlite } = await import(require.resolve('@electric-sql/pglite'))
   const FP_TREE = "select count(*)::int n, md5(coalesce(string_agg(jsonb_build_array(cohort,label,kind,parent_1,parent_2,spine,spine_fund,spine_fund_next,source,loaded_at)::text, E'\\n' order by cohort), '')) h from public.cohort_tree"
@@ -464,6 +504,7 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
     (select coalesce(string_agg(jsonb_build_array(cohort,${TR2_COLS.join(',')})::text, E'\\n' order by cohort), '') from public.cohort_tree) ||
     (select coalesce(string_agg(to_jsonb(l)::text, E'\\n' order by fund, cohort), '') from public.cohort_tree_fund_links l) ||
     (select coalesce(string_agg(to_jsonb(c)::text, E'\\n' order by cohort, ticker), '') from public.cohort_tree_candidates c) ||
+    (select coalesce(string_agg(to_jsonb(g)::text, E'\\n' order by ticker), '') from public.cohort_tree_name_tags g) ||
     (select coalesce(string_agg(to_jsonb(r)::text, E'\\n' order by cohort), '') from public.cohort_tree_tr2_removed r)) h`
   const STANDINS = "select (select md5(string_agg(t::text, E'\\n' order by ticker, cohort)) from public.ticker_cohorts t) ticker_cohorts, (select md5(string_agg(t::text, E'\\n' order by ticker)) from public.tickers t) tickers"
   const standinSeen = new Set(); let dbs = 0
@@ -494,6 +535,7 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
         s.links = (await one('select count(*)::int n from public.cohort_tree_fund_links')).n
         s.candidates = (await one('select count(*)::int n from public.cohort_tree_candidates')).n
         s.stash = (await one('select count(*)::int n from public.cohort_tree_tr2_removed')).n
+        s.tags = (await one('select count(*)::int n from public.cohort_tree_name_tags')).n
         s.fp_tr2 = (await one(FP_TR2)).h
       }
       return s
@@ -508,8 +550,8 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
     return { db, one, run, state }
   }
   const same = (a, b) => a.fp_tree === b.fp_tree && a.fp_members === b.fp_members && a.nodes === b.nodes && a.members === b.members
-  const brief = (s) => ({ nodes: s.nodes, members: s.members, pending: s.pending, links: s.links, candidates: s.candidates, stash: s.stash, fp_tree: s.fp_tree, fp_members: s.fp_members, fp_tr2: s.fp_tr2, spines: s.spines })
-  const applied = (s, pending) => s.nodes === rev.nodes.length && s.members === rev.members.length && s.pending === pending && s.links === rev.links.length && s.candidates === rev.candidates.length && s.stash === 5 && s.frontier === false
+  const brief = (s) => ({ nodes: s.nodes, members: s.members, pending: s.pending, links: s.links, candidates: s.candidates, tags: s.tags, stash: s.stash, fp_tree: s.fp_tree, fp_members: s.fp_members, fp_tr2: s.fp_tr2, spines: s.spines })
+  const applied = (s, pending) => s.nodes === rev.nodes.length && s.members === rev.members.length && s.pending === pending && s.links === rev.links.length && s.candidates === rev.candidates.length && s.tags === rev.tags.length && s.stash === diff.nodes_removed.length && s.frontier === false
   const J = JSON.stringify
   const out = {}
 
@@ -536,6 +578,17 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
       layers: Object.fromEntries((await db.query('select layer, count(*)::int n from public.cohort_tree group by 1 order by 1')).rows.map(r => [r.layer, r.n])),
       frontier_cohorts: Object.fromEntries((await db.query("select cohort, parent_1, parent_2 from public.cohort_tree where cohort in ('SPACE','QUANTUM','AUTONOMY_EVTOL','DEFENCE_TECH','DEFENCE_PRIMES') order by 1")).rows.map(r => [r.cohort, [r.parent_1, r.parent_2]]))
     }
+    const newIds = new Set(diff.nodes_added.map(n => n.cohort)); const movedIntoNewNodes = diff.member_moves.filter(m => newIds.has(m.to)).length
+    checks.steering = {
+      ai_powertrain_groups: (await db.query("select cohort from public.cohort_tree where parent_1 = 'AI_POWERTRAIN' order by 1")).rows.map(r => r.cohort),
+      ai_powertrain_names: (await one("select count(*)::int n from public.cohort_tree_members where cohort = 'AI_POWERTRAIN' and role = 'member'")).n,
+      regulated_utilities_in_ai_powertrain: (await one("select count(*)::int n from public.cohort_tree_members x join public.cohort_tree_members u on u.ticker = x.ticker and u.cohort = 'REGULATED_UTILITIES' and u.role = 'member' where x.cohort = 'AI_POWERTRAIN' and x.role = 'member'")).n,
+      platforms_under_both_parents: (await db.query("select x.ticker from public.cohort_tree_members x join public.cohort_tree t on t.cohort = x.cohort where x.cohort = 'INTERNET_PLATFORMS' and t.parent_1 = 'SOFTWARE_INTERNET' and t.parent_2 = 'CONSUMER' and x.ticker in ('AMZN','SHOP','MELI','BABA','JD','PDD') order by 1")).rows.map(r => r.ticker),
+      factor_branch: Object.fromEntries((await db.query("select t.label, count(*) filter (where x.role = 'member')::int names, string_agg(x.ticker, ' ' order by x.ticker) filter (where x.role = 'reference') fund_lines from public.cohort_tree t join public.cohort_tree_members x on x.cohort = t.cohort where t.parent_1 = 'IDX_FACTOR' group by 1 order by 1")).rows.map(r => [r.label, { names: r.names, fund_lines: r.fund_lines }])),
+      name_tags: (await one('select count(*)::int n from public.cohort_tree_name_tags')).n,
+      anon_can_read_name_tags: (await one("select has_table_privilege('anon', 'public.cohort_tree_name_tags', 'select') y")).y,
+      off_the_hub_regime_only: (await db.query("select cohort from public.cohort_tree where cohort in ('REGULATED_UTILITIES','HOUSING','RESTAURANTS','AEROSPACE_DEFENCE') and hub_pick = 'off' order by 1")).rows.map(r => r.cohort)
+    }
     const f2 = await run(files.forward); const s2 = await state()
     const r1 = await run(files.rollback); const s3 = await state()
     const r2 = await run(files.rollback); const s4 = await state()
@@ -544,12 +597,13 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
     const want = Object.fromEntries(['on', 'off', 'undecided'].map(p => [p, rev.nodes.filter(n => n.hub_pick === p).length]))
     out.A = {
       what: 'TR1 load → forward → forward again → rollback → rollback again → forward once more → rollback',
-      ok: f1.ok && applied(s1, 10) && checks.sector_nodes_with_four_funds === 11 && checks.nodes_written_by_tr2 === 19 && checks.member_rows_written_by_tr2 === 10 &&
-        checks.moved_rows_keep_tr1_source_and_loaded_at === 60 && checks.guard_keys.length === 3 && checks.guard_keys_cascade_or_deferrable === 0 && checks.anon_can_read_stash === false &&
+      ok: f1.ok && applied(s1, PENDING) && checks.sector_nodes_with_four_funds === 11 && checks.nodes_written_by_tr2 === diff.nodes_added.length && checks.member_rows_written_by_tr2 === diff.member_adds.length &&
+        checks.moved_rows_keep_tr1_source_and_loaded_at === movedIntoNewNodes && checks.steering.regulated_utilities_in_ai_powertrain === 0 && checks.steering.anon_can_read_name_tags === true &&
+        J(checks.steering.ai_powertrain_groups) === J(rev.nodes.filter(n => n.parent_1 === 'AI_POWERTRAIN').map(n => n.cohort).sort()) && checks.guard_keys.length === 3 && checks.guard_keys_cascade_or_deferrable === 0 && checks.anon_can_read_stash === false &&
         J(checks.hub_pick) === J({ off: want.off, on: want.on, undecided: want.undecided }) &&
         f2.ok && J(brief(s2)) === J(brief(s1)) &&
         r1.ok && same(s3, s0) && same(s3, REF_LOAD) && J(s3.tables) === J(s0.tables) && J(s3.tree_columns) === J(s0.tree_columns) && J(s3.policies) === J(s0.policies) &&
-        r2.ok && J(s4) === J(s3) && f3.ok && applied(s5, 10) && s5.fp_tr2 !== undefined && r3.ok && same(s6, s0),
+        r2.ok && J(s4) === J(s3) && f3.ok && applied(s5, PENDING) && s5.fp_tr2 !== undefined && r3.ok && same(s6, s0),
       before: brief(s0), forward: f1, after_forward: brief(s1), checks, forward_again: { ...f2, changed_anything: J(brief(s2)) !== J(brief(s1)) },
       rollback: r1, after_rollback: brief(s3), fingerprint_equals_before_forward: same(s3, s0), tables_after_rollback: s3.tables, tree_columns_after_rollback: s3.tree_columns,
       rollback_again: { ...r2, changed_anything: J(s4) !== J(s3) }, forward_once_more: { ...f3, nodes: s5.nodes, members: s5.members }, rollback_once_more: { ...r3, fingerprint_equals_before_forward: same(s6, s0) }
@@ -638,7 +692,7 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
     const uu = await run(files.undoAfterAdmission); const v3 = await state()
     const rb = await run(files.rollback); const v4 = await state()
     const tr1Spines = Object.fromEntries(base.nodes.filter(n => n.spine_fund_next != null).map(n => [n.cohort, `${n.spine_fund} → ${n.spine_fund_next}`]))
-    // (the 29 rows TR2 itself writes take the clock, so an applied state is compared with scenario B by counts and spines)
+    // (the rows TR2 itself writes take the clock, so an applied state is compared with scenario B by counts and spines)
     const asB = v1.nodes === B_MIDDLE.nodes && v1.members === B_MIDDLE.members && v1.pending === 0 && J(v1.spines) === J(B_MIDDLE.spines)
     const E3 = { what: 'TR1 load → forward → TR1 AFTER_ADMISSION → UNDO_TR1_AFTER_ADMISSION (twice) → TR2 rollback', starts_from_scenario_B_middle_state: asB, pending_before_undo: v1.pending, undo: u, pending_after_undo: v2.pending, spines_after_undo: v2.spines,
       spines_as_tr1_loaded: Object.keys(tr1Spines).every(c => v2.spines[c] === tr1Spines[c]), equals_tr2_before_admission: same(v2, v0) && v2.fp_tr2 === v0.fp_tr2,
@@ -656,8 +710,8 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
       ok: E1.failed && !E1.changed_anything && /tr2_roll_back_tr2_first/.test(E1.error) &&
         E2.tables_lost.length === 0 && E2.rows_unchanged && E2.repair.ok && E2.repair.policies_back && E2.repair.rows_unchanged &&
         E2b.failed && E2b.tables_lost.length === 0 && r.ok && rr.ok && !E2c.tables_left.some(t => t.startsWith('cohort_tree')) &&
-        asB && u.ok && E3.pending_after_undo === 10 && E3.spines_as_tr1_loaded && E3.equals_tr2_before_admission && uu.ok && !E3.undo_again.changed_anything && rb.ok && E3.equals_tr1_load_alone &&
-        w.ok && E3b.pending === 10 && E3b.equals_tr1_load_alone,
+        asB && u.ok && E3.pending_after_undo === PENDING && E3.spines_as_tr1_loaded && E3.equals_tr2_before_admission && uu.ok && !E3.undo_again.changed_anything && rb.ok && E3.equals_tr1_load_alone &&
+        w.ok && E3b.pending === PENDING && E3b.equals_tr1_load_alone,
       tr1_load_after_tr2: E1, tr1_rollback_after_tr2_statement_by_statement: E2, tr1_rollback_after_tr2_one_batch: E2b, right_order: E2c, undo_after_admission: E3, undo_after_admission_without_tr2: E3b
     }
   }
@@ -669,7 +723,7 @@ async function runInPglite (dir, { files, tr1, rev, base }) {
     databases_opened: dbs,
     loaded_at_note: 'after TR1\'s load the harness stamps loaded_at with a different fixed time on every row, so fingerprints from separate databases can be compared and a row that came back with another row\'s loaded_at would show',
     fingerprint: 'md5 over every TR1 column of every row, source and loaded_at included, for cohort_tree and cohort_tree_members',
-    fingerprint_note: 'the 19 nodes and 10 member rows TR2 itself writes take the clock for loaded_at, so the fingerprint of an APPLIED tree differs from one database to the next; every equality claimed here is between states TR2 has left (rolled back) or inside one database',
+    fingerprint_note: `the ${diff.nodes_added.length} nodes and ${diff.member_adds.length} member rows TR2 itself writes take the clock for loaded_at, so the fingerprint of an APPLIED tree differs from one database to the next; every equality claimed here is between states TR2 has left (rolled back) or inside one database`,
     how_files_are_run: 'each file is sent whole, as the coordinator\'s one query call would send it; after a failure the harness issues ROLLBACK, which is what closing the connection does. TR1\'s ROLLBACK file has no begin/commit of its own, so it is also run one statement at a time (the worst case)',
     sql_sha256: { forward: sha(files.forward), rollback: sha(files.rollback), undoAfterAdmission: sha(files.undoAfterAdmission), tr1_load: sha(tr1.load), tr1_rollback: sha(tr1.rollback), tr1_afterAdmission: sha(tr1.afterAdmission) },
     reference: { tr1_load_alone: brief(REF_LOAD), tr1_load_then_after_admission_alone: brief(REF_AFTER) },
@@ -689,7 +743,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     dry_run: !WRITE,
     nodes: { tr1: base.nodes.length, tr2: rev.nodes.length, added: diff.nodes_added.length, removed: diff.nodes_removed.length, changed: diff.nodes_changed.length },
     members: { tr1: base.members.length, tr2: rev.members.length, moved: diff.member_moves.length, added: diff.member_adds.length, removed: diff.member_removed.length },
-    links: rev.links.length, candidates: rev.candidates.length,
+    links: rev.links.length, candidates: rev.candidates.length, name_tags: rev.tags.length,
     hub_pick: rev.nodes.reduce((o, n) => (o[n.hub_pick] = (o[n.hub_pick] ?? 0) + 1, o), {}),
     tr1_pending_funds: base.members.filter(m => m.status === 'pending_admission').map(m => m.ticker).sort(),
     tr1_spine_handovers: base.nodes.filter(n => n.spine_fund_next != null).map(n => `${n.cohort}: ${n.spine_fund} → ${n.spine_fund_next}`),

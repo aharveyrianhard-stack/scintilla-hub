@@ -15,6 +15,17 @@
 //   3. "packaged foods — where would that go?" → CONSUMER → CONSUMER STAPLES → PACKAGED FOODS, with the names
 //      that would make it a group recorded beside it (candidates[]; never members: they are not served).
 //   4. his on-Hub picks, as a RECORD (hub_pick on / off / undecided). Nothing reads it; the Hub does not change.
+// …and his evening steering of the same day (18:10 – 19:20 ET), section 3b below:
+//   5. "Amazon and Shopify, consumer discretionary? They seem more like software names to me … I should share both"
+//      → the online marketplaces and merchant platforms also sit in INTERNET & CONSUMER PLATFORMS, whose two
+//        parents are SOFTWARE & INTERNET and CONSUMER.
+//   6. "growth, momentum and low volatility — I would expect them to be a branch, not just tags"
+//      → three nodes under FACTORS in the index layer, their members assigned by rule (factor-tags.json), with
+//        VUG / VTV, MTUM, SPLV and QUAL as the fund lines; the per-name tags are kept as well (tags[]).
+//   7. "PWR, not on AI powertrain. ETN, not on AI powertrain. I think they should be."
+//      → AI POWERTRAIN holds the grid and electrical build-out names, and has four groups under it: grid &
+//        electrical, power producers, nuclear & uranium, fuel cells & storage. Regulated utilities stay out.
+//   8. regulated utilities, housing, restaurants and aerospace: in the tree for the regime read, off the Hub.
 // The SQL that carries this to the two TR1 tables is written by scripts/cohort-tree-revise-sql.mjs from diff{}.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -76,22 +87,55 @@ const PICKS_NAMED = {
   OIL_SERVICES: ['off', 'Alan, 6 Oct: oil & gas off the Hub, kept statistically sound (computed and measured, not shown)'],
   MATERIALS_METALS: ['off', 'Alan, 6 Oct: off the Hub'],
   INDUSTRIAL: ['off', 'Alan, 6 Oct: off the Hub'],
-  REAL_ESTATE: ['off', 'Alan, 6 Oct: off the Hub']
+  REAL_ESTATE: ['off', 'Alan, 6 Oct: off the Hub'],
+  // the coordinator's note of Alan, 6 Oct ~19:20 ET: "in the tree for the regime, off the Hub"
+  REGULATED_UTILITIES: ['off', 'Alan, 6 Oct ~19:20 ET: regulated utilities stay out of AI POWERTRAIN — in the tree for the regime read, off the Hub'],
+  HOUSING: ['off', 'Alan, 6 Oct ~19:20 ET: housing — in the tree for the regime read, off the Hub'],
+  RESTAURANTS: ['off', 'Alan, 6 Oct ~19:20 ET: restaurants — in the tree for the regime read, off the Hub'],
+  AEROSPACE_DEFENCE: ['off', 'Alan, 6 Oct ~19:20 ET: aerospace — in the tree for the regime read, off the Hub']
 }
 // a pick said about a heading is not stretched over these: Alan spoke before they moved, or said "partly"
 const PICK_NOT_INHERITED = {
-  SPACE: 'moved here from FRONTIER on 6 Oct; "industrials off" was said before the move',
-  AUTONOMY_EVTOL: 'moved here from FRONTIER on 6 Oct; "industrials off" was said before the move',
-  DEFENCE_TECH: 'moved here from FRONTIER on 6 Oct; "industrials off" was said before the move',
-  QUANTUM: 'moved here from FRONTIER on 6 Oct; technology as a whole was not named',
-  AEROSPACE_DEFENCE: 'a new shelf: it holds the defence primes (off, with INDUSTRIAL) and three cohorts moved from FRONTIER'
+  SPACE: 'moved here from FRONTIER on 6 Oct; "aerospace off" was said about the industrial shelf, not about these story stocks (RKLB, ASTS) — Alan\'s call',
+  AUTONOMY_EVTOL: 'moved here from FRONTIER on 6 Oct; "aerospace off" was said about the industrial shelf, not about these story stocks (JOBY, ACHR) — Alan\'s call',
+  DEFENCE_TECH: 'moved here from FRONTIER on 6 Oct; half software (PLTR), half defence — Alan\'s call',
+  QUANTUM: 'moved here from FRONTIER on 6 Oct; technology as a whole was not named'
 }
+
+// ALAN'S EVENING STEERING (6 Oct 18:10 – 19:20 ET), as data. Nothing below is a member that is not already served.
+// (5) online marketplaces and merchant platforms that sat only in their region (or, for Amazon, already here)
+const PLATFORM_NAMES = ['SHOP', 'MELI', 'BABA', 'JD', 'PDD']
+const PLATFORM_WHY = 'an online marketplace or merchant platform. Alan, 6 Oct ~18:10 ET: "They seem more like software names to me … I should share both"'
+// (7) AI POWERTRAIN: the build-out names join it, and it gets four groups
+const POWERTRAIN_GROUPS = {
+  GRID_ELECTRICAL: { parent_2: 'INDUSTRIAL', why: 'the grid and electrical build-out: the makers and builders of what carries the power to a data centre. Alan, 6 Oct ~19:20 ET: "PWR, not on AI powertrain. ETN, not on AI powertrain. I think they should be." Second parent INDUSTRIAL: that is where the companies are filed.' },
+  POWER_GENERATORS: { parent_2: 'ENERGY_POWER', label: 'POWER PRODUCERS', why: 'the power producers that sell to the data centres (VST, CEG, TLN, NRG): free to set their price, unlike a regulated utility. Second parent ENERGY & POWER.' },
+  NUCLEAR_URANIUM: { parent_2: 'ENERGY_POWER', why: 'the reactors and their fuel. Second parent ENERGY & POWER.' }
+}
+const POWERTRAIN_JOIN_WHY = 'a grid and electrical build-out name. Alan, 6 Oct ~19:20 ET: "PWR, not on AI powertrain. ETN, not on AI powertrain. I think they should be."'
+const FUEL_CELLS = ['BE', 'EOSE']
+// names that would fill a gap the steering opened: NOT served, never members. in_sp500 and the weight are read
+// from SPY's holdings; "peer" is from memory, not a provider read.
+const STEER_CANDIDATES = [
+  ['GRID_ELECTRICAL', 'GNRC', 'standby and home power'], ['GRID_ELECTRICAL', 'POWL', 'switchgear for data centres and utilities'],
+  ['FUEL_CELLS_STORAGE', 'FLNC', 'grid battery storage'], ['FUEL_CELLS_STORAGE', 'PLUG', 'hydrogen fuel cells'],
+  ['INTERNET_PLATFORMS', 'EBAY', 'online marketplace'], ['INTERNET_PLATFORMS', 'CPNG', 'online marketplace (Korea)'], ['INTERNET_PLATFORMS', 'SE', 'online marketplace and payments (South-East Asia)']
+]
+// (6) the factor branch: node id, label, the tag list it is built from, its fund lines (first = the line it is drawn against)
+export const FACTOR_NODES = [
+  ['IDX_FACTOR_GROWTH', 'GROWTH', 'GROWTH', ['VUG', 'VTV'], 'IDX_STYLE'],
+  ['IDX_FACTOR_MOMENTUM', 'MOMENTUM', 'MOMENTUM', ['MTUM'], null],
+  ['IDX_FACTOR_LOW_VOL', 'LOW VOLATILITY', 'LOW_VOLATILITY', ['SPLV', 'QUAL'], null]
+]
+const FUND_LINE_WHY = { VUG: 'fund line: the index maker\'s growth side, to compare our list with', VTV: 'fund line: the index maker\'s value side — the other half of the same large companies',
+  MTUM: 'fund line: MSCI\'s momentum fund, to compare our list with', SPLV: 'fund line: the 100 calmest S&P 500 names, to compare our list with',
+  QUAL: 'fund line: MSCI\'s quality fund — the closest thing to "blue chip"; it overlaps the calm names but is not the same list' }
 
 const norm = (t) => String(t).toUpperCase().replace(/\./g, '-')
 const r3 = (x) => Math.round(x * 1000) / 1000
 const pct = (x) => (Math.round(x * 10) / 10).toFixed(1)
 
-export function reviseTree ({ base, holdings, consumer }) {
+export function reviseTree ({ base, holdings, consumer, factor }) {
   const nodes = base.nodes.map(n => ({ ...n }))
   const members = base.members.map(m => ({ ...m }))
   const N = () => Object.fromEntries(nodes.map(n => [n.cohort, n]))
@@ -140,6 +184,61 @@ export function reviseTree ({ base, holdings, consumer }) {
     for (const k of [...g.candidates_sp500_by_weight, ...g.candidates_outside_sp500]) put(home, k, g.sub_industry)
   }
   for (const w of consumer.revised_consumer_subtree.waiting_not_nodes) for (const k of w.candidates) put(w.served_today_home && N()[w.served_today_home] ? w.served_today_home : 'CONSUMER', k, `${w.label} (waiting: not a node until names are served)`)
+
+  // ── 3b. Alan's evening steering (18:10 – 19:20 ET): platforms, AI POWERTRAIN, the factor branch ───────────────
+  n = N()
+  const firstHome = (t) => members.find(m => m.ticker === t && m.role === 'member').cohort
+  const second = (cohort, t, why) => members.push({ cohort, ticker: t, role: 'member', status: 'served', near_copy_of: null, why: `also in ${firstHome(t)} (a company may sit in two cohorts): ${why}`.slice(0, 240) })
+  const H0 = holdingsIndex(holdings)
+  // (5) the platforms share both parents
+  for (const t of PLATFORM_NAMES) second('INTERNET_PLATFORMS', t, PLATFORM_WHY)
+  n.INTERNET_PLATFORMS.parent_why = 'two parents on purpose — SOFTWARE & INTERNET first, CONSUMER second: these companies are software that sells to shoppers. Alan, 6 Oct ~18:10 ET: "Amazon and Shopify … seem more like software names to me … I should share both"'
+  // (7) AI POWERTRAIN: three cohorts hang from it, a fourth is new, and it holds the build-out names itself
+  for (const [id, g] of Object.entries(POWERTRAIN_GROUPS)) {
+    n[id].parent_1 = 'AI_POWERTRAIN'; n[id].parent_2 = g.parent_2; n[id].parent_why = g.why
+    if (g.label) n[id].label = g.label
+  }
+  add({ cohort: 'FUEL_CELLS_STORAGE', label: 'FUEL CELLS & STORAGE', kind: 'cohort', parent_1: 'AI_POWERTRAIN', parent_2: 'ENERGY_POWER',
+    spine: 'power made or stored at the data centre itself: fuel cells (BE) and long-duration batteries (EOSE). Two names today, so it is a pair, not a group test. No fund is made for it; it is read against AI POWERTRAIN.' })
+  n = N()
+  n.FUEL_CELLS_STORAGE.parent_why = 'the fourth group of AI POWERTRAIN, beside grid & electrical, the power producers and nuclear. Second parent ENERGY & POWER.'
+  for (const t of FUEL_CELLS) second('FUEL_CELLS_STORAGE', t, 'the fuel-cell and storage makers of AI POWERTRAIN, as their own group')
+  const inPowertrain = new Set(members.filter(m => m.cohort === 'AI_POWERTRAIN' && m.role === 'member').map(m => m.ticker))
+  const joining = members.filter(m => m.cohort === 'GRID_ELECTRICAL' && m.role === 'member' && !inPowertrain.has(m.ticker)).map(m => m.ticker)
+  for (const t of joining) second('AI_POWERTRAIN', t, POWERTRAIN_JOIN_WHY)
+  n.AI_POWERTRAIN.spine = `the power behind the AI build-out, whole: ${inPowertrain.size + joining.length} names in four groups — grid & electrical build-out, power producers, nuclear & uranium, fuel cells & storage. Regulated utilities are NOT here: their prices are set by regulators, so they are kept for the regime read only.`
+  n.AI_POWERTRAIN.parent_why = 'unchanged: AI first, ENERGY & POWER second. What changed on 6 Oct ~19:20 ET is what it holds — the grid and electrical build-out names joined, and its four groups now hang from it.'
+  for (const [cohort, t, what] of STEER_CANDIDATES) {
+    const w = H0.SPY?.[norm(t)] ?? 0
+    candidates.push({ cohort, ticker: t, in_sp500: w > 0, sp500_weight_pct: w > 0 ? r3(w) : null, gap: n[cohort].label,
+      basis: `${what}; ${w > 0 ? `S&P 500 member, ${w.toFixed(3)}% of SPY` : 'not in the S&P 500'}; named as a peer from memory, not a provider read` })
+  }
+  // (6) GROWTH, MOMENTUM, LOW VOLATILITY: a branch of the index layer, members by rule, the fund lines beside them
+  const tags = []
+  if (factor) {
+    const R = factor.rules; const cnt = factor.counts
+    const SPINE = {
+      IDX_FACTOR_GROWTH: `by rule: next-twelve-month revenue growth of ${R.growth_min_ntm_rev_pct}% or more where an analyst estimate is on file (${cnt.growth_estimate_on_file} names); where none is on file yet, the index maker's call stands in (VUG holds it, VTV does not). Each row says which. Fund lines: VUG against VTV.`,
+      IDX_FACTOR_MOMENTUM: `by rule: the top fifth of the tree's companies by six-month return (${factor.window.first} to ${factor.window.last}; ${cnt.ranked_full_window} names ranked). The 12-month leg is not in yet. Fund line: MTUM.`,
+      IDX_FACTOR_LOW_VOL: `by rule: the calmest fifth by "usual day" — the middle size of a name's daily move over six months; the market's (SPY) is ${factor.market.usual_day_pct}%. Not the same as "blue chip": that is closer to QUALITY (QUAL). Fund lines: SPLV, QUAL.`
+    }
+    for (const [id, label, key, funds, parent2] of FACTOR_NODES) {
+      add({ cohort: id, label, kind: 'cohort', parent_1: 'IDX_FACTOR', parent_2: parent2, spine_fund: funds[0], spine: SPINE[id] })
+      for (const m of factor.branches[key]) members.push({ cohort: id, ticker: m.ticker, role: 'member', status: 'served', near_copy_of: null, why: m.why })
+      for (const f of funds) members.push({ cohort: id, ticker: f, role: 'reference', status: 'served', near_copy_of: null, why: FUND_LINE_WHY[f] })
+    }
+    n = N()
+    n.IDX_FACTOR_GROWTH.parent_why = 'a branch of the index layer under FACTORS; second parent GROWTH & VALUE, where its two fund lines (VUG, VTV) live'
+    n.IDX_FACTOR_MOMENTUM.parent_why = 'a branch of the index layer under FACTORS, beside its fund line MTUM'
+    n.IDX_FACTOR_LOW_VOL.parent_why = 'a branch of the index layer under FACTORS, beside its fund lines SPLV and QUAL (USMV joins once it is admitted)'
+    for (const o of factor.names) {
+      tags.push({ ticker: o.ticker, as_of: factor.as_of, tags: o.tags.join(' · ') || null,
+        growth_ntm_rev_pct: o.growth_ntm_rev_pct ?? null, growth_basis: o.growth_basis ?? null,
+        ret_6m_pct: o.ret_126_pct ?? null, momentum_rank: o.momentum_rank ?? null,
+        usual_day_pct: o.usual_day_pct ?? null, usual_day_vs_market: o.usual_day_vs_market ?? null, usual_day_rank: o.usual_day_rank ?? null,
+        held_by: Object.entries(o.held_by).map(([f, w]) => `${f} ${w.toFixed(2)}`).join(' · ') || null, note: o.notes.join('; ') || null })
+    }
+  }
 
   // ── 4. the index layer goes between THE MARKET and everything else ────────────────────────────────────────────
   n = N()
@@ -215,7 +314,7 @@ export function reviseTree ({ base, holdings, consumer }) {
       links.push({ fund, fund_node, family, cohort: x.cohort, ...l })
     }
   }
-  return { nodes, members, links, candidates }
+  return { nodes, members, links, candidates, tags }
 }
 
 // fund → { TICKER: weight % }, share-class spellings folded (BRK.B = BRK-B), the fund's own cash row dropped
@@ -270,29 +369,34 @@ export function validateRevision (base, rev) {
   const served = new Set(base.members.map(m => m.ticker))
   for (const k of rev.candidates) { if (served.has(k.ticker)) errors.push(`candidate ${k.ticker} is already in the tree`); if (!ids.has(k.cohort)) errors.push(`candidate ${k.ticker}: ${k.cohort} is not a node`) }
   for (const l of rev.links) if (!ids.has(l.cohort) || !ids.has(l.fund_node)) errors.push(`link ${l.fund}→${l.cohort}: not a node`)
+  // the evening steering: the tags are one row per company of the tree, and the regulated utilities stay out of AI POWERTRAIN
+  const tagged = new Set(); for (const t of rev.tags ?? []) { if (tagged.has(t.ticker)) errors.push(`tag ${t.ticker}: twice`); tagged.add(t.ticker); if (!b.has(t.ticker)) errors.push(`tag ${t.ticker}: not a company of the tree`) }
+  if ((rev.tags ?? []).length && tagged.size !== b.size) errors.push(`tags cover ${tagged.size} of ${b.size} companies`)
+  const under = (id) => { const out = new Set(); const walk = (c) => { for (const m of rev.members) if (m.cohort === c && m.role === 'member') out.add(m.ticker); for (const k of rev.nodes) if (k.parent_1 === c) walk(k.cohort) }; walk(id); return out }
+  if (ids.has('REGULATED_UTILITIES')) { const pt = under('AI_POWERTRAIN'); const ru = [...under('REGULATED_UTILITIES')].filter(t => pt.has(t)); if (ru.length) errors.push(`regulated utilities inside AI POWERTRAIN: ${ru}`) }
   return errors
 }
 
 export function loadInputs () {
   const universe = J(`${CO1}/data/universe-20261006.json`)
   const base = buildTree({ proposal: J(`${CO1}/proposal.json`), indexLayer: J(`${TR1}/index-layer.json`), served: universe.symbols })
-  return { base, holdings: J('deliverables/20260928/coverage-tree/data/holdings.json'), consumer: J(`${TR2}/consumer-gaps.json`) }
+  return { base, holdings: J('deliverables/20260928/coverage-tree/data/holdings.json'), consumer: J(`${TR2}/consumer-gaps.json`), factor: J(`${TR2}/factor-tags.json`) }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { base, holdings, consumer } = loadInputs()
-  const rev = reviseTree({ base, holdings, consumer })
+  const rev = reviseTree(loadInputs()); const { base } = loadInputs()
   const errors = validateRevision(base, rev); const d = diffTrees(base, rev)
   const by = (arr, k) => arr.reduce((o, r) => (o[r[k]] = (o[r[k]] ?? 0) + 1, o), {})
   const plan = {
     nodes: { tr1: base.nodes.length, tr2: rev.nodes.length, added: d.nodes_added.map(n => n.cohort), removed: d.nodes_removed.map(n => n.cohort), changed: d.nodes_changed.map(n => n.cohort) },
     members: { tr1: base.members.length, tr2: rev.members.length, moved: d.member_moves.length, added: d.member_adds.map(m => `${m.cohort}|${m.ticker}`), removed: d.member_removed.length },
     by_layer: by(rev.nodes, 'layer'), hub_pick: by(rev.nodes, 'hub_pick'), hub_pick_source: by(rev.nodes, 'hub_pick_source'),
-    links: rev.links.length, candidates: rev.candidates.length, errors
+    links: rev.links.length, candidates: rev.candidates.length, tags: rev.tags.length,
+    factor_branch: Object.fromEntries(FACTOR_NODES.map(([id]) => [id, rev.members.filter(m => m.cohort === id && m.role === 'member').length])), errors
   }
   if (errors.length) { console.log(JSON.stringify(plan, null, 1)); console.error('REFUSED: the revised tree does not validate'); process.exit(2) }
   if (process.argv.includes('--write')) {
-    writeFileSync(join(ROOT, `${TR2}/revised-tree.json`), JSON.stringify({ what: 'TR2: the tree revised on Alan\'s 6 Oct notes. Generated by scripts/cohort-tree-revise.mjs from TR1\'s tree, the funds\' holdings and consumer-gaps.json. Nothing here is written to any table.', source: SOURCE, plan, nodes: rev.nodes, members: rev.members, links: rev.links, candidates: rev.candidates, diff: d }, null, 1) + '\n')
+    writeFileSync(join(ROOT, `${TR2}/revised-tree.json`), JSON.stringify({ what: 'TR2: the tree revised on Alan\'s 6 Oct notes. Generated by scripts/cohort-tree-revise.mjs from TR1\'s tree, the funds\' holdings, consumer-gaps.json and factor-tags.json. Nothing here is written to any table.', source: SOURCE, plan, nodes: rev.nodes, members: rev.members, links: rev.links, candidates: rev.candidates, tags: rev.tags, diff: d }, null, 1) + '\n')
     plan.wrote = `${TR2}/revised-tree.json`
   }
   console.log(JSON.stringify(plan, null, 1))

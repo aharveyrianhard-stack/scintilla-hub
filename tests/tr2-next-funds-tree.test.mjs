@@ -15,8 +15,7 @@ const universe = J('deliverables/20261006/cohort-proposal/data/universe-20261006
 const nextFunds = J('deliverables/20261006/tree-revision/next-funds.json')
 const indexLayer = J('deliverables/20261006/tree-adopted/index-layer.json')
 const base = buildTree({ proposal: J('deliverables/20261006/cohort-proposal/proposal.json'), indexLayer, served: universe.symbols })
-const { holdings, consumer } = loadInputs()
-const rev = reviseTree({ base, holdings, consumer })
+const rev = reviseTree({ ...loadInputs(), base })
 const inputs = { nextFunds, base, rev, served: universe.symbols }
 const noComments = (s) => s.replace(/^--.*$/gm, '')
 const admitNext = nextFunds.admit_next.map(f => f.ticker)

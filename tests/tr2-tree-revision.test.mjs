@@ -1,6 +1,9 @@
 // TR2 (6 Oct 2026) — the tree revised on Alan's notes, and the migration that carries it to TR1's two tables.
 // Alan: FRONTIER goes ("just a consolidation of a bunch of stuff"); "the index layer should go between the other
 // layers and the market"; "packaged foods — where would that go?"; and his on-Hub picks, as a record only.
+// And his evening steering of the same day: Amazon and Shopify "more like software names … I should share both";
+// growth, momentum and low volatility "a branch, not just tags"; "PWR, not on AI powertrain. ETN, not on AI
+// powertrain. I think they should be."; regulated utilities, housing, restaurants, aerospace off the Hub.
 // These tests hold the revision to those notes and the SQL to the generator: nothing is typed by hand, nothing can
 // reach the tables the Hub reads, and the migration is right whether TR1's after-admission step has run or not.
 // Fast: no database, no network. The SQL itself is RUN in scripts/cohort-tree-revise-sql.mjs --pglite; the last test
@@ -8,7 +11,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
-import { SECTORS, TR2, TR2_COLS, SOURCE } from '../scripts/cohort-tree-revise.mjs'
+import { SECTORS, TR2, TR2_COLS, SOURCE, FACTOR_NODES } from '../scripts/cohort-tree-revise.mjs'
 import { build, sqlFiles, sha, FILES, DRY_RUN, GUARD_KEYS } from '../scripts/cohort-tree-revise-sql.mjs'
 
 const U = (p) => new URL('../' + p, import.meta.url)
@@ -23,8 +26,13 @@ const companies = (t) => new Set(t.members.filter(m => m.role === 'member').map(
 test('the revised tree validates, and the counts are the ones the migration is written for', () => {
   assert.deepEqual(errors, [])
   assert.deepEqual([base.nodes.length, base.members.length], [91, 771])
-  assert.deepEqual([rev.nodes.length, rev.members.length, rev.links.length, rev.candidates.length], [105, 781, 357, 75])
-  assert.deepEqual([diff.nodes_added.length, diff.nodes_removed.length, diff.nodes_changed.length, diff.member_moves.length, diff.member_adds.length, diff.member_removed.length], [19, 5, 20, 60, 10, 0])
+  assert.deepEqual([rev.nodes.length, rev.members.length, rev.links.length, rev.candidates.length, rev.tags.length], [109, 1120, 359, 82, 453])
+  assert.deepEqual([diff.nodes_added.length, diff.nodes_removed.length, diff.nodes_changed.length, diff.member_moves.length, diff.member_adds.length, diff.member_removed.length], [23, 5, 24, 60, 349, 0])
+  // the evening steering is the difference from the afternoon's revision (19 new nodes, 20 changed, 10 new member rows):
+  // 4 nodes (three factor branches, FUEL CELLS & STORAGE), 4 changed (AI POWERTRAIN and the three cohorts now under it),
+  // and member rows that are every one a served name already in the tree
+  const factorRows = rev.members.filter(m => m.cohort.startsWith('IDX_FACTOR_')).length
+  assert.equal(diff.member_adds.length, 10 + 5 + 2 + 8 + factorRows, 'staples 10, platforms 5, fuel cells 2, grid names into AI POWERTRAIN 8, the factor branch')
   for (const n of rev.nodes) for (const c of TR2_COLS) assert.ok(c in n, `${n.cohort}.${c}`)
 })
 
@@ -138,7 +146,9 @@ test('no candidate is a served name, and every candidate sits beside a real node
   const served = new Set(J('deliverables/20261006/cohort-proposal/data/universe-20261006.json').symbols)
   const inTree = new Set(rev.members.map(m => m.ticker))
   for (const k of rev.candidates) { assert.ok(!served.has(k.ticker), `${k.ticker} is served`); assert.ok(!inTree.has(k.ticker), `${k.ticker} is in the tree`); assert.ok(N[k.cohort], k.cohort) }
-  assert.equal(new Set(rev.candidates.map(k => `${k.cohort}|${k.ticker}`)).size, 75)
+  assert.equal(new Set(rev.candidates.map(k => `${k.cohort}|${k.ticker}`)).size, 82)
+  assert.deepEqual(rev.candidates.slice(-7).map(k => `${k.cohort}|${k.ticker}`), ['GRID_ELECTRICAL|GNRC', 'GRID_ELECTRICAL|POWL', 'FUEL_CELLS_STORAGE|FLNC', 'FUEL_CELLS_STORAGE|PLUG', 'INTERNET_PLATFORMS|EBAY', 'INTERNET_PLATFORMS|CPNG', 'INTERNET_PLATFORMS|SE'])
+  for (const k of rev.candidates.slice(-7)) assert.match(k.basis, /from memory, not a provider read$/, k.ticker)
   assert.ok(rev.candidates.some(k => k.cohort === 'PACKAGED_FOODS'))
 })
 
@@ -167,7 +177,7 @@ test('links agree with the analyst\'s independent fund-links.json wherever both 
   let both = 0
   for (const a of fl.links) {
     const l = mine[`${a.fund}|${a.cohort}`]
-    if (!l || a.cohort === 'STAPLES') continue           // STAPLES was one cohort of 16 names there; here it is a heading of seven
+    if (!l || ['STAPLES', 'AI_POWERTRAIN', 'INTERNET_PLATFORMS'].includes(a.cohort)) continue   // STAPLES was one cohort of 16 names there, here a heading of seven; the evening steering added names to the other two
     both++
     assert.ok(Math.abs(l.fund_weight_pct - a.fund_weight_pct) <= 0.0011, `${a.fund} → ${a.cohort}: ${l.fund_weight_pct} against ${a.fund_weight_pct}`)
     assert.deepEqual([l.names_held, l.node_names], [a.names_held, a.cohort_names], `${a.fund} → ${a.cohort}`)
@@ -196,6 +206,13 @@ test('hub_pick records Alan\'s words and stretches them no further', () => {
     assert.deepEqual([N[id].hub_pick, N[id].hub_pick_source], [pick, 'named'], id)
     assert.match(N[id].hub_pick_note, /^Alan, 6 Oct: /, id)
   }
+  // the evening's four: in the tree for the regime read, off the Hub
+  const regimeOnly = ['REGULATED_UTILITIES', 'HOUSING', 'RESTAURANTS', 'AEROSPACE_DEFENCE']
+  for (const id of regimeOnly) {
+    assert.deepEqual([N[id].hub_pick, N[id].hub_pick_source], ['off', 'named'], id)
+    assert.match(N[id].hub_pick_note, /^Alan, 6 Oct ~19:20 ET: .*in the tree for the regime read, off the Hub$/, id)
+    named[id] = 'off'
+  }
   assert.deepEqual(rev.nodes.filter(n => n.hub_pick_source === 'named').map(n => n.cohort).sort(), Object.keys(named).sort())
   assert.match(N.HEALTH.hub_pick_note, /PARTLY/)
   for (const id of ['OIL_UPSTREAM', 'OIL_MIDSTREAM', 'OIL_REFINERS', 'OIL_SERVICES']) assert.match(N[id].hub_pick_note, /kept statistically sound/, id)
@@ -219,18 +236,18 @@ test('the SQL on disk is exactly what the generator emits, and the generator is 
   for (const f of Object.values(files)) { assert.equal(f.match(/^begin;$/gm).length, 1); assert.equal(f.match(/^commit;$/gm).length, 1); assert.ok(f.trimEnd().endsWith('commit;')) }
 })
 
-test('the SQL names only TR1\'s two tables and TR2\'s three, and never the tables the Hub reads', () => {
+test('the SQL names only TR1\'s two tables and TR2\'s four, and never the tables the Hub reads', () => {
   const sql = noComments(files.forward + files.rollback + files.undoAfterAdmission)
   assert.doesNotMatch(sql, /ticker_cohorts/)
   assert.doesNotMatch(sql, /\btickers\b/)
   const named = new Set([...sql.matchAll(/\bpublic\.([a-z0-9_]+)/g)].map(m => m[1]))
-  assert.deepEqual([...named].sort(), ['cohort_tree', 'cohort_tree_candidates', 'cohort_tree_fund_links', 'cohort_tree_members', 'cohort_tree_tr2_removed'])
+  assert.deepEqual([...named].sort(), ['cohort_tree', 'cohort_tree_candidates', 'cohort_tree_fund_links', 'cohort_tree_members', 'cohort_tree_name_tags', 'cohort_tree_tr2_removed'])
   // every table a statement acts on is written public.<name>: nothing reaches a table by a bare name
   // (quoted text is taken out first: a reason such as "…join here." is words, not SQL)
   const bare = sql.replace(/'(?:[^']|'')*'/g, "''")
   const acted = [...bare.matchAll(/\b(?:insert into|delete from|update|join|alter table|drop table(?: if exists)?|create table(?: if not exists)?|references|truncate)\s+(?:only\s+)?([a-z0-9_."]+)/g)].map(m => m[1])
   assert.ok(acted.length > 40)
-  for (const t of acted) assert.match(t, /^public\.cohort_tree(_members|_fund_links|_candidates|_tr2_removed)?$/, t)
+  for (const t of acted) assert.match(t, /^public\.cohort_tree(_members|_fund_links|_candidates|_name_tags|_tr2_removed)?$/, t)
   assert.doesNotMatch(sql, /\btruncate\b|\bcascade\b|\bcreate (?:or replace )?(?:function|view|trigger)\b|\bcron\b/)
   assert.deepEqual(new Set([...noComments(files.undoAfterAdmission).matchAll(/\bpublic\.([a-z0-9_]+)/g)].map(m => m[1])), new Set(['cohort_tree', 'cohort_tree_members']))
 })
@@ -238,7 +255,7 @@ test('the SQL names only TR1\'s two tables and TR2\'s three, and never the table
 test('the forward file never assigns status or spine_fund_next, and never tests them on a row it does not change', () => {
   const sql = noComments(files.forward)
   const sets = [...sql.matchAll(/\bupdate\s+public\.[a-z_]+(?:\s+[a-z])?\s+set\s+([\s\S]*?)(?=\n|\bwhere\b|\bfrom\b)/g)].map(m => m[1])
-  assert.equal(sets.length, 20 + 2, 'the 20 changed nodes, the member move and the 105-node marking')
+  assert.equal(sets.length, diff.nodes_changed.length + 2, 'the changed nodes, the member move and the marking of every node')
   for (const s of sets) assert.doesNotMatch(s, /\b(status|spine_fund_next)\s*=/, s)
   assert.doesNotMatch(sql, /\bset\s+[^;]*\bstatus\s*=/)
   assert.doesNotMatch(sql, /pending_admission'\s*(,|\))/, 'no row is written as pending')
@@ -265,8 +282,8 @@ test('the three foreign keys that close TR1\'s LOAD and ROLLBACK are named, not 
   assert.doesNotMatch(table, /on delete|deferrable/)
   assert.match(sql, /constraint cohort_tree_hub_pick_check check \(hub_pick in \('on','off','undecided'\)\)/)
   for (const c of TR2_COLS) assert.match(sql, new RegExp(`add column if not exists ${c} `), c)
-  for (const t of ['cohort_tree_fund_links', 'cohort_tree_candidates', 'cohort_tree_tr2_removed']) { assert.ok(sql.includes(`alter table public.${t} enable row level security;`), t); assert.match(sql, new RegExp(`^comment on table public\\.${t} is '.*Not read by the Hub\\.';$`, 'm'), t) }
-  assert.deepEqual([...sql.matchAll(/create policy ([a-z_]+)/g)].map(m => m[1]).sort(), ['cohort_tree_candidates_read', 'cohort_tree_fund_links_read'])
+  for (const t of ['cohort_tree_fund_links', 'cohort_tree_candidates', 'cohort_tree_name_tags', 'cohort_tree_tr2_removed']) { assert.ok(sql.includes(`alter table public.${t} enable row level security;`), t); assert.match(sql, new RegExp(`^comment on table public\\.${t} is '.*Not read by the Hub\\.';$`, 'm'), t) }
+  assert.deepEqual([...sql.matchAll(/create policy ([a-z_]+)/g)].map(m => m[1]).sort(), ['cohort_tree_candidates_read', 'cohort_tree_fund_links_read', 'cohort_tree_name_tags_read'])
   assert.ok(sql.includes(`default '${SOURCE}'`))
 })
 
@@ -307,12 +324,20 @@ test('the dry run was made on the SQL that is on disk, and every scenario in it 
   assert.equal(dry.all_ok, true)
   assert.deepEqual([dry.sql_sha256.forward, dry.sql_sha256.rollback, dry.sql_sha256.undoAfterAdmission], [sha(files.forward), sha(files.rollback), sha(files.undoAfterAdmission)], 'the SQL changed after the dry run: run it again')
   const { A, B, C, D, E, F } = dry.scenarios
-  assert.deepEqual([A.after_forward.nodes, A.after_forward.members, A.after_forward.pending, A.after_forward.links, A.after_forward.candidates], [105, 781, 10, 357, 75])
+  assert.deepEqual([A.after_forward.nodes, A.after_forward.members, A.after_forward.pending, A.after_forward.links, A.after_forward.candidates, A.after_forward.tags], [109, 1120, 10, 359, 82, 453])
+  // what the throw-away database held after the forward file, for the evening steering
+  const st = A.checks.steering
+  assert.deepEqual(st.ai_powertrain_groups, ['FUEL_CELLS_STORAGE', 'GRID_ELECTRICAL', 'NUCLEAR_URANIUM', 'POWER_GENERATORS'])
+  assert.deepEqual([st.ai_powertrain_names, st.regulated_utilities_in_ai_powertrain, st.name_tags], [20, 0, 453])
+  assert.deepEqual(st.platforms_under_both_parents, ['AMZN', 'BABA', 'JD', 'MELI', 'PDD', 'SHOP'])
+  assert.deepEqual(Object.keys(st.factor_branch), ['GROWTH', 'LOW VOLATILITY', 'MOMENTUM'])
+  assert.deepEqual([st.factor_branch.GROWTH.fund_lines, st.factor_branch.MOMENTUM.fund_lines, st.factor_branch['LOW VOLATILITY'].fund_lines], ['VTV VUG', 'MTUM', 'QUAL SPLV'])
+  assert.deepEqual(st.off_the_hub_regime_only, ['AEROSPACE_DEFENCE', 'HOUSING', 'REGULATED_UTILITIES', 'RESTAURANTS'])
   assert.equal(A.fingerprint_equals_before_forward, true)
   assert.equal(A.forward_again.changed_anything, false); assert.equal(A.rollback_again.changed_anything, false)
-  assert.deepEqual([B.middle.nodes, B.middle.members, B.middle.pending, B.middle.spines.IDX_WORLD], [105, 781, 0, 'ACWI → null'])
+  assert.deepEqual([B.middle.nodes, B.middle.members, B.middle.pending, B.middle.spines.IDX_WORLD], [109, 1120, 0, 'ACWI → null'])
   assert.equal(B.fingerprint_equals_reference, true)
-  assert.deepEqual([C.after_forward.nodes, C.after_forward.members, C.after_forward.pending], [105, 781, 0])
+  assert.deepEqual([C.after_forward.nodes, C.after_forward.members, C.after_forward.pending], [109, 1120, 0])
   assert.equal(C.fingerprint_equals_before_forward, true)
   assert.ok(D.cases.length >= 1 && D.cases.every(c => c.refused && c.untouched))
   assert.equal(E.tr1_load_after_tr2.failed, true); assert.equal(E.tr1_load_after_tr2.changed_anything, false)
@@ -321,4 +346,104 @@ test('the dry run was made on the SQL that is on disk, and every scenario in it 
   assert.equal(E.undo_after_admission.pending_after_undo, 10)
   assert.equal(E.undo_after_admission.spines_as_tr1_loaded, true)
   assert.equal(F.distinct_fingerprints_seen, 1)
+})
+
+// ── THE EVENING STEERING (6 Oct 18:10 – 19:20 ET) ───────────────────────────────────────────────────────────────
+const membersOf = (id) => rev.members.filter(m => m.cohort === id && m.role === 'member').map(m => m.ticker)
+const under = (id) => { const out = new Set(); const walk = (c) => { for (const t of membersOf(c)) out.add(t); for (const k of rev.nodes) if (k.parent_1 === c) walk(k.cohort) }; walk(id); return out }
+
+test('Amazon, Shopify and the other online marketplaces sit under SOFTWARE & INTERNET and CONSUMER at once, and keep their first home', () => {
+  assert.deepEqual([N.INTERNET_PLATFORMS.parent_1, N.INTERNET_PLATFORMS.parent_2], ['SOFTWARE_INTERNET', 'CONSUMER'])
+  assert.match(N.INTERNET_PLATFORMS.parent_why, /I should share both/)
+  const inP = new Set(membersOf('INTERNET_PLATFORMS'))
+  const firstHome = { AMZN: 'MAG7', SHOP: 'CANADA', MELI: 'LATAM', BABA: 'CHINA', JD: 'CHINA', PDD: 'CHINA' }
+  for (const [t, home] of Object.entries(firstHome)) {
+    assert.ok(inP.has(t), `${t} is not in INTERNET_PLATFORMS`)
+    assert.ok(rev.members.some(m => m.cohort === home && m.ticker === t && m.role === 'member'), `${t} lost ${home}`)
+    assert.ok(base.members.some(m => m.cohort === home && m.ticker === t), `${t} was not in ${home} in TR1`)
+  }
+  for (const t of ['SHOP', 'MELI', 'BABA', 'JD', 'PDD']) assert.match(rev.members.find(m => m.cohort === 'INTERNET_PLATFORMS' && m.ticker === t).why, /^also in (CANADA|LATAM|CHINA) \(a company may sit in two cohorts\): an online marketplace/, t)
+  assert.ok(rev.members.some(m => m.cohort === 'RETAIL' && m.ticker === 'AMZN'), 'Amazon keeps its consumer home too')
+})
+
+test('AI POWERTRAIN holds the grid and electrical build-out names, has four groups under it, and no regulated utility', () => {
+  const own = new Set(membersOf('AI_POWERTRAIN'))
+  for (const t of ['PWR', 'ETN', 'GEV', 'VRT', 'VST', 'CEG', 'BE']) assert.ok(own.has(t), `${t} is not on AI POWERTRAIN`)
+  const groups = rev.nodes.filter(n => n.parent_1 === 'AI_POWERTRAIN').map(n => n.cohort).sort()
+  assert.deepEqual(groups, ['FUEL_CELLS_STORAGE', 'GRID_ELECTRICAL', 'NUCLEAR_URANIUM', 'POWER_GENERATORS'])
+  // the four groups together are exactly the names AI POWERTRAIN holds itself: nothing in a group that is not on the cohort, nothing left over
+  const inGroups = new Set(groups.flatMap(membersOf))
+  assert.deepEqual([...inGroups].sort(), [...own].sort())
+  assert.equal(own.size, 20)
+  assert.deepEqual([N.GRID_ELECTRICAL.parent_2, N.POWER_GENERATORS.parent_2, N.NUCLEAR_URANIUM.parent_2, N.FUEL_CELLS_STORAGE.parent_2], ['INDUSTRIAL', 'ENERGY_POWER', 'ENERGY_POWER', 'ENERGY_POWER'])
+  assert.deepEqual([N.AI_POWERTRAIN.parent_1, N.AI_POWERTRAIN.parent_2], ['AI', 'ENERGY_POWER'])
+  assert.match(N.GRID_ELECTRICAL.parent_why, /PWR, not on AI powertrain\. ETN, not on AI powertrain\. I think they should be\./)
+  // regulated utilities: in the tree, under ENERGY & POWER, off the Hub, and not one of them inside AI POWERTRAIN
+  const utilities = membersOf('REGULATED_UTILITIES'); const pt = under('AI_POWERTRAIN')
+  assert.equal(utilities.length, 24)
+  assert.deepEqual(utilities.filter(t => pt.has(t)), [])
+  assert.deepEqual([N.REGULATED_UTILITIES.parent_1, N.REGULATED_UTILITIES.parent_2, N.REGULATED_UTILITIES.hub_pick], ['ENERGY_POWER', null, 'off'])
+  for (const id of ['AI_POWERTRAIN', ...groups]) assert.equal(N[id].hub_pick, 'on', id)
+  // every row the steering added is a name the tree already held: no new company, nothing unserved
+  for (const m of diff.member_adds.filter(m => m.role === 'member')) assert.ok(companies(base).has(m.ticker), `${m.cohort}|${m.ticker} is a new company`)
+})
+
+test('data-centre landlords sit under both AI and REAL ESTATE, and REAL ESTATE hangs from its sector fund', () => {
+  assert.deepEqual([N.DC_PROPERTY.parent_1, N.DC_PROPERTY.parent_2], ['AI', 'REAL_ESTATE'])
+  for (const t of ['EQIX', 'DLR', 'IRM']) assert.ok(membersOf('DC_PROPERTY').includes(t), t)
+  assert.equal(N.REAL_ESTATE.parent_1, 'SECTOR_XLRE')
+  assert.deepEqual(rev.nodes.filter(n => n.parent_1 === 'REAL_ESTATE').map(n => n.cohort).sort(), ['REITS', 'TOWERS'])
+})
+
+test('GROWTH, MOMENTUM and LOW VOLATILITY are a branch of the index layer whose members are assigned by rule', () => {
+  const ft = J(`${TR2}/factor-tags.json`)
+  const tag = Object.fromEntries(rev.tags.map(t => [t.ticker, t]))
+  assert.deepEqual(FACTOR_NODES.map(f => f[0]), ['IDX_FACTOR_GROWTH', 'IDX_FACTOR_MOMENTUM', 'IDX_FACTOR_LOW_VOL'])
+  for (const [id, label, key, funds] of FACTOR_NODES) {
+    assert.deepEqual([N[id].label, N[id].kind, N[id].parent_1, N[id].layer, N[id].spine_fund], [label, 'cohort', 'IDX_FACTOR', 1, funds[0]], id)
+    assert.match(N[id].spine, /^by rule: /, id)
+    assert.deepEqual(membersOf(id), ft.branches[key].map(m => m.ticker), `${id}: the members are the tagger's list, in its order`)
+    assert.deepEqual(rev.members.filter(m => m.cohort === id && m.role === 'reference').map(m => m.ticker), funds, `${id}: fund lines`)
+    for (const f of funds) assert.ok(base.members.some(m => m.ticker === f && m.role === 'index_fund' && m.status === 'served'), `${f} is not a served fund of the index layer`)
+    for (const t of membersOf(id)) assert.ok(companies(base).has(t), `${id}|${t} is not a company of the tree`)
+  }
+  assert.equal(N.IDX_FACTOR_GROWTH.parent_2, 'IDX_STYLE')
+  // the rule, checked row by row against the numbers in tags[]
+  const R = ft.rules
+  for (const t of membersOf('IDX_FACTOR_MOMENTUM')) assert.ok(tag[t].momentum_rank >= R.momentum_top_pct, `${t}: momentum rank ${tag[t].momentum_rank}`)
+  for (const t of membersOf('IDX_FACTOR_LOW_VOL')) assert.ok(tag[t].usual_day_rank <= R.low_vol_bottom_pct, `${t}: usual-day rank ${tag[t].usual_day_rank}`)
+  for (const t of membersOf('IDX_FACTOR_GROWTH')) {
+    if (tag[t].growth_basis === 'estimate') assert.ok(tag[t].growth_ntm_rev_pct >= R.growth_min_ntm_rev_pct, `${t}: growth ${tag[t].growth_ntm_rev_pct}`)
+    else { assert.match(tag[t].growth_basis, /^index maker \(VUG holds it, VTV does not\)$/, t); assert.match(tag[t].held_by, /\bVUG \d/, t); assert.doesNotMatch(tag[t].held_by, /\bVTV \d/, t) }
+  }
+  // …and nobody who meets a rule was left out
+  const ranked = rev.tags.filter(t => t.momentum_rank != null)
+  assert.equal(ranked.filter(t => t.momentum_rank >= R.momentum_top_pct).length, membersOf('IDX_FACTOR_MOMENTUM').length)
+  assert.equal(ranked.filter(t => t.usual_day_rank <= R.low_vol_bottom_pct).length, membersOf('IDX_FACTOR_LOW_VOL').length)
+  // one tag row per company; a name that stopped trading carries a note and no tag
+  assert.deepEqual(rev.tags.map(t => t.ticker).sort(), [...companies(rev)].sort())
+  assert.equal(tag.WBD.tags, null); assert.match(tag.WBD.note, /stopped trading 6 Oct 2026/)
+  for (const t of rev.tags) assert.equal(t.as_of, ft.as_of)
+})
+
+test('the six-month return and the usual day are recomputed here from the closes file for five names', () => {
+  const ft = J(`${TR2}/factor-tags.json`)
+  const rows = T('deliverables/20261006/cohort-proposal/data/closes-6m-20261006.csv').trim().split('\n').map(l => l.split(','))
+  const head = rows[0]; const body = rows.slice(1)
+  assert.equal(body.at(-1)[0], ft.as_of)
+  const tag = Object.fromEntries(rev.tags.map(t => [t.ticker, t]))
+  const n = ft.rules.sessions
+  const usual = (t) => {
+    const px = body.map(r => Number(r[head.indexOf(t)])).slice(-(n + 1))
+    const moves = px.slice(1).map((v, i) => Math.abs(v / px[i] - 1) * 100).sort((a, b) => a - b)
+    return { ret: (px.at(-1) / px[0] - 1) * 100, day: (moves[n / 2 - 1] + moves[n / 2]) / 2 }
+  }
+  const spy = usual('SPY')
+  assert.ok(Math.abs(spy.day - ft.market.usual_day_pct) <= 0.005 + 1e-9, `SPY usual day ${spy.day}`)
+  for (const t of ['NVDA', 'PWR', 'KO', 'AMZN', 'DUK']) {
+    const u = usual(t)
+    assert.ok(Math.abs(u.ret - tag[t].ret_6m_pct) <= 0.05 + 1e-9, `${t}: six-month return ${u.ret} against ${tag[t].ret_6m_pct}`)
+    assert.ok(Math.abs(u.day - tag[t].usual_day_pct) <= 0.005 + 1e-9, `${t}: usual day ${u.day} against ${tag[t].usual_day_pct}`)
+    assert.ok(Math.abs(tag[t].usual_day_pct / ft.market.usual_day_pct - tag[t].usual_day_vs_market) <= 0.005 + 1e-9, `${t}: against the market`)
+  }
 })
