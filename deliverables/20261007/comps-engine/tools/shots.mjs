@@ -1,0 +1,18 @@
+/* CP4 · pictures, headless, one page at a time: the Hub's COMPS tab reading the engine's file (a bare host page that mounts the same module the
+   Hub mounts), and the page for Alan, at 1680 and 390. Serves this worktree locally; no request leaves the machine but the fonts. */
+import { createRequire } from "node:module"; import http from "node:http"; import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
+const require = createRequire("/Users/alanharvey/SCINTILLA 0.5/visual-supervisor/package.json"), { chromium } = require("playwright-core");
+const HERE = path.dirname(fileURLToPath(import.meta.url)), WT = path.resolve(HERE, "../../../.."), SHOTS = path.resolve(HERE, "../shots");
+const MIME = { ".html": "text/html", ".mjs": "text/javascript", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".png": "image/png" };
+const HOST = (t) => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#0e0e12;padding:12px;font-family:ui-monospace,Menlo,monospace}</style></head><body><div id="scCompsTab" data-t="${t}"></div><script type="module">import { mountCompsTab } from "/deliverables/20261003/comps-c5/tab.mjs"; mountCompsTab(document.getElementById("scCompsTab"), { ticker: "${t}", pg: async () => { throw new Error("no table read in this picture"); }, quotes: async () => ({ quotes: {} }), today: "2026-10-07", livePrices: {} }).then(() => { window.__mounted = document.getElementById("scCompsTab").dataset.source; });</script></body></html>`;
+const server = http.createServer((req, res) => { const u = new URL(req.url, "http://x"); if (u.pathname.startsWith("/__tab/")) { res.writeHead(200, { "content-type": "text/html" }); return res.end(HOST(u.pathname.split("/")[2])); } const f = path.join(WT, u.pathname); if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); } res.writeHead(200, { "content-type": MIME[path.extname(f)] || "application/octet-stream" }); res.end(fs.readFileSync(f)); });
+await new Promise((ok) => server.listen(0, ok)); const base = `http://127.0.0.1:${server.address().port}`;
+const browser = await chromium.launch({ headless: true });
+const facts = async (page) => page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > window.innerWidth + 1, under11px: [...document.querySelectorAll("body *")].filter((e) => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 11).length, text: document.body.innerText.replace(/\s+/g, " ").slice(0, 200) }));
+for (const [w, h, url, file, wait] of [[1680, 1050, "/__tab/TSM", "hub-tab-1680-tsm.png", () => window.__mounted], [1680, 1050, "/deliverables/20261007/comps-engine/COMPS-ENGINE.html", "page-1680.png", () => document.readyState === "complete"], [390, 844, "/deliverables/20261007/comps-engine/COMPS-ENGINE.html", "page-390.png", () => document.readyState === "complete"]]) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h } }), page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(base + url, { waitUntil: "networkidle", timeout: 120000 }); await page.waitForFunction(wait, null, { timeout: 60000 }); await page.waitForTimeout(500);
+  const f = await facts(page), src = await page.evaluate(() => window.__mounted || null); await page.screenshot({ path: `${SHOTS}/${file}`, fullPage: false }); console.log(file, JSON.stringify({ ...f, source: src, errors: errors.slice(0, 2) }));
+  await ctx.close();
+}
+await browser.close(); server.close();

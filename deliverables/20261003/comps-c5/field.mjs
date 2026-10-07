@@ -73,6 +73,43 @@ export const FD1_FIELD_LAST = Object.freeze({ ...FD1_FIELD_ON, growthFromLastYea
 export const LAST_YEAR_MAX = 1.1;   // years: "the fiscal year just reported" ended no longer ago than this
 export const GROWTH_CREDIT_MAX = 3, MARGIN_GATE = 2, SALES_ROWS = ["ev_sales", "ps"];
 export const REIT_PRIOR = { pe_ttm: 0.2, pe_fwd: 0.3, ev_ebitda: 1.5, ev_sales: 0.6, ps: 0.5, peg: 0.3, p_ffo: 1.6 };
+/* CP4 (7 Oct, 13:20) · THE FOOTBALL FIELD REASSESSED. Alan, 6 Oct: "Growth, revenue growth, earnings growth, is the fundamental
+   driver of everything … If we have to weigh things, that is the biggest." So the PRIOR of each yardstick puts the growth
+   yardstick (PEG, the growth credit on top of it) first and forward P/E second; EV/EBITDA third; trailing P/E, EV/sales and
+   P/S behind (a trailing year carries one-offs; a dollar of sales is not worth the same everywhere). Coverage × fit, measured
+   in the set, still scale these — the page prints the weight that comes out. For a property trust P/FFO leads (CP4_REIT_PRIOR).
+   CLOSENESS (Alan: "weight peers by closeness — size, growth, margin — so a two-cluster set does not hand the leaders the small
+   designers' price"): a peer's weight = exp(−½ d²), d² = the mean of three squared gaps — size: log10(peer market value ÷ own) ÷ 1
+   (a 10× gap is one unit); growth: |EPS growth gap| ÷ 30 points; margin: |operating margin gap| ÷ 20 points. A peer that is one
+   unit away on all three weighs 0.61; two units away, 0.14. Multiplied by the BUSINESS weight: 1 for a same-business peer,
+   ADJACENT_WEIGHT (0.35) for a peer of the same family on another line (Alan: "a blend also works … to average things out"). */
+export const CP4_PRIOR = { pe_ttm: 0.6, pe_fwd: 1.5, ev_ebitda: 1.0, ev_sales: 0.5, ps: 0.4, peg: 2.0 };
+export const CP4_REIT_PRIOR = { pe_ttm: 0.2, pe_fwd: 0.3, ev_ebitda: 1.2, ev_sales: 0.5, ps: 0.4, peg: 0.6, p_ffo: 2.0 };
+export const ADJACENT_WEIGHT = 0.35, ADJACENT_SHARE = 0.5, CLOSE_SIZE = 0.7, CLOSE_GROWTH = 30, CLOSE_MARGIN = 20;   /* ADJACENT_SHARE: the adjacent peers together never weigh more than half the same-business peers together (ten software names must not outvote Microsoft and Amazon on Oracle — measured 7 Oct) */
+/* CP4 · THE PEG YARDSTICK COUNTS GROWTH UP TO PEG_GROWTH_CAP A YEAR. PEG prices a company at its peers' median PEG × its own growth ×
+   its EPS — a straight line in growth. Lynch's rule of thumb was drawn for 10–25% growers; at 55% (Broadcom) the line pays 44× earnings
+   and the yardstick alone implied 1,306 against 375 (measured 7 Oct). Growth beyond the cap is credited through the WEIGHT (the growth
+   credit, up to GROWTH_CREDIT_MAX on the prior), not through the line. Peers' PEGs are read on the same capped growth, so the median
+   and the company are on one footing. Off (null) = the straight line, as C5 built it. */
+export const PEG_GROWTH_CAP = 40;
+export const CP4_FIELD_ON = Object.freeze({ ...CP1_FIELD_ON, growthForward: true, cp4Prior: true, closeness: true, pegCap: true });
+/** CP4 · the closeness weights. set: buildSet()'s answer (kept rows carry ratio = peer market value ÷ own, same_business). */
+export function peerWeightsCP4(snap, peers, set, { adjacent = ADJACENT_WEIGHT } = {}) {
+  const T = snap.ticker, own = (snap.table && snap.table.company) || {}, tp = (snap.table && snap.table.peers) || {}, rows = Object.fromEntries(((set && set.kept) || []).map((r) => [r.ticker, r]));
+  const w = {}, parts = {};
+  for (const t of peers) {
+    const p = tp[t] || {}, r = rows[t] || {}, gaps = [];
+    const size = r.ratio > 0 ? Math.log10(r.ratio) / CLOSE_SIZE : null, growth = own.eps_g_fy != null && p.eps_g_fy != null ? (p.eps_g_fy - own.eps_g_fy) / CLOSE_GROWTH : null, margin = own.om != null && p.om != null ? (p.om - own.om) / CLOSE_MARGIN : null;
+    for (const g of [size, growth, margin]) if (g != null && Number.isFinite(g)) gaps.push(g * g);
+    const d2 = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0, close = Math.exp(-0.5 * d2);
+    const same = r.same_business != null ? !!r.same_business : r.exact != null ? r.exact >= 0.15 : true, business = same ? 1 : adjacent;
+    w[t] = close * business; parts[t] = { size, growth, margin, close, same_business: same, business, weight: w[t] };
+  }
+  /* the adjacent group's share: together at most ADJACENT_SHARE of the same-business group's total weight */
+  const sameSum = peers.filter((t) => parts[t].same_business).reduce((a, t) => a + w[t], 0), adjSum = peers.filter((t) => !parts[t].same_business).reduce((a, t) => a + w[t], 0);
+  if (sameSum > 0 && adjSum > ADJACENT_SHARE * sameSum) { const f = (ADJACENT_SHARE * sameSum) / adjSum; for (const t of peers) if (!parts[t].same_business) { w[t] *= f; parts[t].weight = w[t]; parts[t].share_cap = f; } }
+  return { weights: w, parts, basis: `closeness on size (log10 of the market-value ratio), EPS growth (÷${CLOSE_GROWTH} points) and operating margin (÷${CLOSE_MARGIN} points): exp(−½ · mean of the squared gaps); × 1 for a same-business peer, × ${adjacent} for an adjacent one` };
+}
 export const isReit = (snap) => /reit|real estate/i.test([snap.sector, snap.industry].filter(Boolean).join(" "));
 /** The valuation rows: C5's six, and P/FFO when the reit yardstick added it. */
 export const isValuation = (key) => ROWS.includes(key) || key === "p_ffo";
@@ -137,7 +174,8 @@ export function pegGrowth(e, today, { consensusOnly = false, fromLast = false } 
 }
 /** The PEG row rebuilt from forward growth. estimates: { T: { eps_ttm, est } }; the company's EPS estimate for the price comes from the snapshot.
     forward (FD1 growthForward): every company's growth from consensus to consensus, as a foreign filer's already is. */
-export function pegRow(snap, estimates, today, { forward = false, fromLast = false } = {}) {
+export function pegRow(snap, estimates, today, { forward = false, fromLast = false, cap = null } = {}) {
+  const capG = (pct) => (cap != null && pct != null && pct > cap ? cap : pct);
   const T = snap.ticker, old = snap.rows.find((r) => r.key === "peg"), fwd = snap.rows.find((r) => r.key === "pe_fwd");
   const growth = {}, values = {}, peers = [];
   /* CP3 (7 Oct) — ONE FORWARD BASIS. A snapshot read on the next four quarters (snapshot.forward) carries every company's
@@ -152,18 +190,18 @@ export function pegRow(snap, estimates, today, { forward = false, fromLast = fal
   for (const t of snap.members.filter((x) => x !== T)) {
     const g = one ? gOne(t) : pegGrowth(estimates[t], today, { consensusOnly: forward || foreign(t), fromLast: forward && fromLast }), pf = fwd && fwd.values && fwd.values[t] ? fwd.values[t].multiple : null;
     growth[t] = g;
-    const m = g && g.pct > 0 && pf != null && pf > 0 ? pf / g.pct : null;
+    const m = g && g.pct > 0 && pf != null && pf > 0 ? pf / capG(g.pct) : null;   /* CP4: growth capped for the PEG yardstick */
     values[t] = { multiple: m, why: m != null ? null : pf == null ? "no forward P/E" : !g ? "no forward EPS path" : "EPS is not expected to grow" };
     if (m != null) peers.push({ ticker: t, multiple: m });
   }
-  const gOwn = one ? gOne(T) : pegGrowth(estimates[T], today, { consensusOnly: forward || foreign(T), fromLast: forward && fromLast }), pfOwn = fwd && fwd.own ? fwd.own.multiple : null, mOwn = gOwn && gOwn.pct > 0 && pfOwn > 0 ? pfOwn / gOwn.pct : null;
-  const epsFy1 = snap.eps_fy1, price = (m) => m != null && gOwn && gOwn.pct > 0 && epsFy1 > 0 ? m * gOwn.pct * epsFy1 : null;
+  const gOwn = one ? gOne(T) : pegGrowth(estimates[T], today, { consensusOnly: forward || foreign(T), fromLast: forward && fromLast }), pfOwn = fwd && fwd.own ? fwd.own.multiple : null, mOwn = gOwn && gOwn.pct > 0 && pfOwn > 0 ? pfOwn / capG(gOwn.pct) : null;
+  const epsFy1 = snap.eps_fy1, price = (m) => m != null && gOwn && gOwn.pct > 0 && epsFy1 > 0 ? m * capG(gOwn.pct) * epsFy1 : null;   /* CP4: the line stops at the cap */
   const sorted = peers.slice().sort((a, b) => a.multiple - b.multiple), vals = sorted.map((p) => p.multiple);
   const band = { n: vals.length, min: vals.length ? vals[0] : null, q1: vals.length ? quantile(vals, 0.25) : null, median: vals.length ? median(vals) : null, q3: vals.length ? quantile(vals, 0.75) : null, max: vals.length ? vals[vals.length - 1] : null };
   const at = (m, who = []) => ({ multiple: m, who, price: price(m) });
   const ends = { min: at(band.min, sorted.length ? [sorted[0].ticker] : []), q1: at(band.q1), median: at(band.median), q3: at(band.q3), max: at(band.max, sorted.length ? [sorted[sorted.length - 1].ticker] : []) };
   const ok = band.n >= 2 && ends.median.price != null;
-  return { ...(old || { key: "peg", label: "PEG", fmt: "x2" }), key: "peg", basis: one ? "forward P/E ÷ EPS growth into the following year (the four quarters after the next four over the next four, in %) — the dashboard's forward basis" : forward ? (fromLast ? "forward P/E ÷ forward EPS growth (% a year, from the year just reported on the analysts' basis to the furthest forecast year within three and a half years)" : "forward P/E ÷ forward EPS growth (% a year, from the first forecast year to the furthest within three and a half years)") : "forward P/E ÷ forward EPS growth (% a year, three years out)", growth_from: one ? "following year" : forward ? (fromLast ? "last year" : "forecast") : "trailing", own: { multiple: mOwn, price: snap.price }, own_why: mOwn != null ? null : null,
+  return { ...(old || { key: "peg", label: "PEG", fmt: "x2" }), key: "peg", growth_cap: cap, basis: one ? "forward P/E ÷ EPS growth into the following year (the four quarters after the next four over the next four, in %) — the dashboard's forward basis" + (cap != null ? `; growth counted up to ${cap}% a year for this yardstick` : "") : forward ? (fromLast ? "forward P/E ÷ forward EPS growth (% a year, from the year just reported on the analysts' basis to the furthest forecast year within three and a half years)" : "forward P/E ÷ forward EPS growth (% a year, from the first forecast year to the furthest within three and a half years)") : "forward P/E ÷ forward EPS growth (% a year, three years out)", growth_from: one ? "following year" : forward ? (fromLast ? "last year" : "forecast") : "trailing", own: { multiple: mOwn, price: snap.price }, own_why: mOwn != null ? null : null,
     figure: { word: "EPS growth × EPS estimate", value: gOwn && epsFy1 != null ? gOwn.pct * epsFy1 : null, fmt: "usd2", formula: "PEG × growth % × EPS", growth: gOwn ? gOwn.pct : null, growth_basis: gOwn ? gOwn.basis : null },
     n: band.n, band, ends, peers: sorted, nm: [], missing: Object.keys(values).filter((t) => values[t].multiple == null), values, growth, upside: ok && snap.price > 0 ? (ends.median.price / snap.price - 1) * 100 : null,
     ok, reason: ok ? null : band.n < 2 ? `only ${band.n} peer${band.n === 1 ? "" : "s"} carr${band.n === 1 ? "ies" : "y"} this multiple` : null, computable: mOwn != null };
@@ -240,13 +278,13 @@ export const WAY_WORDS = {
 /** Everything the page draws for one company and one way. estimates: { T: { eps_ttm, est } } (may be empty). */
 export function conclusion(snap, decisions, estimates, today, way = "C", opts = {}) {
   const fx = opts.fx || CP1_FIELD_OFF, reit = !!(fx.reitYardstick && isReit(snap));
-  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today, { forward: !!fx.growthForward, fromLast: !!fx.growthFromLastYear }) : r)) : snap.rows;
+  let rows0 = estimates ? snap.rows.map((r) => (r.key === "peg" ? pegRow(snap, estimates, today, { forward: !!fx.growthForward, fromLast: !!fx.growthFromLastYear, cap: fx.pegCap ? PEG_GROWTH_CAP : null }) : r)) : snap.rows;
   if (reit) rows0 = [...rows0.filter((r) => r.key !== "p_ffo"), ffoRow(snap)];   /* CP1 reitYardstick: the seventh row */
   const snap2 = rows0 === snap.rows ? snap : { ...snap, rows: rows0 };
   const F = applyField(snap2, decisions, opts);   /* C6 passes k = Infinity: no cell leaves a centre on one flag */
   const peersOn = snap.members.filter((t) => t !== snap.ticker && !(snap.excluded || []).some((e) => e.ticker === t) && !F.sel.peers.has(t));
   const cls = reit ? "reit" : sectorClass(snap.sector, snap.industry, snap.cohort), cp1 = fieldAdjust(snap2, F.rows, peersOn, fx, reit);
-  const mw = measureWeights(F.rows, peersOn.length, cls, cp1.adj), pw = peerWeights(snap, peersOn);
+  const mw = measureWeights(F.rows, peersOn.length, cls, cp1.adj), pw = fx.closeness ? peerWeightsCP4(snap2, peersOn, opts.set || null) : peerWeights(snap, peersOn);   /* CP4 closeness: size, growth, margin, and the business blend */
   const W = ways(F.rows, snap2, mw, pw), w = wayOf(W, way);
   const outliers = F.rows.filter((r) => ROWS.includes(r.key)).flatMap((r) => r.outliers.flagged.map((o) => ({ ...o, key: r.key, excluded: r.outliers.excluded.includes(o.ticker), kept: r.outliers.kept.includes(o.ticker) })));
   return { ticker: snap.ticker, price: snap.price, way, band: w && w.ok ? { lo: w.lo, mid: w.mid, hi: w.hi, midpoint: w.midpoint } : null, upside: w && w.ok ? w.upside : null, reason: w && !w.ok ? w.reason : null,
@@ -272,7 +310,7 @@ export function ffoRow(snap, only = null) {
 /** The adjustment measureWeights takes: the reit table, the growth credit on PEG, the margin gate on the sales rows.
     Returns { adj, growth: { own, peers, ratio, credit } | null, margin: { own, peers, ratio, off } | null }. */
 export function fieldAdjust(snap, rows, peersOn, fx = CP1_FIELD_OFF, reit = false) {
-  const adj = { table: reit ? REIT_PRIOR : null, credit: {}, off: {} }; let growth = null, margin = null;
+  const adj = { table: reit ? (fx.cp4Prior ? CP4_REIT_PRIOR : REIT_PRIOR) : fx.cp4Prior ? CP4_PRIOR : null, credit: {}, off: {} }; let growth = null, margin = null;   /* CP4 prior: growth and PEG weigh most */
   if (fx.growthCredit) {
     /* FD1 growthForward: measured from forecast years a peer's EPS can be expected to SHRINK (Pfizer, Bristol), which
        measured from a depressed trailing figure it never did. A shrinking peer has no PEG, but it is still a peer: it

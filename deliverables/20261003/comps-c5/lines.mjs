@@ -78,6 +78,16 @@ export const CP3_STATED = {
     why: "the three clouds it now competes with for AI capacity, and the enterprise software and database companies it has always sold beside" },
 };
 export const CP3_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true, stated: true });
+/* CP4 (7 Oct, 13:20) · PEERS BY THE METHOD, NOT BY HAND. Alan: "Peers by method, not by hand — when was it ever by hand? It was
+   always … a method. You just weren't using it." The eight stated sets (CP3_STATED) are switched OFF; what separates the chip
+   designers from the equipment makers is read from the filings instead:
+     equipment   a company FMP files as "Semiconductors" whose revenue SEGMENTS speak of systems, equipment, process control,
+                 metrology or lithography, or whose SIC code is a machinery / instruments code (3559, 3825, 3827, 3829), is on
+                 the "semiconductor equipment" line — the same line FMP's own "Semiconductor Equipment & Materials" industry
+                 maps to. Lam, KLA, Teradyne, Onto, Applied and ASML move by this rule; Nvidia, AMD, Broadcom, Marvell stay. */
+export const CP4_LINES_ON = Object.freeze({ memoryStorage: true, dcReit: true, complement: true, reference: true, stated: false, equipment: true, seatMin: 0.10 });   /* seatMin: a line at a tenth of revenue seats its two best peers (Alphabet's cloud, 15%, sat on the edge of LINE_MIN) */
+export const SIC_EQUIPMENT = new Set(["3559", "3825", "3827", "3829"]);
+export const EQUIPMENT_SEGMENT = /\b(semiconductor systems?|systems?|customer support|lithography|equipment|process control|metrology|inspection|installed base)\b/i;
 export const CP1_DEFAULT = CP1_LINES_OFF;   // ← change to CP1_LINES_ON to take the four line fixes live (Hub comps + the allocation knockout read this file)
 /** memoryStorage: the lines that count as one. */
 export const ONE_LINE = { memory: "memory & storage", storage: "memory & storage" };
@@ -180,18 +190,25 @@ function linesRaw(ticker, profile, segments, fx) {
   const T = String(ticker).toUpperCase(), ind = profile && profile.industry, map = INDUSTRY_LINES[ind] || null;
   const cp1 = (fx && fx.memoryStorage && CP1_HAND.memoryStorage[T]) || (fx && fx.dcReit && CP1_HAND.dcReit[T]) || null, hand = cp1 || HAND[T] || null;
   if (hand && hand.lines) return { lines: norm(hand.lines), family: FAMILY_OF(Object.keys(hand.lines)[0]), source: "hand", from: hand.from || "hand rule (10-K)" };
-  const dflt = hand && hand.default ? hand.default : map ? map[0] : (ind ? String(ind).toLowerCase() : "unknown");
-  const fam = FAMILY_OF(dflt);
+  let dflt = hand && hand.default ? hand.default : map ? map[0] : (ind ? String(ind).toLowerCase() : "unknown");
   const data = segments && segments.product && segments.product.data;
-  if (!data) return { lines: { [dflt]: 1 }, family: fam, source: hand ? "hand" : "industry", from: hand ? "hand rule (10-K)" : `FMP industry: ${ind || "unknown"}` };
+  /* CP4 equipment: a "Semiconductors" filer that makes the machines (segment words or a machinery / instruments SIC code) */
+  let eqFrom = null;
+  if (fx && fx.equipment && dflt === "semiconductors") {
+    const segNames = data ? Object.keys(data).filter((k) => !SKIP_SEGMENT.test(k.trim())) : [], bySeg = segNames.filter((k) => EQUIPMENT_SEGMENT.test(k)), bySic = profile && profile.sic != null && SIC_EQUIPMENT.has(String(profile.sic));
+    const segShare = data && segNames.length ? bySeg.reduce((a, k) => a + (Number(data[k]) || 0), 0) / segNames.reduce((a, k) => a + (Number(data[k]) || 0), 0) : 0;
+    if (bySic || segShare >= 0.5) { dflt = "semiconductor equipment"; eqFrom = bySic ? `SIC ${profile.sic} (${profile.sic_description || "machinery / instruments"})` : `segments ${bySeg.join(", ")}`; }
+  }
+  const fam = FAMILY_OF(dflt);
+  if (!data) return { lines: { [dflt]: 1 }, family: fam, source: hand ? "hand" : eqFrom ? "sic" : "industry", from: hand ? "hand rule (10-K)" : eqFrom ? `equipment maker by ${eqFrom}` : `FMP industry: ${ind || "unknown"}` };
   const rows = Object.entries(data).filter(([k, v]) => v > 0 && !SKIP_SEGMENT.test(k.trim()));
   if (!rows.length) return { lines: { [dflt]: 1 }, family: fam, source: "industry", from: `FMP industry: ${ind || "unknown"} (segments carry no business rows)` };
   const acc = {}, moved = [];
   for (const [name, v] of rows) {
-    const kw = KEYWORDS.find((k) => k.re.test(name) && k.fam.includes(fam));
+    const kw = eqFrom ? null : KEYWORDS.find((k) => k.re.test(name) && k.fam.includes(fam));   /* CP4: an equipment maker's segments all stay on its line */
     const line = kw ? kw.line : dflt; acc[line] = (acc[line] || 0) + v; if (kw) moved.push(name + " → " + kw.line);
   }
-  return { lines: norm(acc), family: fam, source: "segments", from: `FMP revenue segments FY${segments.product.fy}${moved.length ? " (" + moved.join(", ") + ")" : ""}`, segments: rows.map(([k, v]) => [k, v]) };
+  return { lines: norm(acc), family: fam, source: "segments", from: `FMP revenue segments FY${segments.product.fy}${moved.length ? " (" + moved.join(", ") + ")" : ""}${eqFrom ? " · equipment maker by " + eqFrom : ""}`, segments: rows.map(([k, v]) => [k, v]) };
 }
 
 /** Similarity of two line vectors: shared lines in full, the same family's residual at half. */
@@ -225,8 +242,9 @@ export function buildSet(ticker, inp, { n = N_DEFAULT, fx = CP1_DEFAULT } = {}) 
   const members = rows.filter((r) => r.member).sort((a, b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
   /* seats: every line at ≥ LINE_MIN seats its two best peers (the peers that share THAT line, by score) */
   const seated = [], seatWhy = {};
+  const lineMin = fx && fx.seatMin ? fx.seatMin : LINE_MIN;   /* CP4 seatMin */
   for (const [line, w] of Object.entries(L.lines).sort((a, b) => b[1] - a[1])) {
-    if (w < LINE_MIN) continue;
+    if (w < lineMin) continue;
     let k = 0; for (const r of members) { if (k >= SEATS_PER_LINE) break; if (r.lines[line] && r.lines[line] >= LINE_MIN / 2 && !seated.includes(r.ticker)) { seated.push(r.ticker); seatWhy[r.ticker] = line; k++; } }
   }
   const kept = [...seated.map((t) => members.find((r) => r.ticker === t)), ...members.filter((r) => !seated.includes(r.ticker))].slice(0, n).map((r, i) => ({ ...r, rank: i + 1, seat: seatWhy[r.ticker] || null }));
