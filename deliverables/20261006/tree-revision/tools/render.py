@@ -526,7 +526,11 @@ if LN:
             t = tbl(["NAME", "ON-HUB COHORT", ">RANK OF 100", ">SIX-MONTH RETURN", ">OVER ITS SIX-MONTH LOW" if lag else ">UNDER ITS SIX-MONTH HIGH", ">AGAINST ITS 21-DAY AVERAGE", ">AGAINST ITS 100-DAY AVERAGE", ">REVENUE, NEXT 12 MONTHS", "REVIEWED LINES"], rows, 1180)
         also = f"<p class='cap'>also in this lane today, not shown ({len(L['also'])}): {e(' '.join(L['also']))}</p>" if L.get("also") else ""
         LH.append(f"<h3>LANE · {e(L['lane'])} · {L['count']} TODAY" + (f" · FIRST {L['shown']} SHOWN" if L.get("shown") and L["shown"] < L["count"] else "") + f"</h3>{t}<p class='cap'>{e(L['what'])} · rule: {e(L['rule'])}</p>{also}")
-    LANES_HTML = "<div class='kpi'>" + "".join(f"<div><b>{v}</b><span>{e(k.lower())}</span></div>" for k, v in LN["counts"].items()) + f"<div><b>{LN['rules']['per_lane_cap']}</b><span>names shown per lane a day (the cap)</span></div><div><b>{len(LN['reviewed_so_far'])}</b><span>instruments the Lab has reviewed lines for so far: {e(' '.join(LN['reviewed_so_far'][:10]))} …</span></div></div>" + "".join(LH)
+    QP = LN.get("queue_preview"); QP_HTML = ""
+    if QP:
+        qrows = [tr(R(i["order"]), f"<b>{e(i['ticker'])}</b>", e(i["lane"]), e(i["status"]), e(i["why"].replace("-", "−")), e(i["ask"]), e(" ".join(i["timeframes"])), e(i["priority"])) for i in QP["items"]]
+        QP_HTML = f"<details class='names'><summary>THE SAME NAMES IN THE REVIEW QUEUE'S OWN SHAPE · {len(qrows)} ROWS · A PREVIEW, SENT TO NOBODY</summary>" + tbl([">#", "TICKER", "LANE (THE ONE NEW FIELD)", "STATUS", "WHY", "ASK", "TIMEFRAMES", "PRIORITY"], qrows, 1400) + "</details>"
+    LANES_HTML = "<div class='kpi'>" + "".join(f"<div><b>{v}</b><span>{e(k.lower())}</span></div>" for k, v in LN["counts"].items()) + f"<div><b>{LN['rules']['per_lane_cap']}</b><span>names shown per lane a day (the cap)</span></div><div><b>{len(LN['reviewed_so_far'])}</b><span>instruments the Lab has reviewed lines for so far: {e(' '.join(LN['reviewed_so_far'][:10]))} …</span></div></div>" + "".join(LH) + QP_HTML
 
 # ── facts for PAGE SPECS ────────────────────────────────────────────────────────────────────────────────────────────
 WIN = FR["method"]["window"]; VAN = {v["funds"]["VANGUARD"] for v in FL["sector_funds"].values()}

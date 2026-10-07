@@ -503,3 +503,24 @@ test('the four lanes are a proposal drawn from the tree: every name obeys its la
   // it is a file in this folder only: the handoffs queue and the Lab's folder are not written by anything here
   for (const f of ['deliverables/20261006/tree-revision/tools/steering_evidence.py', 'deliverables/20261006/tree-revision/tools/factor_tags.py']) { assert.doesNotMatch(T(f), /INDICATOR_LAB|handoffs\/REVIEW-QUEUE|urllib|requests\.|http/); }
 })
+
+test('the lanes are also written in the review queue\'s own shape, with one new field, as a preview that is sent to nobody', () => {
+  const ln = J(`${TR2}/market-desk-lanes.json`); const q = ln.queue_preview
+  assert.equal(q.sent, false); assert.match(q.what, /^PREVIEW ONLY\./); assert.match(q.schema, /^scintilla\.review-queue\.v1 \+ lane \(proposed\)$/)
+  const shown = ln.lanes.flatMap(l => l.items.map(i => `${l.lane}|${i.ticker}`))
+  assert.deepEqual(q.items.map(i => `${i.lane}|${i.ticker}`), shown, 'one row per name shown in a lane, in lane order')
+  assert.deepEqual(q.items.map(i => i.order), q.items.map((_, k) => k + 1))
+  const reviewed = new Set(ln.reviewed_so_far)
+  for (const i of q.items) {
+    // the fields REVIEW-QUEUE-FORMAT.md names, and nothing that approves anything
+    for (const k of ['ticker', 'feed', 'why', 'ask', 'timeframes', 'priority', 'source_step', 'lane']) assert.ok(i[k] != null && i[k] !== '', `${i.ticker}.${k}`)
+    assert.equal(i.feed, `BATS:${i.ticker}`)
+    assert.ok(['today', 'this week', 'next review pass'].includes(i.priority), `${i.ticker}: ${i.priority}`)
+    assert.doesNotMatch(i.ask + ' ' + i.why, /\bapprov/i, `${i.ticker}: a queue item never asks for an approval`)
+    // a name the Lab has never reviewed gets a first review on all four timeframes; a reviewed one a re-check on the daily
+    assert.deepEqual(i.timeframes, reviewed.has(i.ticker) ? ['1D'] : ['2W', '1W', '3D', '1D'], i.ticker)
+    assert.equal(i.status, reviewed.has(i.ticker) ? 're-check' : 'new workshop work', i.ticker)
+  }
+  // the proposal lives in this folder only
+  assert.ok(!existsSync(U('handoffs')), 'this repository has no handoffs folder to write a queue into')
+})

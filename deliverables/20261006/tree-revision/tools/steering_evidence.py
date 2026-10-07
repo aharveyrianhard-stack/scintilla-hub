@@ -212,6 +212,31 @@ lanes = {
          "count": len(new_all), "shown": len(new_all), "items": [{**item(t, f"listed {LISTED[t]['listed_on']} ({LISTED[t]['months']:.0f} months ago)"), "listed_on": LISTED[t]["listed_on"], "in_tree_cohorts": [label(m["cohort"]) for m in TREE["members"] if m["ticker"] == t and m["role"] == "member" and not m["cohort"].startswith("IDX_FACTOR_")]} for t in new_all], "also": []},
     ],
 }
+# the same names in the review queue's own shape (the coordinator's review-queue format note, schema scintilla.review-queue.v1) with ONE
+# proposed new field, "lane". A preview: it is not a queue file, it sits in this folder only and is sent to nobody.
+def near_txt(l):
+    bits = [f"{w} {x['line']} {x['level']:,.2f} ({x['pct_from_price']:+.1f}%)" for w, x in (("below", l.get("nearest_below")), ("above", l.get("nearest_above"))) if x]
+    return ("nearest reviewed lines: " + ", ".join(bits)) if bits else None
+def q_item(lane, i, order):
+    l = i["lines"]; first = not l.get("reviewed")
+    why = {"CORE": lambda: f"{i['kind']}: every name below hangs from it · {i['ret_6m_pct']:+.1f}% in six months, {i['off_high_pct']:+.1f}% against its six-month high",
+           "LEADERS ON A PULLBACK": lambda: f"leader on a pullback · {i['why']} · still {i['vs_avg100_pct']:+.1f}% over its 100-day average",
+           "ROTATION LAGGARDS AT SUPPORT": lambda: f"laggard at support · {i['why']} (the six-month low is a stand-in for support until its lines are reviewed)",
+           "NEW NAMES": lambda: f"new name · {i['why']}: little history, needs its own yardsticks"}[lane]()
+    return {"ticker": i["ticker"], "feed": f"BATS:{i['ticker']}", "lane": lane, "order": order, "status": "new workshop work" if first else "re-check",
+            "why": "; ".join(x for x in (why, near_txt(l)) if x),
+            "ask": "first review: capture the pivots (P1 to P4) on each timeframe" if first else "re-check the retained lines against where price sits now; capture anything new, dedupe by exact geometry",
+            "timeframes": ["2W", "1W", "3D", "1D"] if first else ["1D"],
+            "priority": {"CORE": "today" if not first else "this week", "LEADERS ON A PULLBACK": "today", "ROTATION LAGGARDS AT SUPPORT": "this week", "NEW NAMES": "next review pass"}[lane],
+            "source_step": f"tree lanes proposal, close of {AS_OF}"}
+preview = []
+for L in lanes["lanes"]:
+    for i in L["items"]: preview.append(q_item(L["lane"], i, len(preview) + 1))
+lanes["queue_preview"] = {
+    "what": "PREVIEW ONLY. The lanes' names written in the review queue's own shape, with one proposed new field, \"lane\". Not a queue file: it is not in handoffs/, nothing reads it, and nothing was sent to the Indicator Lab. A ticker appears once per lane it qualifies for.",
+    "schema": "scintilla.review-queue.v1 + lane (proposed)", "sent": False, "feed_note": "feeds follow the BATS:<ticker> convention of the existing queue; the Lab confirms the exact feed for a name it has not reviewed before",
+    "defaults_unchanged": "the Lab's standing rules still apply: pivots captured on every timeframe, no new slope approval, no attention pairing, no buffers, dedupe by exact geometry",
+    "items": preview}
 lanes["counts"] = {l["lane"]: l["count"] for l in lanes["lanes"]}
 lanes["reviewed_so_far"] = CTX["reviewed_lines"]["reviewed_tickers"]
 with open(os.path.join(OUT_DIR, "market-desk-lanes.json"), "w") as fh: json.dump(lanes, fh, indent=1); fh.write("\n")
