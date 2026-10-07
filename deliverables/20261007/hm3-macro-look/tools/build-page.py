@@ -39,6 +39,8 @@ def mrow(key, name):
             f'<td>{whole_b}</td><td>yes</td><td class="r">{b["borders"]}</td><td class="r">{a["borders"]}</td></tr>')
 railpx = screen_px(railH, zoom)
 aucOpen = sa["facts"]["auctionOpen"]; prOpen = sa["facts"]["printOpen"]
+so = J(HERE / "data" / "shoot-option-1680.json")
+FV, OV, ON = sa["facts"]["firstView"], so["facts"]["firstView"], so["facts"]["firstViewNoEventCard"]
 
 def head(title): return f'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<title>{title}</title>\n{style}<style>.q{{border-left:2px solid var(--line);padding:2px 0 2px 12px;color:var(--bright);max-width:980px;margin:10px 0}}.trio3{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start}}.trio3>*{{min-width:0}}.four{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}}.four>*{{min-width:0}}.lbl{{display:inline-block;color:var(--bg);background:var(--dim);padding:0 6px;letter-spacing:.08em;font-size:11px;margin-bottom:6px}}.lbl.a{{background:var(--up)}}@media(max-width:760px){{.trio3,.four{{grid-template-columns:1fr}}}}</style></head><body><main>\n<span data-scnav-slot></span>'
 B_, A_ = '<span class="lbl">BEFORE</span>', '<span class="lbl a">AFTER</span>'
@@ -96,7 +98,15 @@ page = head("The macro cards, flat and simple · the compare cards, two per view
 <div>{B_}{shot("6-curve-before-1680.png", "BEFORE: four lines, an axis, a legend on two lines, two boxed tiles and a table.")}</div>
 <div>{A_}{shot("6-curve-after-1680.png", "AFTER: three lines — now (thick), a month ago, a year ago. Five yields are printed on the line: 3-month, 2-year, 5-year, 10-year, 30-year. THEN VS NOW is the same three days as numbers. 2s10s is one number with its last year as a line, and where it stood a month and a year ago.")}</div>
 </div>
-<p class="small">Left out on purpose: the week-ago line (you asked for today, a month ago, a year ago), the axis and the table (the numbers are on the line and in THEN VS NOW), and the second spread, 3m10y (you asked for 2s10s as the single number — see the decisions).</p>
+<p class="small">Left out on purpose: the week-ago line (you asked for today, a month ago, a year ago), the axis and the table (the numbers are on the line and in THEN VS NOW), and the second spread, 3m10y (you asked for 2s10s as the single number; say the word and it comes back as a second line under it).</p>
+
+<h3>WHERE THE CURVE STANDS ON THE RAIL — AN OPTION, BUILT BEHIND ONE SWITCH, OFF</h3>
+<p>As built, the curve stands where it stood this afternoon: after the rail’s two lists. The card is whole inside one view, but as the room opens only its heading shows ({FV["curveShownPx"]} px of it) and it takes one scroll of the rail to read it. The option puts the curve and the auctions first, right under the event card, with the two lists after them — then the room opens on the curve with no scrolling. It is one word in the code (<code>HM3_CURVE_FIRST = true</code>); it is off because the order of the rail is your call.</p>
+<div class="trio3">
+<div><span class="lbl">AS BUILT</span>{shot("1-room-after-1680.png", "As built, the room as it opens: the event card, the two lists, and the curve’s heading at the bottom edge.")}</div>
+<div><span class="lbl a">OPTION</span>{shot("13-option-curve-first-option-1680.png", f"The option, the room as it opens with an event card: the whole curve, and the first lines of the auctions ({OV['auctionsShownPx']} of its {OV['auctionsPx']} px).")}</div>
+<div><span class="lbl a">OPTION</span>{shot("14-option-curve-first-no-event-card-option-1680.png", "The option when nothing has just been released (most of the day there is no event card): the whole curve and the whole auctions card, then the lists.")}</div>
+</div>
 
 <h3>TREASURY AUCTIONS</h3>
 <div class="trio3">
@@ -167,13 +177,14 @@ page = head("The macro cards, flat and simple · the compare cards, two per view
 <li>In an opened print the height of a bar is the number and its colour is the surprise. A tall red bar is a high number that was worse than expected, not a “bad” high number as such.</li>
 <li>Only one line is open at a time in a card: opening a second folds the first. That keeps a card from growing without end; it also means two terms cannot be compared side by side.</li>
 <li>The two older lists on the rail (UPCOMING, PRINTED) still wear their box, so the rail mixes flat cards and boxed ones until they are done too.</li>
-<li>The curve is the third card on the rail, as it was. It is whole inside one view, but as the room opens it takes one scroll of the rail to reach it.</li>
+<li>As built the curve is still one scroll of the rail down as the room opens (see the option above: one switch puts it first).</li>
 </ul>
 
 <h2>WHAT WAS NOT DONE</h2>
 <ul>
 <li>Nothing is deployed. No table was created or written.</li>
-<li>The order of the rail was not changed (that is the rail question from this afternoon).</li>
+<li>The order of the rail was not changed: the curve-first order is built but switched off.</li>
+<li>The two older lists on the rail were not redrawn.</li>
 <li>The phone’s sliver of rail was not changed.</li>
 <li>The slider, the put/call tape and the Station were not touched.</li>
 </ul>
@@ -181,15 +192,15 @@ page = head("The macro cards, flat and simple · the compare cards, two per view
 <h2>DECISIONS FOR YOU</h2>
 <div class="panel">
 <p><b>1 · The macro look: ship it as pictured?</b> Recommendation: <b>yes</b>. It is behind one switch; turned off, the four cards are exactly this afternoon’s.</p>
-<p><b>2 · The two older lists on the rail (UPCOMING, PRINTED): the same flat look?</b> Recommendation: <b>yes</b>, in the same pass as the rail question, so the rail reads as one thing.</p>
-<p><b>3 · The second spread, 3m10y: gone from the curve card. Bring it back as a second line under 2s10s?</b> Recommendation: <b>leave it out</b> — one number is what makes the card readable.</p>
+<p><b>2 · The curve and the auctions first on the rail, so the room opens on them?</b> Recommendation: <b>yes</b>. It is what makes the curve readable without scrolling as the room opens. The cost: the two lists (UPCOMING, PRINTED) stay on the rail but start one scroll down instead of at the top. One word turns it on.</p>
+<p><b>3 · The two older lists on the rail (UPCOMING, PRINTED): the same flat look?</b> Recommendation: <b>yes</b>, as a small follow-up, so the rail reads as one thing.</p>
 </div>
 
 <details class="sc-pagespecs"><summary>PAGE SPECS</summary><div>
-<p><b>How the pictures were taken.</b> Headless Chromium, never a window, one page at a time, every request that is not a GET stopped and counted. The page is opened at the live address and answered with a local page: BEFORE for the cards is the Hub as deployed; BEFORE for the macro cards is this afternoon’s branch (hub/hm2-macro-20261007 @ca8e0dc); AFTER is this branch. Every read on screen is the real one, except the auctions table, which does not exist yet. Each whole-card picture is taken with the window made tall, so the rail’s own scroll does not cut it.</p>
-<p><b>How it is built.</b> A small layer redraws the four cards; every read, every rule and every number is the earlier work’s own function. Two switches: HM3_ON = false gives this afternoon’s cards back; HM2_ON = false takes the macro work out altogether. The compare cards’ change is one number in their sheet (a card’s share of the list, a third → half); a phone and full screen keep a third.</p>
+<p><b>How the pictures were taken.</b> Headless Chromium, never a window, one page at a time, every request that is not a GET stopped and counted. The page is opened at the live address and answered with a local page: BEFORE for the cards is the Hub as deployed; BEFORE for the macro cards is this afternoon’s branch (hub/hm2-macro-20261007 @ca8e0dc); AFTER is this branch; OPTION is this branch with HM3_CURVE_FIRST = true and nothing else changed. Every read on screen is the real one, except the auctions table, which does not exist yet. Each whole-card picture is taken with the window made tall, so the rail’s own scroll does not cut it.</p>
+<p><b>How it is built.</b> A small layer redraws the four cards; every read, every rule and every number is the earlier work’s own function. Three switches: HM3_ON = false gives this afternoon’s cards back; HM3_CURVE_FIRST = true puts the curve and the auctions first on the rail; HM2_ON = false takes the macro work out altogether. The compare cards’ change is one number in their sheet (a card’s share of the list, a third → half); a phone and full screen keep a third.</p>
 <p><b>Read off the page at 1680 × 1050 (page px before the page’s own {zoom}× zoom).</b> Rail {A["railCssPx"][0]} × {railH}. After: event {"×".join(map(str, A["cards"]["event"]["cssPx"]))}, curve {"×".join(map(str, A["cards"]["curve"]["cssPx"]))}, auctions {"×".join(map(str, A["cards"]["auctions"]["cssPx"]))} (opened: {aucOpen["cssPx"][1]}), prints {"×".join(map(str, A["cards"]["prints"]["cssPx"]))} (opened: {prOpen["cssPx"][1]}). Before: event {"×".join(map(str, B["cards"]["event"]["cssPx"]))}, curve {"×".join(map(str, B["cards"]["curve"]["cssPx"]))}, auctions {"×".join(map(str, B["cards"]["auctions"]["cssPx"]))}, prints {"×".join(map(str, B["cards"]["prints"]["cssPx"]))}. Smallest text after: {min(A["cards"][k]["smallestTextPx"] for k in A["cards"])} px. Names cut after: none; before: {sum(len(B["cards"][k]["cut"]) for k in B["cards"])} at 1680 and {sum(len(PB["cards"][k]["cut"]) for k in PB["cards"])} on a phone.</p>
-<p><b>Tests.</b> The Hub’s suite: 2,181 on the live Hub → 2,186 with the cards alone → 2,227 on the macro branch; the same 7 tests fail in all three, none of them about these screens.</p>
+<p><b>Tests.</b> The Hub’s suite: 2,181 on the live Hub → 2,186 with the cards alone → 2,229 on the macro branch; the same 7 tests fail in all three, none of them about these screens.</p>
 </div></details>
 </main></body></html>
 '''

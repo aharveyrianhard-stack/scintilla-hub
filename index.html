@@ -17164,6 +17164,11 @@ async function fillEvents(quiet) {
    inside a box. One row is open at a time in a card, so a card never grows past one history.
    HOW TO TURN IT OFF: HM3_ON = false draws HM2's four cards exactly as they were. */
 var HM3_ON = true;                      /* var, not const: HM2's block reads it as `typeof HM3_ON !== "undefined" && HM3_ON`, so a page without this layer draws HM2's cards */
+/* WHERE THE CURVE STANDS. As built (false) the curve, the auctions and the prints stand where HM2 put them: after the
+   rail's two lists, so as the room opens the curve is one scroll of the rail down. true = the curve and the auctions
+   come FIRST on the rail, right under the event card, and the room opens on them (the prints stay where they are).
+   It is off because the order of the rail is Alan's call; both ways are pictured in HM3.html. */
+var HM3_CURVE_FIRST = false;
 let HM3 = { auc: null, print: null, have: null, by: null };
 const HM3_THEN = [["1M AGO", 30, "#00D4FF", "5 3"], ["1Y AGO", 365, "#FF8A00", "2 3"]];   /* a hue and a dash each: no grey line */
 const HM3_ON_LINE = { m3: 1, y2: 1, y5: 1, y10: 1, y30: 1 };                             /* the yields printed on today's line */
@@ -17368,11 +17373,16 @@ function hm3EventHTML(ev, nowSec, news, auction) {
 }
 
 /* ---- the three cards' frames, what PAGE SPECS says, and the click ------------------------------------- */
-function hm3RailCardsHTML() {
-  return '<div class="card hm2-card hm3-card"><h4>TREASURY CURVE <i class="ec-li-note" id="hm2CurveAsOf"></i></h4><div id="hm2Curve"><div class="sc-senttxt">—</div></div></div>' +
-    '<div class="card hm2-card hm3-card"><h4>TREASURY AUCTIONS</h4><div id="hm2Auctions"><div class="sc-senttxt">—</div></div></div>' +
-    '<div class="card hm2-card hm3-card"><h4>MACRO PRINTS <i class="ec-li-note" id="hm2StripsSince"></i></h4><div id="hm2Strips"><div class="sc-senttxt">—</div></div></div>';
-}
+const HM3_FRAME = {
+  curve: '<div class="card hm2-card hm3-card"><h4>TREASURY CURVE <i class="ec-li-note" id="hm2CurveAsOf"></i></h4><div id="hm2Curve"><div class="sc-senttxt">—</div></div></div>',
+  auctions: '<div class="card hm2-card hm3-card"><h4>TREASURY AUCTIONS</h4><div id="hm2Auctions"><div class="sc-senttxt">—</div></div></div>',
+  prints: '<div class="card hm2-card hm3-card"><h4>MACRO PRINTS <i class="ec-li-note" id="hm2StripsSince"></i></h4><div id="hm2Strips"><div class="sc-senttxt">—</div></div></div>',
+};
+/* where HM2's cards stand, after the rail's two lists … */
+function hm3RailCardsHTML() { return (HM3_CURVE_FIRST ? "" : HM3_FRAME.curve + HM3_FRAME.auctions) + HM3_FRAME.prints; }
+/* … and the top of the rail, right under the event card: nothing, unless the curve and the auctions are to come first
+   (and never when HM2's own switch is off: then the room has none of these cards) */
+function hm3RailTopHTML() { return HM3_CURVE_FIRST && (typeof HM2_ON === "undefined" ? false : HM2_ON) ? HM3_FRAME.curve + HM3_FRAME.auctions : ""; }
 const HM3_SPECS_P =
   "<p><b>Treasury curve.</b> treasury_rates (Treasury’s daily par yields). Three lines: today, and the stored curve nearest to a month and a year before it. Today’s line is green when the 10-year closed above the day before and red when below; five of its yields are printed on it. THEN VS NOW is the same three days as numbers. 2s10s is the 10-year minus the 2-year, with its last 252 sessions as a line; above zero the curve slopes up.</p>" +
   "<p><b>Treasury auctions.</b> One line per term: the newest auction’s date, size, where it stopped (the highest yield accepted), the cover (dollars bid per dollar sold) and the share taken by indirect bidders and by dealers. An r beside a term is a reopening: more of a bond that already trades. A number is green when it shows more demand than the average of the six auctions of that term before it and red when less; for DEALERS a smaller share is the stronger auction. Click a line to open that term: Treasury’s own result, and its last thirty auctions as bars, oldest on the left (STOPPED AT is coloured by which way it moved from the auction before). COMING is what Treasury has announced, with its size; LATER is dated on the calendar and not yet sized. TreasuryDirect’s own results, a few minutes after the 1:00 PM New York deadline. The tail is not shown: it needs the yield the new issue traded at one minute before the deadline, and no free source carries it.</p>" +
@@ -18796,6 +18806,7 @@ function econRoomHTML() {
        3d69248's own card; the releases source is named in the same footer. */
     '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>macro rail · <b>stored prints</b></span>' + SECFS_BTN + '</div><div class="rail">' +
       (typeof HM2_ON !== "undefined" && HM2_ON ? '<div class="card hm2-card hm2-ev" id="hm2Event"></div>' : "") +   /* HM2 — the event card: empty (and taking no room) until a release is happening or is clicked */
+      (typeof HM3_ON !== "undefined" && HM3_ON ? hm3RailTopHTML() : "") +   /* HM3 — the top of the rail: the curve and the auctions when HM3_CURVE_FIRST is true; as built it is false and this adds nothing */
       (ECON_ROOM_TAPE_ON ? '<div class="card"><h4>UPCOMING · RELEASES <i class="ec-li-note">US watch list · 7 days</i></h4><div class="ev-upwrap" id="ecRoomUp">—</div></div>' +
         '<div class="card"><h4>PRINTED · THIS WEEK</h4><div class="ev-pastwrap" id="ecRoomPast">—</div></div>' : "") +   /* 29 Sep — the earnings rail's two lists */
       /* HM2 — the curve as a picture, the auctions and the surprise strips stand where the one-line curve and the

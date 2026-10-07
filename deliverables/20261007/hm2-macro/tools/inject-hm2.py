@@ -56,6 +56,11 @@ HOOKS = [
     ("    try { scintStripRender(); boardScintPass(); } catch (_) {}   /* M42 — the strip and the outlier marks on a fresh mount */\n",
      "    try { hm2PcFill(); hm2PcArm(); } catch (_) {}   /* HM2 — the put/call tape on a fresh mount */\n", "after"),
 ]
+# HM3 — the layer's own one-line hook, right under the event card's host (the line the second hook above adds): the top
+# of the rail. It adds nothing unless HM3_CURVE_FIRST is true (the curve and the auctions first on the rail).
+if hm3_block:
+    HOOKS.insert(2, (HOOKS[1][1],
+                     "      (typeof HM3_ON !== \"undefined\" && HM3_ON ? hm3RailTopHTML() : \"\") +   /* HM3 — the top of the rail: the curve and the auctions when HM3_CURVE_FIRST is true; as built it is false and this adds nothing */\n", "after"))
 # The block goes just ABOVE the economic room's own module (Room 9 … Room 9b), never inside it: that module is pinned to
 # three tables, two calendar reads and no fetch (tests/economic-port, economic-review), and those stay true of it.
 JS_ANCHOR = "/* ---- Room 9 · ECONOMIC (wired: treasury_rates curve + econ_history latest prints) */\n"

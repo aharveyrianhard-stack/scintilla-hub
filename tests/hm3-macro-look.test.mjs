@@ -31,15 +31,17 @@ const helpers = [
   grab(/const EC_MONTH_TAG = [^\n]*\n/, "EC_MONTH_TAG"), grab(/const ecBase\s+= [^\n]*\n/, "ecBase"),
   grab(/const ecPeriod = [^\n]*\n/, "ecPeriod"), grab(/const ecCat = [^\n]*\n/, "ecCat"),
 ].join("");
-const EXPORTS = "HM3_ON, HM3, HM3_THEN, HM3_SPECS_P, hm3BarsHTML, hm3CurveHTML, hm3AuctionsHTML, hm3PrintsHTML, hm3PrintsPaint, hm3EventHTML, hm3RailCardsHTML, " +
+const EXPORTS = "HM3_ON, HM3_CURVE_FIRST, HM3, HM3_THEN, HM3_SPECS_P, hm3BarsHTML, hm3CurveHTML, hm3AuctionsHTML, hm3PrintsHTML, hm3PrintsPaint, hm3EventHTML, hm3RailCardsHTML, hm3RailTopHTML, " +
   "hm2RailCardsHTML, hm2StripRows, hm2AuctionsHTML, hm2AuctionsPaint, hm2CurveHTML, hm2CurveFill, hm2StripsFill, hm2AuctionsFill, hm2EventPaint, HM2_SPECS, HM2_AUC, HM2_EV, HM2_TL, hm3On, ecToday, ecShift, ecAnchor";
-/* the layer above the block, as on the page. `on` false = the switch thrown; `layer` false = a page without the layer. */
-function load({ on = true, layer = true, hosts = {}, pg = async () => [] } = {}) {
+/* the layer above the block, as on the page. `on` false = the switch thrown; `layer` false = a page without the layer;
+   `first` = HM3_CURVE_FIRST thrown on; `hm2` false = HM2's own switch off. */
+function load({ on = true, layer = true, first = false, hm2: hm2On = true, hosts = {}, pg = async () => [] } = {}) {
   const heard = { click: [], keydown: [] };
   const ctx = { S: { econCty: "US", econCat: "ALL", econImp: "ALL", econDay: null }, el: (id) => hosts[id] || null, pg, console,
     document: { addEventListener: (k, f) => { (heard[k] || (heard[k] = [])).push(f); }, querySelectorAll: () => [], visibilityState: "visible" } };
   vm.runInNewContext(helpers + "const ecNormalize = (r) => r; const ecCountryFilter = () => '&country=eq.US'; const ecKeysetAfter = () => ''; const ecFetchWindow = async () => [];\n" +
-    (layer ? (on ? hm3 : hm3.replace("var HM3_ON = true;", "var HM3_ON = false;")) : "") + hm2 +
+    (layer ? (on ? hm3 : hm3.replace("var HM3_ON = true;", "var HM3_ON = false;")).replace("var HM3_CURVE_FIRST = false;", "var HM3_CURVE_FIRST = " + first + ";") : "") +
+    (hm2On ? hm2 : hm2.replace("var HM2_ON = true;", "var HM2_ON = false;")) +
     "\nglobalThis.out = { " + (layer ? EXPORTS : EXPORTS.split(", ").filter((n) => !/^(hm3|HM3)/.test(n) || n === "hm3On").join(", ")) + " };", ctx);
   return Object.assign(ctx.out, { ctx, heard });
 }
@@ -96,6 +98,31 @@ test("the sheet styles only the layer's own classes, its text is 11 px or more, 
   }
   assert.match(css, /\.hm3-cl--now\.up, \.hm3-sl\.up\{ stroke:var\(--bull\); \} \.hm3-cl--now\.dn, \.hm3-sl\.dn\{ stroke:var\(--bear\); \}/, "the newest curve and the 2s10s line are the day's colour");
   assert.match(css, /\.hm3-row:hover\{ background:rgba\(255,255,255,\.035\); \}\n\.hm3-row\.is-open\{ background:rgba\(255,255,255,\.07\); \}/, "a line's hover and its open are the slider's own two greys");
+});
+
+test("where the curve stands: as built, after the rail's two lists; with the one switch, the curve and the auctions come first — the same frames, each still once", () => {
+  assert.equal(count(hm3, /^var HM3_CURVE_FIRST = false;$/gm), 1, "off as built: the order of the rail is Alan's call");
+  /* the layer's one line on the page: the top of the rail, right under the event card's host */
+  const host = "(typeof HM2_ON !== \"undefined\" && HM2_ON ? '<div class=\"card hm2-card hm2-ev\" id=\"hm2Event\"></div>' : \"\") +", top = "(typeof HM3_ON !== \"undefined\" && HM3_ON ? hm3RailTopHTML() : \"\") +";
+  assert.equal(page.split(top).length - 1, 1);
+  const between = page.slice(page.indexOf(host) + host.length, page.indexOf(top));
+  assert.match(between, /^   \/\* HM2 — the event card:[^\n]*\*\/\n      $/, "nothing but the end of the event host's own line stands between them");
+  assert.ok(page.indexOf(top) < page.indexOf("'<div class=\"card\"><h4>UPCOMING · RELEASES"), "…and it is above the rail's two lists");
+  assert.equal(count(page, /typeof HM2_ON !== "undefined" && HM2_ON/g), 5, "HM2's own five hooks are as they were");
+  const ids = ["hm2Curve", "hm2CurveAsOf", "hm2Auctions", "hm2Strips", "hm2StripsSince"], once = (html, id) => count(html, new RegExp('id="' + id + '"', "g"));
+  const built = load();
+  assert.equal(built.HM3_CURVE_FIRST, false); assert.equal(built.hm3RailTopHTML(), "", "as built the line adds nothing");
+  for (const id of ids) assert.equal(once(built.hm3RailCardsHTML(), id), 1, id);
+  const first = load({ first: true });
+  assert.equal(first.HM3_CURVE_FIRST, true);
+  assert.match(first.hm3RailTopHTML(), /^<div class="card hm2-card hm3-card"><h4>TREASURY CURVE [\s\S]*<div class="card hm2-card hm3-card"><h4>TREASURY AUCTIONS<\/h4><div id="hm2Auctions">[^]*<\/div><\/div>$/);
+  assert.match(first.hm3RailCardsHTML(), /^<div class="card hm2-card hm3-card"><h4>MACRO PRINTS /, "the prints stay where they were");
+  assert.equal(count(first.hm3RailCardsHTML(), /hm3-card/g), 1);
+  for (const id of ids) assert.equal(once(first.hm3RailTopHTML() + first.hm3RailCardsHTML(), id), 1, id + " is on the rail exactly once either way");
+  assert.equal(first.hm3RailTopHTML() + first.hm3RailCardsHTML(), built.hm3RailCardsHTML(), "the same three frames, byte for byte: only where the first two stand differs");
+  /* never when the layer is off, and never when HM2's own switch is off (then the room has none of these cards) */
+  assert.equal(load({ first: true, hm2: false }).hm3RailTopHTML(), "");
+  assert.match(load({ first: true, on: false }).hm2RailCardsHTML(), /TREASURY AUCTIONS <i class="ec-li-note">each against the six before it<\/i>/, "with the look off, HM2's three cards stand where HM2 put them");
 });
 
 /* ---- 1 · the curve -------------------------------------------------------------------------------------- */
@@ -294,6 +321,19 @@ test("read off the page at 1680: every card is flat and whole inside one view of
   assert.ok(now.facts.auctionOpen.cssPx[1] > a.cards.auctions.cssPx[1] + 200); assert.equal(now.facts.auctionFoldedAgain, true);
   assert.deepEqual(now.facts.oneOpenAtATime, ["Inflation Rate YoY"]);
   assert.deepEqual(now.facts.auctionOpen.cut, []); assert.deepEqual(now.facts.printOpen.cut, []);
+});
+test("read off the page at 1680, the room as it opens: as built the curve is one scroll down; with the switch the whole curve is in the first view", () => {
+  const built = shoot("after-1680").facts.firstView, opt = shoot("option-1680");
+  assert.equal(opt.error, undefined); assert.equal(opt.pageErrors.length, 0); assert.match(opt.page, /with HM3_CURVE_FIRST = true$/);
+  assert.deepEqual(built.order, ["FOMC MINUTES", "UPCOMING · RELEASES", "PRINTED · THIS WEEK", "TREASURY CURVE", "TREASURY AUCTIONS", "MACRO PRINTS"]);
+  assert.equal(built.curveWhole, false); assert.ok(built.curveShownPx < 60, "as built only the curve's heading shows as the room opens: " + built.curveShownPx + " px");
+  const f = opt.facts.firstView, n = opt.facts.firstViewNoEventCard;
+  assert.deepEqual(f.order, ["FOMC MINUTES", "TREASURY CURVE", "TREASURY AUCTIONS", "UPCOMING · RELEASES", "PRINTED · THIS WEEK", "MACRO PRINTS"]);
+  assert.equal(f.railScrollTop, 0); assert.equal(f.curveWhole, true); assert.equal(f.curveShownPx, 312); assert.ok(f.auctionsShownPx > 150 && !f.auctionsWhole, "under an event card: the whole curve and the first lines of the auctions");
+  assert.equal(n.eventCardPx, 0); assert.equal(n.curveWhole, true); assert.equal(n.auctionsWhole, true, "with no event card (most of the day): the whole curve and the whole auctions card");
+  /* the cards themselves are the size they are as built */
+  const a = shoot("after-1680").facts.asItOpens.cards;
+  for (const k of ["event", "curve", "auctions", "prints"]) assert.deepEqual(opt.facts.cards[k].cssPx, a[k].cssPx, k);
 });
 test("read off the page at 390: the same four cards, each narrower than the screen, nothing cut, nothing under 11 px", () => {
   const was = shoot("before-390"), now = shoot("after-390");

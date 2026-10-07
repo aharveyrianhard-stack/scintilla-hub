@@ -5,7 +5,8 @@
 //     before = HM2's page (branch hub/hm2-macro-20261007 @ca8e0dc, read out of git)      after = this branch's index.html
 // Every read on screen is the real one, except public.treasury_auctions, which does not exist yet: it is answered from
 // HM2's own file of Treasury's rows (deliverables/20261007/hm2-macro/data/treasury-auctions.json), as HM2's pictures were.
-//   node deliverables/20261007/hm3-macro-look/tools/shoot.mjs                 all four, one after the other
+//     option = this branch's page with its one switch thrown (HM3_CURVE_FIRST = true): the curve and the auctions first on the rail
+//   node deliverables/20261007/hm3-macro-look/tools/shoot.mjs                 all five, one after the other
 //   node deliverables/20261007/hm3-macro-look/tools/shoot.mjs after 1680      one
 import fs from "node:fs";
 import path from "node:path";
@@ -25,8 +26,14 @@ const CARD = { event: "#hm2Event", curve: ".card:has(> #hm2Curve)", auctions: ".
 
 async function one(which, W) {
   const phone = W < 500, H = phone ? 844 : 1050, tag = which + "-" + W;
-  const html = which === "before" ? execFileSync("git", ["-C", REPO, "show", HM2_SHA + ":index.html"], { maxBuffer: 64 << 20 }) : fs.readFileSync(path.join(REPO, "index.html"));
-  const out = { which, width: W, height: H, at: new Date().toISOString(), page: which === "before" ? "hub/hm2-macro-20261007 @" + HM2_SHA : "this branch's index.html", shots: [], facts: {} };
+  let html = which === "before" ? execFileSync("git", ["-C", REPO, "show", HM2_SHA + ":index.html"], { maxBuffer: 64 << 20 }) : fs.readFileSync(path.join(REPO, "index.html"));
+  if (which === "option") {
+    /* THE OPTION: this branch's page with its one switch thrown — HM3_CURVE_FIRST = true — and nothing else changed */
+    const src = html.toString("utf8"), off = "var HM3_CURVE_FIRST = false;";
+    if (src.split(off).length !== 2) throw new Error("the switch is not on the page exactly once");
+    html = Buffer.from(src.replace(off, "var HM3_CURVE_FIRST = true;"), "utf8");
+  }
+  const out = { which, width: W, height: H, at: new Date().toISOString(), page: which === "before" ? "hub/hm2-macro-20261007 @" + HM2_SHA : which === "option" ? "this branch's index.html with HM3_CURVE_FIRST = true" : "this branch's index.html", shots: [], facts: {} };
   const browser = await chromium.launch({ headless: true, args: ["--mute-audio"] });
   let blocked = 0; const errors = [];
   try {
@@ -93,6 +100,24 @@ async function one(which, W) {
       }
       return o;
     }, CARD);
+    /* what the first view of the rail holds, as the room opens */
+    const firstView = () => page.evaluate((CARD) => {
+      const curve = document.querySelector(CARD.curve), auc = document.querySelector(CARD.auctions), ev = document.querySelector(CARD.event), rail = curve.closest(".rail");
+      const zoom = +getComputedStyle(document.body).zoom || 1, R = rail.getBoundingClientRect();
+      const seen = (c) => { const b = c.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(R.bottom, b.bottom) - Math.max(R.top, b.top)) / zoom); };
+      const whole = (c) => { const b = c.getBoundingClientRect(); return b.height > 0 && b.top >= R.top - 1 && b.bottom <= R.bottom + 1; };
+      return { railScrollTop: rail.scrollTop, order: Array.from(rail.children).filter((c) => c.getBoundingClientRect().height > 0).slice(0, 6).map((c) => ((c.querySelector("h4") || c).firstChild || c).textContent.trim().slice(0, 22)),
+        eventCardPx: Math.round(ev.getBoundingClientRect().height / zoom), curveWhole: whole(curve), curveShownPx: seen(curve), auctionsWhole: whole(auc), auctionsShownPx: seen(auc), auctionsPx: Math.round(auc.getBoundingClientRect().height / zoom) };
+    }, CARD);
+    if (which === "option") {
+      out.facts.firstView = await firstView(); out.facts.cards = (await read()).cards;
+      await shot("13-option-curve-first");                              /* with an event card above them */
+      await page.evaluate((CARD) => { document.querySelector(CARD.event).style.display = "none"; }, CARD); await railTop(); await sleep(400);
+      out.facts.firstViewNoEventCard = await firstView();
+      await shot("14-option-curve-first-no-event-card");                /* as it is most of the day: nothing just released, so no event card */
+      out.facts.title = await page.title(); await ctx.close();
+      return finish();
+    }
     out.facts.asItOpens = await read();
     await shot("1-room");                                           /* the room as it opens: the event card first on the rail */
     await shot("2-event", CARD.event);
@@ -118,20 +143,25 @@ async function one(which, W) {
         await page.click('[data-hm3="auc"][data-k="10-Year"]'); await sleep(400); await toCard(CARD.auctions); await sleep(400);
         await shot("12-room-auction-open");
         out.facts.onTheScreenOpen = await read();
+        await page.click('[data-hm3="auc"][data-k="10-Year"]'); await sleep(300); await railTop(); await sleep(300);
+        out.facts.firstView = await firstView();                       /* as built: what the first view of the rail holds as the room opens */
       }
     }
     out.facts.title = await page.title();
     await ctx.close();
   } catch (e) { out.error = String((e && e.stack) || e).slice(0, 700); }
   finally { await browser.close(); }
+  return finish();
+  function finish() {
   out.requests = { stoppedNonGet: blocked }; out.pageErrors = errors.slice(0, 6);
   fs.writeFileSync(path.join(DATA, "shoot-" + tag + ".json"), JSON.stringify(out, null, 1) + "\n");
-  const c = (out.facts.asItOpens || {}).cards || {};
+  const c = (out.facts.asItOpens || {}).cards || out.facts.cards || {};
   console.log(tag, out.error ? "ERROR " + out.error : "", "| event", out.facts.event, "| rail", JSON.stringify((out.facts.asItOpens || {}).railCssPx), "| cards",
     Object.entries(c).map(([k, v]) => k + " " + (v ? v.cssPx.join("×") + (v.fitsInOneRailView ? "" : " (taller than the rail)") + " boxes " + v.borders + " min " + v.smallestTextPx + "px cut " + v.cut.length : "—")).join(" · "),
-    "| stopped", blocked, "errors", errors.length, "| shots", out.shots.length);
+    "| stopped", blocked, "errors", errors.length, "| shots", out.shots.length, out.facts.firstView ? "| first view: curve whole " + out.facts.firstView.curveWhole + ", " + out.facts.firstView.curveShownPx + " px of it" : "");
   return out;
+  }
 }
 const [a1, a2] = process.argv.slice(2);
 if (a1) await one(a1, +a2 || 1680);
-else for (const [w, x] of [["before", 1680], ["after", 1680], ["before", 390], ["after", 390]]) await one(w, x);   /* one page at a time */
+else for (const [w, x] of [["before", 1680], ["after", 1680], ["option", 1680], ["before", 390], ["after", 390]]) await one(w, x);   /* one page at a time */
