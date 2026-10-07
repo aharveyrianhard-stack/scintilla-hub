@@ -19,9 +19,10 @@ import { inputs as c4inputs, readSet, snapshotFromCohort } from "../../20261001/
 import { SOURCE_WORDS } from "../../20261001/comps-mechanic/peers.mjs";
 import { ROWS, SHORT, TABLE } from "../../20261001/comps-template/cohort.mjs";
 import { decisionRow, FLAG_WORDS } from "../../20260930/comps-tab/comps-tab.mjs";
-import { buildSet, lineWords, N_DEFAULT, NS, SIM_MIN, LINE_MIN, SIZE_WEIGHT, SEATS_PER_LINE } from "./lines.mjs";
+import { buildSet, lineWords, N_DEFAULT, NS, SIM_MIN, LINE_MIN, SIZE_WEIGHT, SEATS_PER_LINE, REFERENCE_PEERS } from "./lines.mjs";
 import { isOff, isKept, median, quantile, WAY_WORDS, wayOf, PEG_YEARS_MAX } from "./field.mjs";
-import { conclusion6, isFlagged, isVote, VOTES, CUT, MIN_N, MIN_FLAGS, SHARE, SHARE_MIN_FLAGS } from "../../20261005/comps-c6/outliers.mjs";
+import { conclusion6, isFlagged, isVote, VOTES, CUT, MIN_N, MIN_FLAGS, SHARE, SHARE_MIN_FLAGS, LIVE_FX } from "../../20261005/comps-c6/outliers.mjs";
+import { referenceOf, withReference, withReferenceQuotes } from "./reference.mjs";   /* RL1: the comps-only reference peers (SK hynix, Samsung, Kioxia), priced from their dated facts file as the cards price them */
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const SVG = "http://www.w3.org/2000/svg";
@@ -167,6 +168,12 @@ async function standin() { if (STANDIN !== null) return STANDIN; try { STANDIN =
   /* C5b — FMP's statement currency for every served company rides with the stand-in: a foreign reporter is never read as a dollar filer */
   try { const r = await (await fetch("/deliverables/20261003/comps-c5b/reporting-currency-fmp-2026-10-03.json", { cache: "no-store" })).json(); if (r && r.reported) STANDIN = { ...(STANDIN || {}), reported: r.reported }; } catch (_) {} return STANDIN; }
 const fetchJson = (u) => fetch(u, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(u + " → " + r.status); return r.json(); });
+/* RL1 (7 Oct) — the tab prices on LIVE_FX (comps-c6/outliers.mjs), the switches the cards, the knockout and the allocation tool
+   were built on. With `reference` on, the three foreign memory makers are read from the same dated facts file the cards read
+   (the newest one on file); when it cannot be read they carry no figures and are left out of the price, as a card does. */
+const REF_FACTS_URL = "/deliverables/20261003/comps-c5/reference-peers-facts-20261007.json";
+let REF_FACTS = null;
+async function refFacts() { if (!LIVE_FX.reference) return false; if (REF_FACTS !== null) return REF_FACTS; try { REF_FACTS = await fetchJson(REF_FACTS_URL); } catch (_) { REF_FACTS = false; } return REF_FACTS; }
 /** The segments: public.revenue_segments when the Hub serves it, else the dated fixture. */
 async function segments(pg) {
   try {
@@ -183,7 +190,7 @@ export async function mountCompsTab(root, opts) {
   root.innerHTML = `<div class="loading">BUILDING THE COMPARABLE SET OF ${esc(T)}…</div>`;
   const S = { root, opts, T, n: opts.n || N_DEFAULT, way: "C", reasonFor: null, open: {} };
   try {
-    if (!INPUTS || Date.now() - INPUTS_AT > TTL) { const [inp, seg] = await Promise.all([c4inputs({ pg: opts.pg, fetchJson }), segments(opts.pg)]); inp.segments = seg.companies; inp.segments_from = seg.from; INPUTS = inp; INPUTS_AT = Date.now(); }
+    if (!INPUTS || Date.now() - INPUTS_AT > TTL) { const [inp, seg] = await Promise.all([c4inputs({ pg: opts.pg, fetchJson }), segments(opts.pg)]); inp.segments = seg.companies; inp.segments_from = seg.from; const facts = await refFacts(); if (facts) inp.reference = referenceOf(facts).peers; INPUTS = inp; INPUTS_AT = Date.now(); }
     S.inp = INPUTS;
     await loadSet(S);
   } catch (e) { root.innerHTML = `<div class="err"><b>${esc(T)}</b>: the comparable set could not be built — ${esc(e && e.message || e)}.</div>`; return; }
@@ -194,14 +201,19 @@ export async function mountCompsTab(root, opts) {
   fit(); new ResizeObserver(fit).observe(root);
 }
 async function loadSet(S) {
-  S.set = buildSet(S.T, S.inp, { n: S.n });
-  const key = S.T + "|" + [S.T, ...S.set.kept.map((r) => r.ticker)].join(",");
+  S.set = buildSet(S.T, S.inp, { n: S.n, fx: LIVE_FX });
+  const served = { ...S.set, kept: S.set.kept.filter((r) => !r.reference || r.has_figures) };   /* RL1: a reference peer with no figures is shown in the set and never read (the cards' rule) */
+  const facts = await refFacts(), pg = facts ? withReference(S.opts.pg, facts) : S.opts.pg, quotes = facts ? withReferenceQuotes(S.opts.quotes, facts) : S.opts.quotes;
+  const key = S.T + "|" + [S.T, ...served.kept.map((r) => r.ticker)].join(",");
   const hit = CTX.get(key);
   if (hit && Date.now() - hit.at < TTL) { S.ctx = hit.ctx; S.estimates = hit.estimates; }
   else {
-    const fx = await standin();
-    S.ctx = await readSet(S.T, S.set, { today: S.opts.today, pg: S.opts.pg, quotes: S.opts.quotes, livePrices: S.opts.livePrices || {}, fxStandin: fx || null });
-    let est = []; try { est = await S.opts.pg(`analyst_estimates?select=ticker,fiscal_date,est_eps_avg&period=eq.annual&ticker=in.(${S.ctx.members.map(encodeURIComponent).join(",")})&fiscal_date=gte.${S.opts.today}&order=ticker.asc,fiscal_date.asc`); } catch (_) { est = []; }
+    let fx = await standin();
+    if (fx && facts && facts.fx) { const ref = referenceOf(facts).peers, rates = { ...(fx.rates || {}) }, reported = { ...(fx.reported || {}) };   /* RL1: the won and yen rates and the reference peers' currencies ride with the stand-in, as in the cards' run */
+      for (const [c, rows] of Object.entries(facts.fx)) if (rows && rows.length && !(rates[c] && rates[c].length)) rates[c] = rows;
+      for (const [t, c] of Object.entries(ref)) reported[t] = c.currency; fx = { ...fx, rates, reported }; }
+    S.ctx = await readSet(S.T, served, { today: S.opts.today, pg, quotes, livePrices: S.opts.livePrices || {}, fxStandin: fx || null });
+    let est = []; try { est = await pg(`analyst_estimates?select=ticker,fiscal_date,est_eps_avg&period=eq.annual&ticker=in.(${S.ctx.members.map(encodeURIComponent).join(",")})&fiscal_date=gte.${S.opts.today}&order=ticker.asc,fiscal_date.asc`); } catch (_) { est = []; }
     S.estimates = Object.fromEntries(S.ctx.inputs.map((i) => [i.ticker, { eps_ttm: i.eps_ttm ?? null, est: (est || []).filter((e) => e.ticker === i.ticker).map((e) => ({ fiscal_date: e.fiscal_date, eps: e.est_eps_avg })) }]));
     CTX.set(key, { ctx: S.ctx, estimates: S.estimates, at: Date.now() });
   }
@@ -212,7 +224,7 @@ async function loadSet(S) {
 
 function render(S) {
   const { T, set } = S;
-  const C = conclusion6(S.snap, S.decisions, S.estimates, S.opts.today, S.way, { set: S.set }); S.C = C;
+  const C = conclusion6(S.snap, S.decisions, S.estimates, S.opts.today, S.way, { set: S.set, fx: LIVE_FX }); S.C = C;
   const snap = C.snap, w = wayOf(C.ways, S.way), peers = S.members.filter((t) => t !== T);
   const h = [];
   /* the set */
@@ -220,7 +232,7 @@ function render(S) {
   h.push(`<div class="sec"><div class="hd"><b>comparables</b><span>${esc(set.own_industry || "industry unknown")}${snap.sector ? " · " + esc(snap.sector) : ""} · ${esc(CAP(set.own_market_cap))}</span><span class="ctl"><span>keep</span>${NS.map((v) => `<button type="button" data-cm="n" data-v="${v}" class="${S.n === v ? "on" : ""}">${v}</button>`).join("")}</span></div>
     <div class="lines" title="${esc(L.from)}">${linesBar.map(([l, v]) => `<i style="flex:${Math.max(0.02, v)}" title="${esc(l)} ${Math.round(v * 100)}%"></i>`).join("")}</div>
     <div class="linew">${linesBar.map(([l, v]) => `<b>${esc(l)}</b> ${Math.round(v * 100)}%`).join(" · ")} <span style="color:var(--mute)">· ${esc(L.source)}</span></div>
-    ${bizHTML(C.c6.business)}${setTableHTML(S)}</div>`);
+    ${bizHTML(C.c6.business, C.c6)}${setTableHTML(S)}</div>`);
   /* the range */
   const lw = (ww) => ww && ww.ok ? esc(P0(ww.mid)) : "—";
   h.push(`<div class="sec"><div class="hd"><b>the range</b><span>way ${esc(S.way)} · ${C.peersOn.length} of ${peers.length} peers in · ${C.c6.outliers.length} outlier${C.c6.outliers.length === 1 ? "" : "s"} out · ${C.c6.flaggedCells} cells marked</span></div>
@@ -240,8 +252,12 @@ function render(S) {
 
 /* ---- the set ------------------------------------------------------------------------------------------ */
 /* C6b 4 · how many peers share the company's business; under half, the set is named (labels only, the sentence is in PAGE SPECS) */
-function bizHTML(b) {
+/* RL1: a comps-only reference peer is shown by its name (SK hynix), never by its home listing's code (000660.KS) */
+const peerName = (t) => (REFERENCE_PEERS[t] && REFERENCE_PEERS[t].name) || t;
+function bizHTML(b, c6) {
   if (!b) return "";
+  /* RL1: when the price comes from the peers that share the business (LIVE_FX), the line says that — the others are shown, not priced */
+  if (c6 && c6.pricedOn === "business") return `<div class="biz" id="cm5Biz"><span><b>priced on the ${c6.businessPeers.length} peers that share ${esc(b.line || "the business")}</b></span><span>${c6.notPriced.length} more shown, not priced</span></div>`;
   const n = `<span><b>${b.same.length} of ${b.n}</b> peers share ${esc(b.line || "the business")}</span>`;
   return b.mostlyDifferent ? `<div class="biz warn" id="cm5Biz"><span><b>peer set mostly different business</b></span>${n}<span>fix the peers, not the outliers</span></div>` : `<div class="biz" id="cm5Biz">${n}</div>`;
 }
@@ -250,7 +266,7 @@ function setTableHTML(S) {
   const row = (r) => { const o6 = c6.ruleOff.has(r.ticker), k6 = c6.kept.includes(r.ticker), n6 = c6.notCut.includes(r.ticker), off = !o6 && sel.peers.has(r.ticker), top = r.shared.slice(0, 2), w6 = o6 ? "outlier" : k6 ? "kept" : "same business · not cut";
     const mark = o6 || k6 || n6 ? `<span class="o6n s" title="${esc(sc[r.ticker].flags.map((f) => f.short + " " + Math.abs(f.d).toFixed(1) + " spreads " + (f.side === "high" ? "above" : "below")).join(" · "))}"><b>${w6}</b> · ${sc[r.ticker].n} of ${sc[r.ticker].have}</span>` : "", long = o6 || k6 || n6 ? `<span class="o6n l"><b>${w6}</b> · ${esc(sc[r.ticker].words)}</span>` : "";
     const tog = o6 || k6 ? `<button type="button" class="tog${o6 ? " o6" : " on"}" data-cm="keeppeer" data-t="${esc(r.ticker)}" title="${o6 ? "keep in the medians and the price" : "let the rule leave it out again"}">${o6 ? "◇" : "◆"}</button>` : `<button type="button" class="tog${off ? "" : " on"}" data-cm="peer" data-t="${esc(r.ticker)}" title="${off ? "put back" : "turn off"}">${off ? "□" : "■"}</button>`;
-    return `<tr class="${o6 ? "o6" : off ? "off" : ""}"${o6 ? ` data-o6="${esc(r.ticker)}"` : ""}><td>${tog}</td><td class="tk" title="${esc(names[r.ticker] || "")}">${esc(r.ticker)}${mark}</td><td><span class="sim" title="similarity ${r.sim.toFixed(2)}"><i style="width:${Math.round(Math.min(1, r.sim) * 100)}%"></i></span>${r.sim.toFixed(2)}</td><td>${long ? long : top.length ? top.map((s) => `${esc(s.line)} <span style="color:var(--mute)">${Math.round(s.own * 100)}·${Math.round(s.peer * 100)}%</span>`).join(", ") : esc(r.why.replace(/^same family \(([^)]+)\): (.*)$/, "$2 · $1 family"))}${r.seat ? `<span class="seat">seat</span>` : ""}</td><td><span class="src" title="${esc(r.line_from)}">${esc(r.line_source)}</span>${r.sources.map((s) => `<span class="src" title="${esc(SOURCE_WORDS[s] || s)}">${s === "MASSIVE" ? "mas" : s.toLowerCase()}</span>`).join("")}</td><td class="r">${esc(CAP(r.market_cap))}</td><td class="r">${esc(RATIO(r.ratio))}</td></tr>`; };
+    return `<tr class="${o6 ? "o6" : off ? "off" : ""}"${o6 ? ` data-o6="${esc(r.ticker)}"` : ""}><td>${tog}</td><td class="tk" title="${esc(names[r.ticker] || peerName(r.ticker))}">${esc(peerName(r.ticker))}${mark}</td><td><span class="sim" title="similarity ${r.sim.toFixed(2)}"><i style="width:${Math.round(Math.min(1, r.sim) * 100)}%"></i></span>${r.sim.toFixed(2)}</td><td>${long ? long : top.length ? top.map((s) => `${esc(s.line)} <span style="color:var(--mute)">${Math.round(s.own * 100)}·${Math.round(s.peer * 100)}%</span>`).join(", ") : esc(r.why.replace(/^same family \(([^)]+)\): (.*)$/, "$2 · $1 family"))}${r.seat ? `<span class="seat">seat</span>` : ""}</td><td><span class="src" title="${esc(r.line_from)}">${esc(r.line_source)}</span>${r.sources.map((s) => `<span class="src" title="${esc(SOURCE_WORDS[s] || s)}">${s === "MASSIVE" ? "mas" : s.toLowerCase()}</span>`).join("")}</td><td class="r">${esc(CAP(r.market_cap))}</td><td class="r">${esc(RATIO(r.ratio))}</td></tr>`; };
   const notin = set.named_not_in.filter((d) => !/not served|same company/.test(d.why)).slice(0, 12), unserved = set.named_not_in.filter((d) => /not served/.test(d.why)).length;
   return `<div class="tw"><table class="p"><thead><tr><th></th><th>peer</th><th>shares</th><th>the business they share · ${esc(T)}·peer</th><th>decided by · named by</th><th class="r">market value</th><th class="r">size vs ${esc(T)}</th></tr></thead><tbody>
     <tr class="me"><td></td><td class="tk">${esc(T)}</td><td></td><td>${esc(lineWords(set.own_lines))}</td><td><span class="src">${esc(set.lines_source)}</span></td><td class="r">${esc(CAP(set.own_market_cap))}</td><td class="r">1×</td></tr>
@@ -413,7 +429,7 @@ function tableHTML(S) {
   const meRow = `<tr class="me"><td></td><td class="tk l">${esc(T)}</td>${TABLE.map((c) => `<td>${esc(val(c, snap.table.company[c.key]))}</td>`).join("")}<td class="l"></td></tr>`;
   const body = peers.map((t) => { const o6 = c6.ruleOff.has(t), k6 = c6.kept.includes(t), off = !o6 && sel.peers.has(t), d = sel.list.filter((x) => x.peer === t); const reason = o6 || k6 ? (o6 ? "outlier · " : "kept · ") + sc[t].words : d.map((x) => (x.measure === "ALL" ? "" : SHORT[x.measure] + ": ") + (x.reason || "no reason yet")).join(" · ");
     const tog = o6 || k6 ? `<button type="button" class="tog${o6 ? " o6" : " on"}" data-cm="keeppeer" data-t="${esc(t)}" title="${o6 ? "keep in the medians and the price" : "let the rule leave it out again"}">${o6 ? "◇" : "◆"}</button>` : `<button type="button" class="tog${off ? "" : " on"}" data-cm="peer" data-t="${esc(t)}">${off ? "□" : "■"}</button>`;
-    const r = `<tr class="${o6 ? "o6" : off ? "off" : ""}" data-peer="${esc(t)}"${o6 ? ` data-o6="${esc(t)}"` : ""}><td>${tog}</td><td class="tk l">${esc(t)}</td>${TABLE.map((c) => cell(t, c)).join("")}<td class="l">${esc(reason)}</td></tr>`;
+    const r = `<tr class="${o6 ? "o6" : off ? "off" : ""}" data-peer="${esc(t)}"${o6 ? ` data-o6="${esc(t)}"` : ""}><td>${tog}</td><td class="tk l">${esc(peerName(t))}</td>${TABLE.map((c) => cell(t, c)).join("")}<td class="l">${esc(reason)}</td></tr>`;
     return S.reasonFor && S.reasonFor.peer === t ? r + reasonRowHTML(S, t) : r; }).join("");
   const stat = (label, k) => `<tr class="stat"><td></td><td class="l">${label}</td>${TABLE.map((c) => ROWS.includes(c.key) ? `<td>${esc(X(C.rows.find((r) => r.key === c.key).band[k]))}</td>` : "<td></td>").join("")}<td></td></tr>`;
   const fmed = (CC, c) => { if (ROWS.includes(c.key)) return CC.rows.find((r) => r.key === c.key).band.median; const vs = CC.peersOn.map((t) => snap.table.peers[t] ? snap.table.peers[t][c.key] : null).filter((v) => v != null && Number.isFinite(v)); return vs.length ? median(vs) : null; };

@@ -248,6 +248,12 @@ export const FD1_ALL = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_ON, ...CP1_
 /* CP3 (7 Oct): CP1's twelve switches, the stated same-business sets, and the price from the same-business peers on every
    line. The forward basis is not a switch here: it is how the snapshot was read (cohort.mjs `forward`). */
 export const CP3_ALL = Object.freeze({ ...CP1_LINES_ON, stated: true, ...CP1_FIELD_ON, ...CP1_OUT_ON, priceOnEveryLine: true });
+/* RL1 (7 Oct) · THE ONE LINE THAT SAYS WHAT IS LIVE ON THE HUB'S COMPS TAB. Alan, 7 Oct ~12:50 ET, approved the same-business
+   pricing ("always go"); the decision cards, the universe knockout and the allocation tool were already built on CP3_ALL.
+   The tab (comps-c5/tab.mjs) reads its switches from here and from nowhere else, so the tab, the card, the knockout and the
+   tool price a name on one configuration. The way back is this line: CP1_NONE is the tab exactly as C6b left it. Callers
+   that pass their own switches (the reports, the tools, the tests) are not touched by it. */
+export const LIVE_FX = CP3_ALL;
 /** The proposal beside it: growth from the fiscal year just reported, on the analysts' basis (field.mjs growthFromLastYear). */
 export const FD1_ALL_LAST = Object.freeze({ ...CP1_LINES_ON, ...FD1_FIELD_LAST, ...CP1_OUT_ON });
 export const isFlagged = (c6, peer, key) => !!(c6 && c6.cols[key] && c6.cols[key].cells[peer] && c6.cols[key].cells[peer].flag);
