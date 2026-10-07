@@ -3,7 +3,17 @@
 Greys only (channels within 24, none above 210; checked below, loudly), body text 11px+ (the SVG too), pictures first,
 explanations in PAGE SPECS at the bottom. Every number comes from a JSON file; three files may not exist yet and then
 print "not run yet". The BACK / CLOSE pair is placed with scripts/inject-scnav.py's own BLOCK, ensure_slot and SNIPPET,
-on this page only."""
+on this page only.
+
+The order everything in this folder is rebuilt in, from the worktree root (each step reads only local files):
+  python3 deliverables/20261006/tree-revision/tools/factor_tags.py            # the tags and the three branch lists
+  node scripts/cohort-tree-revise.mjs --write                                 # the revised tree
+  node scripts/cohort-tree-revise-sql.mjs --write --pglite <dir>              # the migration, its way back, the dry run
+  node scripts/cohort-tree-next-funds-sql.mjs --write --pglite <dir>          # the next fund batch's tree rows
+  python3 deliverables/20261006/tree-revision/tools/steering_evidence.py      # the evidence and the lanes proposal
+  python3 deliverables/20261006/tree-revision/tools/render.py                 # this page
+  node deliverables/20261006/tree-revision/tools/page-shots.mjs               # headless shots and the page checks
+<dir> holds node_modules/@electric-sql/pglite (a throw-away Postgres in memory; never the live database)."""
 import json, os, html, re, sys, importlib.util
 from datetime import date
 HERE = os.path.dirname(os.path.abspath(__file__)); D = os.path.dirname(HERE); ROOT = os.path.abspath(os.path.join(D, "..", "..", ".."))
