@@ -20,7 +20,8 @@
 //   5. A company reporting in another currency was divided as if it reported in dollars (TSM: P/E 1.1).
 //   6. THE MARKET VALUE was fundamentals.market_cap, which its writer (fmp-fundamentals) fills with the market value at
 //      the last FISCAL PERIOD END, "not a current value". Against today's (company_profile, refreshed daily: price ×
-//      shares) it is more than 10% off for 256 of 452 names and more than 25% off for 102 (WDC +31%, NVDA −18%).
+//      shares) it is more than 10% off for 243 of the 437 dollar reporters and more than 25% off for 90 (WDC +31%,
+//      NVDA −18%; deliverables/20261007/feed-fix/data/market-value-scan.json).
 //
 // THE RULES NOW (each is the comps tab's own definition — deliverables/20260927/comps-single/comps.mjs — so a number
 // means the same thing on the Hub's COMPS tab, on a decision card and in the knockout):
