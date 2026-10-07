@@ -17,7 +17,10 @@ for (const [w, h, name] of [[1680, 1050, "1680"], [390, 844, "390"]]) {
   const figs = await p.$$("figure.chart"); let i = 0;
   for (const f of figs) { i++; await f.scrollIntoViewIfNeeded(); await f.screenshot({ path: path.join(shots, `pf1-chart-${String(i).padStart(2, "0")}-${name}.png`) }); }
   const heads = await p.$$eval("h2", (els) => els.map((e) => e.textContent.trim()));
-  for (const [k, title] of [["table", "The comparison table"], ["read", "My read, and the two that fit best"], ["episodes", "The last two years, episode by episode"], ["plug", "How each of the two would plug into the allocation tool"]]) {
+  const named = [["table", "The comparison table"], ["read", "My read, and the two that fit best"], ["episodes", "The last two years, episode by episode"], ["plug", "How each of the two would plug into the allocation tool"],
+                 ["alternatives", "Alternatives you did not name"], ["decisions", "Decisions for Alan"]];
+  for (const t of heads) { const m = t.match(/^([1-6]) · /); if (m) named.push([`s${m[1]}`, t]); }      // one picture per structure section
+  for (const [k, title] of named) {
     const sec = await p.evaluateHandle((t) => { const h = [...document.querySelectorAll("h2")].find((e) => e.textContent.trim() === t); return h ? h.nextElementSibling : null; }, title);
     const el = sec.asElement(); if (el) { await el.scrollIntoViewIfNeeded(); await el.screenshot({ path: path.join(shots, `pf1-${k}-${name}.png`) }); }
   }

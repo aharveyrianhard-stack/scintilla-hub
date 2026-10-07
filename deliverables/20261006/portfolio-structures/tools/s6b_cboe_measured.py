@@ -23,7 +23,7 @@ def series(sym):
 
 D = L.load(); out = {"structure": "s6b_cboe_measured", "source": "Cboe Global Markets, public daily index histories (" + URL.format("PUT / BXM / BXY") + "), read 6 Oct 2026",
                      "variants": [], "coverage": {}}
-spy = D.tr["SPY"]
+spy = D.tr["SPY"]; EQ = {}
 def scorecard(eq):
     pb = []; bo = []
     for p in L.pullbacks(D):
@@ -56,7 +56,13 @@ for sym, label in INDEXES:
          "years": L.year_table(sim), "scorecard": scorecard(eq), "curve_full": L.curve(sim, step=5), "curve_last2": L.curve(sim, *L.LAST2), "cost_paid_pct": None, "turnover_x": None,
          "spy_same_window": {"cagr_pct": spy_same["cagr_pct"], "max_dd_pct": spy_same["max_dd_pct"], "vol_pct": spy_same["vol_pct"]}, "measured": True}
     for c in ("curve_full", "curve_last2"): v[c]["stock"] = [None] * len(v[c]["stock"])
-    out["variants"].append(v); out["coverage"][sym] = {"first_daily_session_used": first, "rows_in_file": int(len(raw)), "last": raw.index[-1], "sessions_carried_forward": stray}
+    out["variants"].append(v); out["coverage"][sym] = {"first_daily_session_used": first, "rows_in_file": int(len(raw)), "last": raw.index[-1], "sessions_carried_forward": stray}; EQ[sym] = eq
+
+# one picture needs one date grid: SPY, PUT and BXM each set to 1.00 on the first session all three have, every fifth session
+first_all = max(EQ["PUT"].index[0], EQ["BXM"].index[0]); grid = [d for d in D.dates if first_all <= d <= L.FULL[1]]
+pick = grid[::5] if grid[-1] in grid[::5] else grid[::5] + [grid[-1]]
+out["chart_same_dates"] = {"from": first_all, "dates": pick, "SPY": [round(float(spy[d] / spy[first_all]), 4) for d in pick],
+                           "PUT": [round(float(EQ["PUT"][d] / EQ["PUT"][first_all]), 4) for d in pick], "BXM": [round(float(EQ["BXM"][d] / EQ["BXM"][first_all]), 4) for d in pick]}
 
 # our model beside the measured record, over the SAME dates — how far does the model flatter?
 M = json.load(open(os.path.join(L.DATA, "s6_paid_to_wait.json"))) if os.path.exists(os.path.join(L.DATA, "s6_paid_to_wait.json")) else None

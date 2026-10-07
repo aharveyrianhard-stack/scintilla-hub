@@ -158,11 +158,11 @@ def make(S0, S, HEAD):
                       f"<li>Size: one contract is 100 shares — about ${cs['SPY_one_contract_usd']:,.0f} for one SPY put today. There are no fractional contracts.</li></ul>")}}
 
     T["alternatives_intro"] = (
-        "<p>You asked for more than your own idea handed back. Three alternatives came out of the tests themselves, and the rest come from the public record (each line below survived an independent fact-check).</p>"
+        "<p>You asked for more than your own idea handed back. Three alternatives came out of the tests themselves. Nine more come from the public record: three change your rules, three change what you hold, three use options. Each box gives the case for, the case against, and whether our own bars can test it; every line survived an independent fact-check. The first two are the ones this study's own tests bear out: the comparison at the top of the page is “invested until a sell signal” against “cash until a buy signal”, and the deadline on waiting is tested in structure 5.</p>"
         f"<ul><li><b>A floor under the ladder.</b> Keep everything you have built; let the ladder steer only the part above a fixed index floor. Tested above: {P(L2(f50)['total_return_pct'])} / {P(L2(f60)['total_return_pct'])} / {P(L2(f70)['total_return_pct'])} with a 50 / 60 / 70% floor, against {P(L2(lad)['total_return_pct'])} as it was.</li>"
         f"<li><b>A slow rule instead of a fast one.</b> The same trend rule asked on three closes in a row instead of every day left the market {o2s['count']} times instead of {o2['count']} and made {pts(F(s2slow)['cagr_pct'] - F(s2h)['cagr_pct'])} points a year more. Fewer decisions, better result.</li>"
         f"<li><b>A deadline on waiting.</b> Level-based buying with a 63-session deadline gave almost the same result as without one on index funds ({side(r5['M4']['mean_gap_pts'])} buying at once, against {side(r5['M3']['mean_gap_pts'])} it without the deadline), because the level nearly always came. On single stocks, where it may not, the deadline is the rule that stops a missed leg.</li></ul>"
-        "<h3>From the public record</h3>")
+        "<h3>Nine from the public record</h3>")
     T["alternatives_after"] = ""
 
     T["plug_in"] = (

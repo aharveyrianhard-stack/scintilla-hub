@@ -118,26 +118,56 @@ def variant_table(sj):
         rows.append(f'<tr class="{"hl" if i == 0 else ""}">' + "".join(c) + "</tr>")
     rows.append(f'<tr class="base"><td>Buy and hold SPY, for scale</td>{cell(SPY["full"]["cagr_pct"])}{cell(SPY["full"]["max_dd_pct"], signed=False)}<td>100%</td>{cell(SPY["last2"]["total_return_pct"])}{cell(SPY["last2"]["max_dd_pct"], signed=False)}<td>100%</td><td>0.0</td></tr>')
     return f'<div class="tw"><table>{h}{"".join(rows)}</table></div>'
+CAPS = r"\(?[A-Z][A-Z0-9'/\-]+\)?(?![A-Za-z])"                      # one ALL-CAPS word, optionally in brackets, not the start of a mixed-case word
+def tidy(claim):
+    """The fact-checker's working labels are not the reader's: 'CORRECTED WORDING - X: ...' is simply the corrected sentence."""
+    import re
+    claim = re.sub(r"^CORRECTED(?: WORDING)?\s*[-–—]\s*", "", claim)
+    m = re.match(r"^CORRECTED(?: WORDING)?:\s*(.)", claim)
+    if m: claim = m.group(1).upper() + claim[m.end():]
+    return re.sub(r"^MODEL CHECK, ", "THE PUBLISHED RECORD, ", claim)
+def tagged(claim):
+    """Bold a leading run of ALL-CAPS words (FOR, EVIDENCE AGAINST, TIME-STOP ON CASH ...) so the list can be scanned."""
+    import re
+    m = re.match(rf"^({CAPS}(?:[ ,]+{CAPS})*)", claim)
+    if not m or (len(m.group(1).split()) < 2 and m.group(1).strip(",") not in ("FOR", "AGAINST")): return esc(claim)
+    return f"<b>{esc(m.group(1))}</b>{esc(claim[m.end():])}"
+def src_links(f, srcs, res):
+    links = []
+    for sid in f.get("source_ids", []):
+        c, r = srcs.get(sid), res.get(sid); s = c or r
+        if not s or not str(s.get("url", "")).startswith("http") or (c is not None and not c.get("loads", True)): continue
+        who = (s.get("authors") or (r or {}).get("authors") or s.get("title") or "source"); yr = s.get("year") or (r or {}).get("year") or ""
+        links.append(f'<a href="{esc(s["url"])}" rel="noopener">{esc(str(who)[:48])}{" " + esc(str(yr)) if yr else ""}</a>')
+    return " · ".join(dict.fromkeys(links))
+def nums_fold(f): return f'<details class="nums"><summary>THE NUMBERS</summary><p>{esc(f["numbers"])}</p></details>' if f.get("numbers") else ""
 def lit_block(key, show=5):
-    """Only findings the independent fact-checker marked verified or corrected are printed, each with the source pages that loaded."""
+    """Only findings the independent fact-checker marked verified or corrected are printed, each with the source pages that
+    loaded. The plain sentence is shown; the figures behind it sit one click away, so the column reads as words, not a wall."""
     items = [x for x in LIT["literature"] if x["key"] in (key if isinstance(key, (list, tuple)) else [key])]; out = []
     for it in items:
         chk = it.get("check") or {}; srcs = {s["id"]: s for s in (chk.get("sources") or [])}; res = {s["id"]: s for s in it["research"]["sources"]}
         good = [f for f in (chk.get("findings") or []) if f["status"] in ("verified", "corrected")]
         if not good: continue
-        lis = []
-        for f in good:
-            links = []
-            for sid in f.get("source_ids", []):
-                c, r = srcs.get(sid), res.get(sid); s = c or r
-                if not s or not str(s.get("url", "")).startswith("http") or (c is not None and not c.get("loads", True)): continue
-                who = (s.get("authors") or (r or {}).get("authors") or s.get("title") or "source"); yr = s.get("year") or (r or {}).get("year") or ""
-                links.append(f'<a href="{esc(s["url"])}" rel="noopener">{esc(str(who)[:48])}{" " + esc(str(yr)) if yr else ""}</a>')
-            lis.append(f'<li>{esc(f["claim"])}{" <b>" + esc(f["numbers"]) + "</b>" if f.get("numbers") else ""} <span class="src">{" · ".join(dict.fromkeys(links))}</span></li>')
+        lis = [f'<li>{tagged(tidy(f["claim"]))} <span class="src">{src_links(f, srcs, res)}</span>{nums_fold(f)}</li>' for f in good]
         extra = [f"<li>{linkify(m)}</li>" for m in (chk.get("missing") or [])]
         head, rest = lis[:show], lis[show:] + extra
         out.append("<ul>" + "".join(head) + "</ul>" + (f'<details><summary>MORE FROM THE RECORD ({len(rest)})</summary><ul>{"".join(rest)}</ul></details>' if rest else ""))
     return "".join(out) or "<p class='src'>No finding survived the fact-check for this structure.</p>"
+def alt_block():
+    """The alternatives Alan did not name: one box each — what it is, the case for, the case against, and whether our bars can test it."""
+    import re
+    it = next((x for x in LIT["literature"] if x["key"] == "outside-the-box"), None)
+    if not it: return ""
+    chk = it.get("check") or {}; srcs = {s["id"]: s for s in (chk.get("sources") or [])}; res = {s["id"]: s for s in it["research"]["sources"]}; boxes = []
+    for f in [f for f in (chk.get("findings") or []) if f["status"] in ("verified", "corrected")]:
+        parts = re.split(r"\s(FOR|AGAINST|TESTABLE ON DAILY BARS):\s", tidy(f["claim"])); head = parts[0]; d = dict(zip(parts[1::2], parts[2::2]))
+        up = lambda t: t[:1].upper() + t[1:]
+        rows = "".join(f"<p><b>{lab}</b> {esc(up(d[k]))}</p>" for k, lab in [("FOR", "For:"), ("AGAINST", "Against:"), ("TESTABLE ON DAILY BARS", "Can our bars test it:")] if d.get(k))
+        k = head.find(": "); k = k if 0 < k <= 60 else (head.find(" (") if head.find(" (") > 0 else len(head))      # the name: up to the colon when it comes early, else up to its bracket
+        boxes.append(f'<div class="pick"><p><b>{esc(head[:k])}</b>{esc(head[k:])}</p>{rows}<p class="src">{src_links(f, srcs, res)}</p>{nums_fold(f)}</div>')
+    extra = [f"<li>{linkify(m)}</li>" for m in (chk.get("missing") or [])]
+    return (f'<div class="two alts">{"".join(boxes)}</div>' + (f'<details><summary>WHAT THE FACT-CHECK COULD NOT CONFIRM ({len(extra)})</summary><ul>{"".join(extra)}</ul></details>' if extra else ""))
 def linkify(t):
     import re
     return re.sub(r"(https?://[^\s)\]]+)", lambda m: f'<a href="{esc(m.group(1).rstrip(".,;"))}" rel="noopener">source</a>', esc(t))
@@ -171,6 +201,8 @@ page = f"""<!doctype html>
 <section>{cmp_table()}<p class="cap">{TEXT["cap_table"]}</p></section>
 <h2>My read, and the two that fit best</h2>
 <section>{TEXT["read"]}<div class="two">{"".join(f'<div class="pick"><h3>{esc(p["title"])}</h3>{p["html"]}</div>' for p in TEXT["picks"])}</div>{TEXT["read_after"]}</section>
+<h2>Alternatives you did not name</h2>
+<section>{TEXT["alternatives_intro"]}{alt_block()}{TEXT["alternatives_after"]}</section>
 <h2>The last two years, episode by episode</h2>
 <section><h3>The three pullbacks</h3>{pullback_table()}<p class="cap">{TEXT["cap_pullbacks"]}</p><h3>The ten breakouts</h3>{breakout_table()}<p class="cap">{TEXT["cap_breakouts"]}</p></section>
 {structure_section("s1_core_satellite", X.s1(S))}
@@ -179,8 +211,6 @@ page = f"""<!doctype html>
 {structure_section("s4_vol_sizing", X.s4(S))}
 {structure_section("s5_level_scaling", X.s5(S))}
 {structure_section("s6_paid_to_wait", X.s6(S, S0))}
-<h2>Alternatives you did not name</h2>
-<section>{TEXT["alternatives_intro"]}{lit_block("outside-the-box")}{TEXT["alternatives_after"]}</section>
 <h2>How each of the two would plug into the allocation tool</h2>
 <section>{TEXT["plug_in"]}</section>
 <h2>Decisions for Alan</h2>

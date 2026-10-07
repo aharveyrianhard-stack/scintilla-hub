@@ -23,9 +23,9 @@ def s1(S):
         tr(["Typical holding time (the middle one)", f'{rt["full"]["median_hold_sessions"]:.0f} sessions', f'{rt["last2"]["median_hold_sessions"]:.0f} sessions']),
         tr(["Share of those positions that beat SPY over the same days", f'{rt["full"]["beat_spy_pct"]:.0f}%', f'{rt["last2"]["beat_spy_pct"]:.0f}%']),
         tr(["Share of days with all three slots filled / none filled", f'{sl["full"]["3"]:.0f}% / {sl["full"]["0"]:.0f}%', f'{sl["last2"]["3"]:.0f}% / {sl["last2"]["0"]:.0f}%']),
-        tr(["<b>What sending a sold position back to the index, not to cash, was worth</b>", f'<b>{pts(g["full_cagr_pts"])} points a year</b>', f'<b>{pts(g["last2_total_return_pts"])} points in total</b>'], "hl")])
+        tr(["<b>What sending a sold position back to the index, not to cash, was worth</b>", f'<b>{pts(g["full_cagr_pts"])} points a year</b>', f'<b>{pts(g["last2_total_return_pts"])} points in total</b>'], "hl")], 560)
     b = tbl(["same rule, other settings (sector stand-in)", "return a year 2005–2026", "worst fall", "last 2 years"], [
-        tr([f'{x["budget_pct"]}% satellite · sold under its {esc(x["exit_average_plain"]).split(" (")[0]}', cell(x["full_cagr_pct"]), cell(x["full_max_dd_pct"], signed=False), cell(x["last2_total_return_pct"])], "hl" if x.get("is_headline") else "") for x in e["sensitivity"]])
+        tr([f'{x["budget_pct"]}% satellite · sold under its {esc(x["exit_average_plain"]).split(" (")[0]}', cell(x["full_cagr_pct"]), cell(x["full_max_dd_pct"], signed=False), cell(x["last2_total_return_pct"])], "hl" if x.get("is_headline") else "") for x in e["sensitivity"]], 560)
     behind = sum(1 for x in e["sensitivity"] if x["full_cagr_minus_spy_pts"] < 0)
     a += '<p class="cap">The last-two-years column counts positions opened and closed inside those two years.</p>'
     b += f'<p class="cap">In the 21-day rows only the selling line changes; a new pick is still judged on its 50-day average, as the rule is written. {behind} of the {len(e["sensitivity"])} settings finished behind buy-and-hold SPY over 2005–2026.</p>'
@@ -104,19 +104,10 @@ def s6(S, S0):
     M = J("s6b_cboe_measured.json"); sj = S["s6_paid_to_wait"]; e = sj["extras"]; out = []
     if M:
         spy = next(v for v in S0["variants"] if v["label"] == "Buy and hold SPY"); put = var(M, "put_measured"); bxm = var(M, "bxm_measured")
-        a0 = put["full_from"]; sc = spy["curve_full"]; i0 = next(k for k, d in enumerate(sc["dates"]) if d >= a0); base = sc["equity"][i0]
-        dates = sc["dates"][i0:]
-        def onto(v):
-            m = dict(zip(v["curve_full"]["dates"], v["curve_full"]["equity"])); first = None; res = []
-            for d in dates:
-                x = m.get(d)
-                if x is not None and first is None: first = x
-                res.append(None if x is None or first is None else round(x / first, 4))
-            return res
-        bx = dict(zip(bxm["curve_full"]["dates"], bxm["curve_full"]["equity"])); b0 = next((bx[d] for d in dates if d in bx), None)
-        out.append(V.line_chart([{"name": "Buy and hold SPY", "color": V.BLUE, "dates": dates, "values": [round(x / base, 4) for x in sc["equity"][i0:]]},
-                                 {"name": "Selling puts (Cboe PUT)", "color": V.ORANGE, "dates": dates, "values": onto(put)},
-                                 {"name": "Covered calls (Cboe BXM)", "color": V.AQUA, "dates": dates, "values": [None if d not in bx else round(bx[d] / b0, 4) for d in dates]}],
+        ch = M["chart_same_dates"]; a0 = ch["from"]             # all three on one date grid, each 1.00 on the first session all three have
+        out.append(V.line_chart([{"name": "Buy and hold SPY", "color": V.BLUE, "dates": ch["dates"], "values": ch["SPY"]},
+                                 {"name": "Selling puts (Cboe PUT)", "color": V.ORANGE, "dates": ch["dates"], "values": ch["PUT"]},
+                                 {"name": "Covered calls (Cboe BXM)", "color": V.AQUA, "dates": ch["dates"], "values": ch["BXM"]}],
                                 f"Measured, not modelled: Cboe's own put-selling and covered-call indexes against SPY, 1.00 put in on {dmy(a0)}", h=360, log=True,
                                 note="These are the real strategies, run by rule on the S&P 500 every month and published daily by Cboe. Each step up the scale is a doubling."))
         rows = []

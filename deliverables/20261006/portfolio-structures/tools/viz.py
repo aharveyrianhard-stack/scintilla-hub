@@ -22,6 +22,9 @@ def cell(x, signed=True, dp=1, colour=True): return f"<td{col(x) if colour else 
 def line_chart(series, title, w=1180, h=420, log=False, shades=(), unit="×", note="", ymin=None, ymax=None, fmt=None, step_series=None):
     """series: [{name, color, dates, values, dash?}] sharing one date axis (the first series' dates). Direct labels at the right."""
     _cid[0] += 1; cid = f"lc{_cid[0]}"; dates = series[0]["dates"]; n = len(dates)
+    for s in series:                                                    # every line must sit on the one date axis, and actually be there
+        if len(s["values"]) != n: raise ValueError(f'{s["name"]}: {len(s["values"])} points on a {n}-date axis')
+        if sum(x is not None for x in s["values"]) < 0.5 * n: raise ValueError(f'{s["name"]}: most of its points are missing on this date axis')
     L, R, T, B = 54, 300, 16, 30; pw, ph = w - L - R, h - T - B
     vals = [v for s in series for v in s["values"] if v is not None]
     lo = min(vals) if ymin is None else ymin; hi = max(vals) if ymax is None else ymax
@@ -70,6 +73,8 @@ def line_chart(series, title, w=1180, h=420, log=False, shades=(), unit="×", no
     out.append(f'<line class="xh" x1="0" x2="0" y1="{T}" y2="{T + ph}" stroke="{INK3}" stroke-width="1" visibility="hidden"/><rect class="hit" x="{L}" y="{T}" width="{pw}" height="{ph}" fill="transparent"/></svg>')
     data = {"L": L, "pw": pw, "w": w, "dates": dates, "s": [{"n": s["name"], "c": s["color"], "v": s["values"]} for s in series], "unit": unit}
     out.append(f'<div class="tip" hidden></div><script type="application/json" data-for="{cid}">{json.dumps(data, separators=(",", ":"))}</script></div>')
+    lasts = sorted(((next(x for x in reversed(s["values"]) if x is not None), s) for s in series), key=lambda t: -t[0])
+    out.append('<div class="lg">' + "".join(f'<span><i style="background:{s["color"]}"></i>{esc(s["name"])} <b>{esc(fmt(x))}</b></span>' for x, s in lasts) + "</div>")   # shown on narrow screens, where the labels inside the picture are too small to read
     if note: out.append(f'<p class="cap">{note}</p>')
     out.append("</figure>"); return "".join(out)
 
@@ -96,6 +101,7 @@ def hbar_chart(rows, title, w=1180, unit="%", vmax=100, note="", label_w=400, ba
         out.append(f'<path d="M{L},{y} h{bw - 4:.1f} a4,4 0 0 1 4,4 v{bar_h - 8} a4,4 0 0 1 -4,4 h-{bw - 4:.1f} z" fill="{r["color"]}"><title>{esc(r["label"])}: {r["value"]:.0f}{unit}{" · " + esc(r.get("right", "")) if r.get("right") else ""}</title></path>')
         out.append(f'<text x="{L + bw + 8:.1f}" y="{y + bar_h / 2 + 4:.1f}" class="lb"><tspan class="lbv">{r["value"]:.0f}{unit}</tspan>{"  ·  " + esc(r["right"]) if r.get("right") else ""}</text>')
     out.append("</svg></div>")
+    out.append('<div class="lg col">' + "".join(f'<span><i style="background:{r["color"]}"></i>{esc(r["label"])} <b>{r["value"]:.0f}{unit}</b>{" · " + esc(r["right"]) if r.get("right") else ""}</span>' for r in rows) + "</div>")
     if note: out.append(f'<p class="cap">{note}</p>')
     out.append("</figure>"); return "".join(out)
 
@@ -142,13 +148,16 @@ CSS = """
   .tip .td{ color:var(--ink3); margin-bottom:4px; } .tip i{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; } .tip b{ float:right; margin-left:14px; }
   .cap{ color:var(--ink3); font-size:12px; margin-top:6px; }
   .two{ display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; } .two > div{ min-width:0; }
-  .pick{ border:1px solid var(--line); padding:12px 14px; } .pick h3{ margin-top:0; }
+  .pick{ border:1px solid var(--line); padding:12px 14px; } .pick h3{ margin-top:0; } .alts{ gap:6px; } .alts .pick p{ margin:5px 0; }
   .tag{ display:inline-block; border:1px solid var(--line); padding:1px 7px; font-size:11px; letter-spacing:.12em; color:var(--ink3); margin-right:6px; }
   ol,ul{ margin:6px 0 0 20px; padding:0; max-width:1180px; } li{ margin:5px 0; }
   details{ margin-top:14px; color:var(--ink3); font-size:13px; } summary{ cursor:pointer; letter-spacing:.2em; font-size:12px; color:var(--ink2); }
   details p, details li{ color:var(--ink2); } details.sc-pagespecs{ margin-top:26px; }
+  details.nums{ margin-top:3px; } details.nums summary{ font-size:11px; letter-spacing:.16em; color:var(--ink3); } details.nums p{ color:var(--ink3); font-size:12px; margin:4px 0 8px; }
   .src{ font-size:12px; color:var(--ink3); } .src a{ color:var(--ink2); }
   .kpi{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin:10px 0 4px; } .kpi > div{ border:1px solid var(--line); padding:10px 12px; }
   .kpi .v{ color:var(--ink); font-size:24px; line-height:1.2; } .kpi .k{ color:var(--ink3); font-size:11px; letter-spacing:.12em; text-transform:uppercase; } .kpi .n{ color:var(--ink2); font-size:12px; }
-  @media (max-width:900px){ .two{ grid-template-columns:1fr; } .kpi{ grid-template-columns:1fr 1fr; } body{ font-size:13px; } main{ padding:16px 10px 70px; } }
+  .lg{ display:none; }
+  @media (max-width:900px){ .two{ grid-template-columns:1fr; } .kpi{ grid-template-columns:1fr 1fr; } body{ font-size:13px; } main{ padding:16px 10px 70px; }
+    .lg{ display:flex; flex-wrap:wrap; gap:3px 14px; font-size:12px; color:var(--ink2); margin-top:6px; } .lg.col{ flex-direction:column; } .lg i{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; } }
 """
