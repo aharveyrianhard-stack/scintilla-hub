@@ -210,7 +210,7 @@ test('hub_pick records Alan\'s words and stretches them no further', () => {
   const regimeOnly = ['REGULATED_UTILITIES', 'HOUSING', 'RESTAURANTS', 'AEROSPACE_DEFENCE']
   for (const id of regimeOnly) {
     assert.deepEqual([N[id].hub_pick, N[id].hub_pick_source], ['off', 'named'], id)
-    assert.match(N[id].hub_pick_note, /^Alan, 6 Oct ~19:20 ET: .*in the tree for the regime read, off the Hub$/, id)
+    assert.match(N[id].hub_pick_note, /^Alan, 6 Oct ~19:20 ET, as the coordinator noted it: .*in the tree for the regime read, off the Hub$/, id)   // a note of what he said, marked as one
     named[id] = 'off'
   }
   assert.deepEqual(rev.nodes.filter(n => n.hub_pick_source === 'named').map(n => n.cohort).sort(), Object.keys(named).sort())

@@ -88,11 +88,12 @@ const PICKS_NAMED = {
   MATERIALS_METALS: ['off', 'Alan, 6 Oct: off the Hub'],
   INDUSTRIAL: ['off', 'Alan, 6 Oct: off the Hub'],
   REAL_ESTATE: ['off', 'Alan, 6 Oct: off the Hub'],
-  // the coordinator's note of Alan, 6 Oct ~19:20 ET: "in the tree for the regime, off the Hub"
-  REGULATED_UTILITIES: ['off', 'Alan, 6 Oct ~19:20 ET: regulated utilities stay out of AI POWERTRAIN — in the tree for the regime read, off the Hub'],
-  HOUSING: ['off', 'Alan, 6 Oct ~19:20 ET: housing — in the tree for the regime read, off the Hub'],
-  RESTAURANTS: ['off', 'Alan, 6 Oct ~19:20 ET: restaurants — in the tree for the regime read, off the Hub'],
-  AEROSPACE_DEFENCE: ['off', 'Alan, 6 Oct ~19:20 ET: aerospace — in the tree for the regime read, off the Hub']
+  // These four are the coordinator's note of what Alan said at ~19:20 ET ("in the tree for the regime, off the Hub"), not his
+  // words quoted: the record says so, so nobody later reads the sentence as a quotation.
+  REGULATED_UTILITIES: ['off', 'Alan, 6 Oct ~19:20 ET, as the coordinator noted it: regulated utilities stay out of AI POWERTRAIN — in the tree for the regime read, off the Hub'],
+  HOUSING: ['off', 'Alan, 6 Oct ~19:20 ET, as the coordinator noted it: housing — in the tree for the regime read, off the Hub'],
+  RESTAURANTS: ['off', 'Alan, 6 Oct ~19:20 ET, as the coordinator noted it: restaurants — in the tree for the regime read, off the Hub'],
+  AEROSPACE_DEFENCE: ['off', 'Alan, 6 Oct ~19:20 ET, as the coordinator noted it: aerospace — in the tree for the regime read, off the Hub']
 }
 // a pick said about a heading is not stretched over these: Alan spoke before they moved, or said "partly"
 const PICK_NOT_INHERITED = {

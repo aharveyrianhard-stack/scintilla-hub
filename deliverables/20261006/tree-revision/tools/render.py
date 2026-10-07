@@ -299,8 +299,9 @@ for k in T["candidates"]:
 
 # ── 6 · picks ───────────────────────────────────────────────────────────────────────────────────────────────────────
 def src(n):
-    note = re.sub(r"^Alan, 6 Oct( ~[\d:]+ ET)?: ", "", n.get("hub_pick_note") or "").replace("he has not said", "not yet said"); s = n["hub_pick_source"]
-    if s == "named": return "named by you · " + note
+    raw = n.get("hub_pick_note") or ""; noted = ", as the coordinator noted it" in raw
+    note = re.sub(r"^Alan, 6 Oct( ~[\d:]+ ET)?(, as the coordinator noted it)?: ", "", raw).replace("he has not said", "not yet said"); s = n["hub_pick_source"]
+    if s == "named": return ("named by you, in the coordinator's note of what you said · " if noted else "named by you · ") + note
     if s == "inherited": return "follows its heading · " + note.replace("follows ", "")
     if s == "parents_disagree": return note
     return "not said" + ("" if note == "not named on 6 Oct" else " · " + note)
