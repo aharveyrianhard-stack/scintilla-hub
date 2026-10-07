@@ -41,8 +41,10 @@ def year_meter(p, w=70, h=12):
 def comps_cell(n):
     if n["comps_no_peer_set"]: return '<span class="dim">no peer set</span>'
     if n["comps"] is None: return '<span class="dim">not priced</span>'
-    mark = "" if n["comps_strength"] == 1 else ('<span class="tag">' + ("not used" if n["comps_strength"] == 0 else "thin" if n["comps_thin"] else "fragile") + "</span>")
-    return sgn(n["comps"]) + mark
+    w = n["comps_words"]; why = "no earnings" if w.startswith("no earnings") else "thin + fragile" if w.startswith("thin (") else "thin" if n["comps_thin"] else "fragile"
+    mark = "" if n["comps_strength"] == 1 else f'<span class="tag" title="{E(w)}">{why}</span>'
+    num = sgn(n["comps"]) if n["comps_strength"] > 0 else f'<span class="faint" title="not used in the score">{sgn(n["comps"], plain=True)}</span>'
+    return num + mark
 def growth_cell(r, e, note=None):
     if r is None and e is None: return '<span class="dim">not ranked</span>'
     return f'{sgn(r)} <span class="faint">/</span> {sgn(e) if e is not None else "<span class=faint>—</span>"}'
@@ -87,7 +89,30 @@ def list_panel(k):
     plain = lambda t: f'<span class="tk" title="{E((N[t]["name"] if t in N and N[t].get("name") else t))}">{E(t)}</span>'
     rows = "".join(f'<div class="seg"><span class="seglab"><i style="background:{sh}"></i>{c} {E(w.upper())}</span>' + " ".join(plain(t) for t in ts) + "</div>" for c, w, sh, ts in segs if c)
     return f'<div class="panel"><div class="ph">{k} · {n} NAMES · {len(r["champions"])} CHAMPIONS · {len(r["finalists"])} FINALISTS</div>{bar}<div style="height:10px"></div>{rows}</div>'
-lists_html = '<div class="grid3">' + "".join(list_panel(k) for k in ("RADAR", "FAVORITES", "LIKED")) + "</div>"
+def count_bar(ts, most):
+    n = len(ts); w = 0 if not most else round(120 * n / most)
+    return (f'<svg class="bar" width="120" height="12" viewBox="0 0 120 12" role="img" aria-label="{n} names"><title>{E(" ".join(ts)) or "none"}</title><rect x="0" y="5.5" width="120" height="1" fill="{LINE}"/>'
+            + (f'<rect x="0" y="2" width="{max(w, 2)}" height="8" rx="2" fill="{DIM}"/>' if n else "") + f"</svg>{n}")
+LS = K["lists_by_sector"]; most = {k: max(len(r[k]) for r in LS) for k in ("RADAR", "FAVORITES", "LIKED")}
+ls_rows = "".join("<tr>" + cell("ROUND 1", f'<span class="rk">#{r["rank"]}</span>') + cell("SECTOR", f'<b>{E(r["label"])}</b><br><span class="small">{E(r["read"] or "")} · {r["names"]} names</span>')
+                  + cell("HEAT NOW", f'{heat_bar(r["heat"])}{gg(r["heat"])}', "n") + cell("ITS OWN YEAR", f'{year_meter(r["pctl"])}<span class="small">{ordinal(r["pctl"]) if r["pctl"] is not None else "—"}</span>', "n")
+                  + "".join(cell(k, count_bar(r[k], most[k]), "n") for k in ("RADAR", "FAVORITES", "LIKED")) + "</tr>" for r in LS)
+tot = {k: sum(len(r[k]) for r in LS) for k in ("RADAR", "FAVORITES", "LIKED")}; last4 = {k: sum(len(r[k]) for r in LS[-4:]) for k in tot}; first4 = {k: sum(len(r[k]) for r in LS[:4]) for k in tot}
+sector_html = (f'<div class="panel"><div class="ph">WHERE YOUR LISTS SIT IN ROUND 1 · COMPANIES BY SECTOR, IN ROUND-1 ORDER</div>'
+               + tbl(th("#", "SECTOR", ">HEAT NOW  −1…+1", ">ITS OWN YEAR", ">RADAR", ">FAVORITES", ">LIKED", w=[44, None, 172, 118, 190, 190, 190]), ls_rows)
+               + '<div class="kpis" style="margin:14px 0 0">' + "".join(f'<div class="kpi"><b>{last4[k]} of {tot[k]}</b><span>{k} · IN THE FOUR SECTORS RANKED LAST</span></div><div class="kpi"><b>{first4[k]} of {tot[k]}</b><span>{k} · IN THE FOUR RANKED FIRST</span></div>' for k in ("RADAR", "FAVORITES", "LIKED")) + "</div></div>")
+def radar_rows():
+    out = ""
+    for t in K["lists"]["RADAR"]:
+        n = N.get(t)
+        if not n: out += "<tr>" + cell("NAME", f'<span class="tk">{E(t)}</span>') + cell("VERDICT", '<span class="dim">not scored: not a company</span>') + "".join(cell(l, "—", c) for l, c in (("BRANCH", ""), ("WHY", "w"), ("COMPS", "n"), ("GROWTH NEXT YR", "n"), ("GEIGER", "n"), ("WHERE IT WOULD BE BOUGHT", "w"))) + "</tr>"; continue
+        h = n.get("home") or (n.get("verdict_branches") or [None])[0]; br = n["branches"].get(h) if h else None
+        out += ("<tr>" + cell("NAME", f'<span class="tk">{E(t)}</span>{wait_tag(n)}<br><span class="small el">{E(n["name"] or "")}</span>') + cell("VERDICT", E(n["verdict"]))
+                + cell("BRANCH", (f'{E(br["label"])}<br><span class="small">{ordinal(br["rank"]) if br["rank"] else "not ranked"} of {br["of"]} · branch #{B[h]["rank"]} of {len(B)}</span>' if br else "—")) + cell("WHY", E(n["why"] or "—"), "w")
+                + cell("COMPS", comps_cell(n), "n") + cell("GROWTH NEXT YR", growth_cell(n["g1_rev"], n["g1_eps"]), "n") + cell("GEIGER", geiger_cell(n), "n") + cell("WHERE IT WOULD BE BOUGHT", E(n["buy"]["words"]), "w") + "</tr>")
+    return out
+radar_html = f'<div class="panel"><div class="ph">RADAR, NAME BY NAME · {len(K["lists"]["RADAR"])}</div>{tbl(th("NAME", "VERDICT", "BRANCH", "WHY IT STANDS THERE", ">COMPS", ">GROWTH NEXT YR REV / EPS", ">GEIGER · OWN YR", "WHERE IT WOULD BE BOUGHT", w=[150, 170, 250, None, 124, 132, 112, 330]), radar_rows())}</div>'
+lists_html = '<div class="grid3">' + "".join(list_panel(k) for k in ("RADAR", "FAVORITES", "LIKED")) + "</div>" + sector_html + radar_html
 # ---------------------------------------------------------------- 3 · round 1
 def r1_rows(rows, what="BRANCH"):
     out = ""
@@ -111,7 +136,11 @@ def fin_cell(b, i):
 ch_rows = ""
 for c in sorted(B, key=lambda c: B[c]["rank"]):
     b = B[c]; t = b["champion"]
-    if not t: continue
+    if not t:
+        ch_rows += ("<tr>" + cell("RANK", f'<span class="rk">#{b["rank"]}</span>') + cell("BRANCH", f'<b>{E(b["label"])}</b><br><span class="small">heat {gg(b.get("heat"))} · {ordinal(b["pctl"]) if b.get("pctl") is not None else "—"} of its year</span>')
+                    + cell("CHAMPION", '<span class="dim">none</span>') + cell("2ND · 3RD", '<span class="faint">—</span>') + cell("WHY IT WON", '<span class="dim">no name in this branch can be judged on fundamentals: ' + E(", ".join(f"{x} ({N[x]['verdict'].split(': ', 1)[-1]})" for x in b["run"])) + "</span>", "w")
+                    + cell("COMPS", "—", "n") + cell("GROWTH NEXT YR", "—", "n") + cell("GEIGER", "—", "n") + cell("WHERE IT WOULD BE BOUGHT", "—", "w") + "</tr>")
+        continue
     n = N[t]; fr = b["finalist_rows"][0]
     ch_rows += ("<tr>" + cell("RANK", f'<span class="rk">#{b["rank"]}</span>') + cell("BRANCH", f'<b>{E(b["label"])}</b><br><span class="small">heat {gg(b.get("heat"))} · {ordinal(b["pctl"]) if b.get("pctl") is not None else "—"} of its year</span>')
                 + cell("CHAMPION", tk(t, wait_tag(n)) + f'<br><span class="small el">{E(n["name"] or "")}</span>') + cell("2ND · 3RD", f'<div>{fin_cell(b, 1)}</div><div>{fin_cell(b, 2)}</div>')
@@ -120,7 +149,7 @@ for c in sorted(B, key=lambda c: B[c]["rank"]):
 champ_html = f'<div class="panel"><div class="ph">ONE ROW A BRANCH · IN ROUND-1 ORDER · {F["champions"]} DIFFERENT NAMES · <span class="tk mine">CYAN</span> = ON ONE OF YOUR LISTS</div>{tbl(th("#", "BRANCH", "CHAMPION", "2ND · 3RD", "WHY IT WON", ">COMPS", ">GROWTH NEXT YR REV / EPS", ">GEIGER · OWN YR", "WHERE IT WOULD BE BOUGHT", w=[44, 232, 168, 112, None, 124, 132, 112, 330]), ch_rows)}</div>'
 # ---------------------------------------------------------------- 5a · blind spots
 def name_branch(n, c):
-    br = n["branches"][c]; return f'{E(br["label"])}<br><span class="small">{ordinal(br["rank"])} of {br["of"]} · the branch ranks #{B[c]["rank"]} of {len(B)}</span>'
+    br = n["branches"][c]; return f'{E(br["label"])}<br><span class="small">{ordinal(br["rank"])} of {br["of"]} · branch #{B[c]["rank"]} of {len(B)}</span>'
 def blind_rows(ts):
     out = ""
     for t in ts:
@@ -157,7 +186,8 @@ named = K["named_green"]; g_lists = [t for t in K["green"] if N[t]["lists"] and 
 wl = K["wait_on_lists"]
 tunnel_html = (f'<div class="panel"><div class="ph">TUNNEL VISION · ON YOUR LISTS, FAILS ROUND 2 (FUNDAMENTALS) · {len(t2)}</div>{tbl(th("NAME", "ON", "BRANCH", "WHY IT FAILS", ">COMPS", ">GROWTH NEXT YR REV / EPS", ">GEIGER · OWN YR", w=[76, 214, 270, None, 124, 132, 112]), t2_rows)}'
                f'<h3>ON YOUR LISTS · PASSES FUNDAMENTALS, ROUND 3 SAYS WAIT · {len(wl)} · THEIR LEVELS ARE IN THE GREEN TABLE BELOW</h3><div>' + " ".join(f'<span class="chip" title="{E(N[t]["buy"]["words"])}">{E(t)} <span class="small">{ordinal(N[t]["pctl"])}</span></span>' for t in wl) + "</div>"
-               f'<h3>ON YOUR LISTS · NOT SCORED · {len(t0)}</h3><div>' + " ".join(f'<span class="chip" title="{E(x["why"])}">{E(x["t"])}</span>' for x in t0) + "</div></div>")
+               f'<h3>ON YOUR LISTS · NOT JUDGED: SALES UNDER 1% OF MARKET VALUE, OR FEWER THAN THREE READINGS · {len([x for x in t0 if x["t"] in N])}</h3><div>' + " ".join(f'<span class="chip" title="{E(x["why"])}">{E(x["t"])}</span>' for x in t0 if x["t"] in N) + "</div>"
+               f'<h3>ON YOUR LISTS · NOT COMPANIES (FUNDS, COINS, METALS) · {len([x for x in t0 if x["t"] not in N])}</h3><div>' + " ".join(f'<span class="chip" title="{E(x["why"])}">{E(x["t"])}</span>' for x in t0 if x["t"] not in N) + "</div></div>")
 green_html = (f'<div class="panel"><div class="ph">WENT GREEN · GEIGER ABOVE THE 70TH PERCENTILE OF ITS OWN YEAR · {len(K["green"])} COMPANIES</div>'
               + tbl(GH, f'<tr class="sec"><td colspan="9">THE SEVEN YOU NAMED</td></tr>{green_rows(named)}<tr class="sec"><td colspan="9">THE OTHERS ON YOUR LISTS · {len(g_lists)}</td></tr>{green_rows(g_lists)}')
               + f'<details class="fold"><summary>THE REST, ON NONE OF YOUR LISTS · {len(g_rest)}</summary>{tbl(GH, green_rows(g_rest))}</details></div>')
@@ -166,7 +196,7 @@ def all_rows():
     out = ""
     for t in sorted(N):
         n = N[t]; h = n.get("home") or (n.get("verdict_branches") or [None])[0]; br = n["branches"].get(h) if h else None
-        marks = ("" if not n["one_off"] else '<span class="tag" title="' + E("; ".join(n["one_off"])) + '">one-off cleaned</span>') + ('<span class="tag" title="next to no sales yet: growth from nothing is not ranked">venture</span>' if n.get("venture") else "")
+        marks = ("" if not n["one_off"] else '<span class="tag" title="' + E("; ".join(n["one_off"])) + '">one-off cleaned</span>') + ('<span class="tag" title="its sales are under 1% of its market value: the price rests on what it may become">venture</span>' if n.get("venture") else "")
         out += (f'<tr data-k="{E((t + " " + (n["name"] or "") + " " + (br["label"] if br else "") + " " + n["verdict"]).lower())}">' + cell("NAME", tk(t) + marks + f'<br><span class="small el">{E(n["name"] or "")}</span>') + cell("BRANCH", (f'{E(br["label"])} <span class="small">{("#" + str(br["rank"]) + " of " + str(br["of"])) if br["rank"] else "not ranked"}</span>' if br else "—"))
                 + cell("VERDICT", E(n["verdict"])) + cell("COMPS", comps_cell(n), "n") + cell("GROWTH NEXT YR", growth_cell(n["g1_rev"], n["g1_eps"]), "n") + cell("YEAR AFTER", growth_cell(n["g2_rev"], n["g2_eps"]), "n")
                 + cell("REVISIONS", sgn(n["revisions"]), "n") + cell("CASH YIELD", sgn(n["cash"], 1), "n") + cell("GEIGER", geiger_cell(n), "n") + cell("WHERE IT WOULD BE BOUGHT", E(n["buy"]["words"]), "w") + "</tr>")
@@ -205,7 +235,7 @@ specs = f"""
 <li><b>Comps.</b> The comps system exactly as the comps fix left it, with every one of its switches on: memory and storage priced on each other, the data-centre landlords on each other, the growth credit, the tighter outlier rule, no sales multiples when margins are more than twice apart, and the test of the company itself. None of that code was changed. {F["priced"]} of the {total0} got a number; the fix moved {F["moved_by_the_fix_5pts"]} of them by more than five points.</li>
 <li><b>How far a comps number is leaned on.</b> Sound ({F["sound"]}): four or more peers with figures behind the centre, and no single peer moves it more than 10%. Half strength ({F["half_strength"]}): thin (fewer than four peers) or fragile (one peer moves the centre more than 10%), one or the other. Not used ({F["not_used"]}): both at once, or the comps system itself withholds a number, or the company has no earnings, trailing or expected. A name whose comps number is not used is still ranked, on growth, revisions and cash.</li>
 <li><b>Round 1.</b> No branch is dropped. Each one is ranked.</li>
-<li><b>Round 2.</b> A name passes when it stands in the upper half of its own branch. A name in two branches is scored in each; it passes if it passes in one of its business branches.</li>
+<li><b>Round 2.</b> A name passes when it stands in the upper half of its own branch. A name in two branches is scored in each; it passes if it passes in one of its business branches. A name is <b>not judged</b> ({F["round2_not_judged"]}) when fewer than three of the five readings are on file, or when its sales are under 1% of its market value: it is listed and never ranked.</li>
 <li><b>Round 3.</b> Timing never removes a company. It says now or wait: a name above the 70th percentile of its own year waits.</li>
 <li><b>Finalists and champions.</b> The top three of a branch among those that passed round 2, and the first of them.</li>
 </ul>
@@ -226,7 +256,7 @@ specs = f"""
 <p><b>Last year's earnings</b> are taken on the analysts' footing: the four quarters as the street scored them, or, where a quarter is missing, the analysts' own row for that year ({sum(1 for n in N.values() if n.get("base_basis") == "row")} names).</p>
 <p><b>One-off gains.</b> The rule is the estimates-versus-guidance study's: the consensus follows GAAP when the street's reported number is within 10% of the filed one; a quarter carries a one-off when other income is more than a quarter of its profit; and when the one-offs reach 15% of the year's earnings, the year is cleaned. That study read the pre-tax lines from the filings of six names. The Hub's tables hold operating income and net income only, so for the whole universe a quarter is marked when it shows more net income than operations could have left after an ordinary tax, and that is unusual for the company itself (measured against its own other quarters). On Alphabet this reads 8.18 a share for 2026 against the study's 8.92, and on Amazon 4.20 against 4.91: a little under, so the clean growth shown here is a little lower than that study's.</p>
 <p>The base was cleaned for {len(one_off)} names: {E(", ".join(t for t, _ in one_off))}.</p>
-<p><b>A base that cannot be grown from.</b> Earnings growth is not ranked when the base holds a loss, or a one-off year (one more than 40% under the years either side of it: {E(", ".join(dips))}). Those names are ranked on revenue growth for that year. A company with next to no sales yet (under 1% of its market value) is not ranked on growth at all, because growth from nothing is not a rate: {E(", ".join(vent))}.</p>
+<p><b>A base that cannot be grown from.</b> Earnings growth is not ranked when the base holds a loss, or a one-off year (one more than 40% under the years either side of it: {E(", ".join(dips))}). Those names are ranked on revenue growth for that year. A company whose sales are under 1% of its market value is priced on what it may become: growth from so small a base is not a rate, there is no comps number to lean on, and this process does not judge it. There are {len(vent)}: {E(", ".join(vent))}.</p>
 <h4>ROUND 3 — TIMING AND LEVELS</h4>
 <ul>
 <li><b>Geiger and its own year.</b> The live reading, and where it sits among the name's own last {RU["year"]} evenings. The history is the Geiger-history study's replay of the Hub's seven rungs, run here for every company. On the 6 October evening the replay equals the live Geiger to four decimals on {ck["replay"]["equal_4dp"]} of {ck["replay"]["names"]} names; the largest gap is {ck["replay"]["max"]:.3f}.</li>
@@ -252,7 +282,8 @@ specs = f"""
 <li><b>The trend word flips on small numbers.</b> A branch whose trend half reads −0.01 is a "bounce in a downtrend" and one at +0.01 an "uptrend": the trend and momentum numbers are printed beside the word.</li>
 <li><b>Revisions are one 56-day step,</b> and for names that reported in between they carry the report. {sum(1 for n in N.values() if n["revisions"] is None)} names have no August copy on file, only this week's, so they carry no revisions reading.</li>
 <li><b>The comps number is not cleaned.</b> For the {len(one_off)} names whose earnings base carries a one-off, the comps number still rests on the earnings as reported. Alphabet's and Amazon's trailing multiples look cheaper than they are.</li>
-<li><b>Venture names.</b> The {len(vent)} companies with next to no sales yet cannot be ranked by this process: no comps number, no growth rate. Where one stands in a branch, it stands on revisions and cash alone.</li>
+<li><b>Venture names are not judged, which is not a verdict.</b> The {len(vent)} companies with sales under 1% of their market value are left out of round 2. That says the process has nothing to measure, not that they are wrong to hold. Quantum has no champion for that reason.</li>
+<li><b>A company with no earnings can still win a branch.</b> Its comps number is not used, so it stands on growth, revisions and cash against companies that are also judged on their price. Lucid leads autos that way. The comps column says "no earnings" where this applies.</li>
 <li><b>The one-session cool-down.</b> Replayed on the last 20 sessions of each green name, the one-session read missed the real next-day Geiger by {ck["cool"]["median_gap"]} at the median and {ck["cool"]["p90_gap"]} nine times in ten ({ck["cool"]["sessions"]:,} sessions).</li>
 <li><b>The Lab's installed line packs</b> are marked not yet approved by you in the Lab's own registry.</li>
 <li><b>Foreign reporters.</b> For the sixteen that report in another currency the one-off rule is not applied, and their filed earnings are not always on the analysts' footing.</li>

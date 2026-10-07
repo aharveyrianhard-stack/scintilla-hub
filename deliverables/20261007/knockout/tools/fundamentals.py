@@ -172,14 +172,16 @@ if __name__ == "__main__":
             ok, why = base_ok([(w, clean1, d1), (1 - w, ee(e2), d2)], Ne, sps2)
             if not ok: o["eps_g2_unranked"] = o["eps_g2"]; o["eps_g2"] = None; o["eps_note2"] = why
         # sales: under 1% of market value is next to no sales yet — a venture bet, whose growth is from nothing
+        # The measure is the comps reader's own price-to-sales on the sales already reported (above 100 = sales under 1% of
+        # market value); where it has none, the last twelve months blended here against the market value.
         share = None
-        if not foreign and mcap and Lr is not None: share = Lr / mcap
-        elif ps and ps > 0: share = 1 / ps
+        if ps and ps > 0: share = 1 / ps
+        elif not foreign and mcap and Lr is not None: share = Lr / mcap
         o["sales_share_of_value"] = None if share is None else round(share, 4)
         o["venture"] = bool(share is not None and share < RULE["baseShareOfValue"]) or bool(not foreign and Lr is not None and Lr <= 0)
         if o["venture"]:
             o["rev_g1_unranked"] = o["rev_g1"]; o["rev_g2_unranked"] = o["rev_g2"]; o["rev_g1"] = None; o["rev_g2"] = None
-            o["venture_words"] = "next to no sales yet (under 1% of its market value): growth from nothing is not ranked"
+            o["venture_words"] = "its sales are under 1% of its market value: the price rests on what it may become, and growth from so small a base is not a rate"
         o["ntm_eps"] = Ne; o["ltm_eps"] = Le; o["ntm_rev"] = Nr; o["ltm_rev"] = Lr
         o["thin_estimates"] = bool(e1.get("num_analysts_eps") is not None and e1["num_analysts_eps"] < RULE["thinAnalysts"])
         # ---- revisions: the same twelve months in the oldest stored copy against the newest (joined on the fiscal year, ±45 days)

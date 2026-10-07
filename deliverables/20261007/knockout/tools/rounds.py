@@ -10,13 +10,15 @@
 #          weighed with growth the largest: growth next year 25, growth the year after 15, comps 30, revisions 15, cash 15.
 #          A comps number that is thin OR fragile counts at half strength; one that is both, or that the comps system
 #          itself withholds, or that belongs to a company with no earnings, is not used. A name passes when it stands in
-#          the upper half of its branch (the middle name included) after the tie rule below.
+#          the upper half of its branch (the middle name included) after the tie rule below. A name with fewer than three
+#          of the five readings, or with sales under 1% of its market value, is NOT JUDGED: listed, never ranked.
 # ROUND 3  TIMING. Never eliminates a company: it says now or wait. Above the 70th percentile of its own year = wait.
 # FINALISTS the top three of a branch among those that passed round 2; within 0.02 of each other the one more washed out
 #          for itself goes first (the knockout's own tie rule).
 WEIGHTS = {"growth_next": 25, "growth_after": 15, "comps": 30, "revisions": 15, "cash": 15}          # percent of the vote
 TURN = {"improve": 1.35, "go": 1.0, "buy": 0.85, "avoid": 0.6, "none": 1.0}                            # the allocation tool's own
-COLD_FLOOR = 0.05; EVEN = 0.02; HOT = 70.0; COLD = 30.0; MIN_READINGS = 2; TOP = 3
+COLD_FLOOR = 0.05; EVEN = 0.02; HOT = 70.0; COLD = 30.0; TOP = 3
+MIN_READINGS = 3                                                                                      # a majority of the five: with fewer a name is not judged
 REGION_OR_SIZE = ("MAG7", "CHINA", "EUROPE", "ASIA_PACIFIC", "CANADA", "LATAM")                        # clubs by place or size, not by business
 def quartiles(values):
     """25th, 50th and 75th of a list by straight-line interpolation (numpy's default, the knockout's own)."""
@@ -62,7 +64,8 @@ def score_branch(members):
         p["revisions"] = ramp(m.get("revisions"), field["revisions"]); p["cash"] = ramp(m.get("cash"), field["cash"])
         n = sum(1 for v in p.values() if v is not None)
         score = sum(WEIGHTS[k] * (0.5 if p[k] is None else p[k]) for k in WEIGHTS) / 100.0
-        out.append({**m, "parts": p, "score": score, "n": n, "judged": n >= MIN_READINGS})
+        # a company whose sales are under 1% of its market value is priced on what it may become: nothing here can rank it
+        out.append({**m, "parts": p, "score": score, "n": n, "judged": n >= MIN_READINGS and not m.get("venture")})
     judged = [r for r in out if r["judged"]]
     med = quartiles([r["score"] for r in judged]); cut = med["med"] if med else None
     order = sorted(judged, key=lambda r: (-r["score"], r["t"]))

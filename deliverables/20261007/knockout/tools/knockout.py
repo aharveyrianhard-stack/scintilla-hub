@@ -110,7 +110,7 @@ for group in (BR, SR):                                                       # t
     for k, b in enumerate(rows): b["rank_tool"] = k + 1
 # ---------------------------------------------------------------- ROUND 2 · inside each branch
 for c in cohorts:
-    rows = [{k: NAMES[t][k] for k in ("t", "g1_rev", "g1_eps", "g2_rev", "g2_eps", "comps", "comps_strength", "revisions", "cash", "pctl")} for t in BR[c]["run"]]
+    rows = [{k: NAMES[t][k] for k in ("t", "g1_rev", "g1_eps", "g2_rev", "g2_eps", "comps", "comps_strength", "revisions", "cash", "pctl", "venture")} for t in BR[c]["run"]]
     S = R.score_branch(rows); BR[c]["order"] = S["order"]; BR[c]["cut"] = r2(S["cut"]) if S["cut"] is not None else None; BR[c]["finalists"] = S["finalists"]; BR[c]["champion"] = S["finalists"][0] if S["finalists"] else None
     BR[c]["field"] = {k: (None if v is None else {"n": v["n"], "q1": r1(v["q1"]), "med": r1(v["med"]), "q3": r1(v["q3"])}) for k, v in S["field"].items()}
     BR[c]["scores"] = {r["t"]: {"score": round(r["score"], 3), "rank": r["rank"], "passes": bool(r["passes"]), "n": r["n"], "judged": r["judged"], "parts": {k: (None if v is None else round(v, 2)) for k, v in r["parts"].items()}} for r in S["rows"]}
@@ -119,6 +119,16 @@ anyc = lambda t: [c for c in mine.get(t, []) if c in BR and t in BR[c].get("scor
 WORDS = {"growth_next": "growth next year", "growth_after": "growth the year after", "comps": "comps", "revisions": "estimate revisions", "cash": "cash yield"}
 pc = lambda v: "—" if v is None else (f"{v:+.0f}%" if abs(v) >= 1 or v == 0 else f"{v:+.1f}%").replace("-", "\u2212")
 MATERIAL = {"revisions": 1.0, "comps": 5.0, "cash": 1.0}                    # a reading is named as a reason only when it is more than a rounding
+def eps_word(n, which):
+    """Earnings growth in words: the number, or why there is none to give."""
+    v = n["g1_eps"] if which == 1 else n["g2_eps"]
+    if v is not None: return "earnings " + pc(v)
+    note = (n.get("eps_note") if which == 1 else (n.get("eps_note2") or n.get("eps_note"))) or ""
+    if note.startswith("no earnings") or note.startswith("no EPS"): return "no earnings yet"
+    if "one-off year" in note: return "earnings not ranked, a one-off year in the base"
+    if "loss" in note: return "earnings not ranked, a loss in the base"
+    if "footing" in note: return "earnings not ranked, the filed and the analysts' figures differ"
+    return "earnings not ranked"
 def reason(t, c):
     """The plain reason a name stands where it does in a branch: its strongest readings, with the numbers."""
     n = NAMES[t]; s = BR[c]["scores"][t]; p = s["parts"]; bits = []
@@ -128,21 +138,22 @@ def reason(t, c):
         if k == "revisions" and (n["revisions"] or 0) < MATERIAL["revisions"]: continue
         if k == "comps" and (n["comps"] or 0) < MATERIAL["comps"]: continue
         if k == "cash" and (n["cash"] or 0) < MATERIAL["cash"]: continue
-        if k == "growth_next": bits.append(f"growth next year in the branch's top quarter (revenue {pc(n['g1_rev'])}, earnings {pc(n['g1_eps']) if n['g1_eps'] is not None else 'none yet'})")
-        elif k == "growth_after": bits.append(f"growth the year after in the top quarter (revenue {pc(n['g2_rev'])}, earnings {pc(n['g2_eps']) if n['g2_eps'] is not None else 'none yet'})")
+        if k == "growth_next": bits.append(f"growth next year in the branch's top quarter (revenue {pc(n['g1_rev'])}, {eps_word(n, 1)})")
+        elif k == "growth_after": bits.append(f"growth the year after in the top quarter (revenue {pc(n['g2_rev'])}, {eps_word(n, 2)})")
         elif k == "comps": bits.append(f"more room against its peers than most of the branch ({pc(n['comps'])}{', ' + n['comps_words'].split(':')[0] if n['comps_words'] else ''})")
         elif k == "revisions": bits.append(f"estimates raised more than most ({pc(n['revisions'])} in {n['revisions_days']} days)")
         elif k == "cash": bits.append(f"a cash yield in the top quarter ({n['cash']:.1f}%)")
     if not bits:
         best = top[0] if top else None
-        bits.append("no reading in the branch's top quarter; it leads on being weak in none" + (f" (best: {WORDS[best]})" if best else ""))
+        bits.append(("no reading in the branch's top quarter; it leads by being weak in none" if s["rank"] == 1 else "upper half of the branch without a top-quarter reading") + (f" (its best: {WORDS[best]})" if best else ""))
+    if len(BR[c]["order"]) == 1: bits = ["the only name in the branch the fundamentals can judge"] + bits[:1]
     return "; ".join(bits)
 def weak(t, c):
     n = NAMES[t]; p = BR[c]["scores"][t]["parts"]; bits = []
     for k in sorted([k for k in R.WEIGHTS if p[k] is not None], key=lambda k: p[k]):
         if p[k] > 0.3 or len(bits) == 2: continue
-        if k == "growth_next": bits.append(f"growth next year in the branch's bottom quarter (revenue {pc(n['g1_rev'])}, earnings {pc(n['g1_eps']) if n['g1_eps'] is not None else 'none'})")
-        elif k == "growth_after": bits.append(f"growth the year after in the bottom quarter (revenue {pc(n['g2_rev'])}, earnings {pc(n['g2_eps']) if n['g2_eps'] is not None else 'none'})")
+        if k == "growth_next": bits.append(f"growth next year in the branch's bottom quarter (revenue {pc(n['g1_rev'])}, {eps_word(n, 1)})")
+        elif k == "growth_after": bits.append(f"growth the year after in the bottom quarter (revenue {pc(n['g2_rev'])}, {eps_word(n, 2)})")
         elif k == "comps": bits.append(f"less room against its peers than most of the branch ({pc(n['comps'])}{', ' + n['comps_words'].split(':')[0] if n['comps_words'] else ''})")
         elif k == "revisions": v = n["revisions"] or 0; bits.append(f"estimates cut ({pc(v)} in {n['revisions_days']} days)" if v <= -1 else f"estimates raised less than most of the branch ({pc(v)})" if v >= 1 else f"estimates flat ({pc(v)}) while others in the branch were raised")
         elif k == "cash": bits.append(f"cash yield in the bottom quarter ({n['cash']:.1f}%)")
@@ -177,7 +188,7 @@ for t, n in NAMES.items():
     n["finalist_in"] = [c for c in anyc(t) if t in BR[c]["finalists"]]; n["champion_in"] = [c for c in anyc(t) if BR[c]["champion"] == t]
     # the branches its own verdict rests on: its business branches (a club by place or size only when it has no other)
     n["verdict_branches"] = bs; n["finalist_where_it_counts"] = [c for c in bs if t in BR[c]["finalists"]]; n["champion_where_it_counts"] = [c for c in bs if BR[c]["champion"] == t]
-    n["verdict"] = ("not in a branch of the tree" if not n["in_tree"] else "not judged: fewer than two readings" if n["r2"] is None else "fails round 2 (fundamentals)" if not n["r2"] else "passes fundamentals; timing says wait" if n["hot"] else "passes both")
+    n["verdict"] = ("not in a branch of the tree" if not n["in_tree"] else ("not judged: sales under 1% of its market value" if n["venture"] else "not judged: fewer than three of the five readings") if n["r2"] is None else "fails round 2 (fundamentals)" if not n["r2"] else "passes fundamentals; timing says wait" if n["hot"] else "passes both")
     h = n["home"]
     n["why"] = None if not h else (reason(t, h) if BR[h]["scores"][t]["passes"] else weak(t, h))
 # ---------------------------------------------------------------- finalists and the champions table
@@ -198,8 +209,8 @@ for t in sorted(allL):
         p = PROF.get(t) or {}; why = SKIP.get(t) or ("a coin, a future or a metal: no company figures" if t.endswith("USD") else "a fund, not a company" if (p.get("is_etf") or t in LIVE) else "not in the figures on file")
         tunnel.append({"t": t, "lists": on_lists(t), "round": None, "why": "not scored: " + why}); continue
     if n["r2"] is False: tunnel.append({"t": t, "lists": n["lists"], "round": 2, "branch": BR[n["home"]]["label"] if n["home"] else None, "rank": n["branches"][n["home"]]["rank"] if n["home"] else None, "of": n["branches"][n["home"]]["of"] if n["home"] else None, "why": n["why"]})
+    elif n["r2"] is None: tunnel.append({"t": t, "lists": n["lists"], "round": None, "why": n["verdict"]})
     elif n["hot"]: tunnel.append({"t": t, "lists": n["lists"], "round": 3, "branch": BR[n["home"]]["label"] if n["home"] else None, "why": f"Geiger {n['geiger']:+.2f}, the {n['pctl']}th percentile of its own year: {n['buy']['words']}"})
-    elif n["r2"] is None: tunnel.append({"t": t, "lists": n["lists"], "round": None, "why": "not judged: " + n["verdict"]})
 wait_on_lists = sorted([t for t in allL if t in NAMES and NAMES[t]["r2"] and NAMES[t]["hot"]], key=lambda t: (0 if "RADAR" in NAMES[t]["lists"] else 1 if "FAVORITES" in NAMES[t]["lists"] else 2, t))
 green = sorted([t for t, n in NAMES.items() if n["hot"]], key=lambda t: (0 if NAMES[t]["lists"] else 1, -NAMES[t]["pctl"], t))
 # ---------------------------------------------------------------- the funnel
@@ -228,11 +239,14 @@ def list_read(k):
     ts = lists[k]; sc = [t for t in ts if t in NAMES]
     return {"n": len(ts), "companies_scored": len(sc), "not_scored": [t for t in ts if t not in NAMES], "pass_both": [t for t in sc if NAMES[t]["r2"] and not NAMES[t]["hot"]], "pass_wait": [t for t in sc if NAMES[t]["r2"] and NAMES[t]["hot"]], "fail_r2": [t for t in sc if NAMES[t]["r2"] is False],
             "finalists": [t for t in sc if NAMES[t]["finalist_in"]], "champions": [t for t in sc if NAMES[t]["champion_in"]]}
+sec_of = {t: BR[(n["verdict_branches"] or anyc(t))[0]]["sector"] for t, n in NAMES.items() if (n["verdict_branches"] or anyc(t))}
+lists_by_sector = [{"sector": s, "label": SR[s]["label"], "rank": SR[s]["rank"], "heat": SR[s].get("heat"), "pctl": SR[s].get("pctl"), "read": SR[s].get("read"), "names": len(SR[s]["run"]),
+                    **{k: [t for t in lists[k] if sec_of.get(t) == s] for k in ("RADAR", "FAVORITES", "LIKED")}} for s in sorted(SR, key=lambda s: SR[s]["rank"])]
 out = {"today": TODAY, "built_utc": dtm.datetime.utcnow().isoformat() + "Z", "price_is": CU["meta"]["price_is"], "geiger_published_utc": TM.get("geiger_published_utc"),
        "rules": {"weights": R.WEIGHTS, "turn": R.TURN, "hot": R.HOT, "cold": R.COLD, "even": R.EVEN, "top": R.TOP, "region_or_size": list(R.REGION_OR_SIZE), "thin_below": CU["meta"]["constants"]["THIN_BELOW"], "zone_pct": TM["zone_pct"], "year": TM["year"]},
        "checks": {"replay": TM["replay_check"], "cool": TM["cool_check"], "confluence": TM["confluence_file"], "comps_switches": CU["meta"]["switches"], "tables": CU["meta"]["tables"]},
        "funnel": funnel, "sectors": SR, "branches": BR, "champions": champions, "names": NAMES, "lists": {k: lists[k] for k in ("RADAR", "FAVORITES", "LIKED")}, "list_read": {k: list_read(k) for k in ("RADAR", "FAVORITES", "LIKED")},
-       "blind_spots": blind, "tunnel": tunnel, "wait_on_lists": wait_on_lists, "green": green, "named_green": [t for t in "AVGO VST NBIS BE CRWV NVDA MSTR".split() if t in NAMES]}
+       "lists_by_sector": lists_by_sector, "blind_spots": blind, "tunnel": tunnel, "wait_on_lists": wait_on_lists, "green": green, "named_green": [t for t in "AVGO VST NBIS BE CRWV NVDA MSTR".split() if t in NAMES]}
 os.makedirs(os.path.dirname(OUT), exist_ok=True); json.dump(out, open(OUT, "w"), separators=(",", ":"))
 print("funnel:", json.dumps({k: v for k, v in funnel.items() if not isinstance(v, (dict, list))}))
 print("skipped:", funnel["skipped"], "| holdings:", funnel["funds_holdings"])

@@ -76,7 +76,7 @@ test("the vote: growth weighs most, the shares add to 100, and each reading is r
   assert.ok(w.growth_next + w.growth_after > Math.max(w.comps, w.revisions, w.cash), "growth carries the largest share (Alan, 6 Oct)");
   assert.deepEqual(q, { n: 5, q1: 20, med: 30, q3: 40 }); assert.equal(r0, 0); assert.equal(r1, 1); assert.equal(rm, null, "a missing reading has no place: it counts as the middle in the score");
   assert.equal(rh, 1, "an extreme cannot win a branch by its size"); assert.equal(rflat, 0.5); assert.equal(rlow, 1);
-  assert.equal(c.even, 0.02, "the knockout's own tie width"); assert.equal(c.hot, 70); assert.equal(c.top, 3);
+  assert.equal(c.even, 0.02, "the knockout's own tie width"); assert.equal(c.hot, 70); assert.equal(c.top, 3); assert.equal(c.min_readings, 3, "a majority of the five readings");
 });
 test("how far a comps number is leaned on follows the comps system's own flags", PY, () => {
   const band = { lo: 1, centre: 2, hi: 3 }, base = { ok: true, band, eps_ttm: 2, eps_fy1: 3, n_behind: 12, thin: false, fragile: null };
@@ -98,12 +98,13 @@ test("inside a branch: the upper half passes, a missing reading is the middle, a
   const [S3] = py(["score_branch", [[m("HOT", 30, 20, { pctl: 90 }), m("COLD", 30, 20, { pctl: 10, revisions: 2.9 }), m("X", 5, -30), m("Y", 4, -40)]]]);
   assert.ok(Math.abs(S3.rows.find((r) => r.t === "HOT").score - S3.rows.find((r) => r.t === "COLD").score) < 0.02);
   assert.deepEqual(S3.order.slice(0, 2), ["COLD", "HOT"]);
-  /* fewer than two readings: not judged, never ranked, never passed */
-  const [S4] = py(["score_branch", [[m("A", 50, 40), m("B", 30, 20), { t: "Z", g1_rev: null, g1_eps: null, g2_rev: null, g2_eps: null, comps: null, comps_strength: 0, revisions: null, cash: 1, pctl: 5 }]]]);
-  const z = S4.rows.find((r) => r.t === "Z"); assert.equal(z.judged, false); assert.equal(z.rank, null); assert.equal(z.passes, false); assert.equal(S4.judged, 2);
+  /* fewer than three of the five readings, or sales under 1% of market value: not judged, never ranked, never passed */
+  const [S4] = py(["score_branch", [[m("A", 50, 40), m("B", 30, 20), { t: "Z", g1_rev: null, g1_eps: null, g2_rev: null, g2_eps: null, comps: null, comps_strength: 0, revisions: 9, cash: 1, pctl: 5 }, m("V", 900, 90, { venture: true })]]]);
+  for (const t of ["Z", "V"]) { const z = S4.rows.find((r) => r.t === t); assert.equal(z.judged, false, t); assert.equal(z.rank, null); assert.equal(z.passes, false); }
+  assert.equal(S4.judged, 2); assert.deepEqual(S4.order, ["A", "B"], "the venture name's +900% does not enter the order"); assert.equal(S4.rows.find((r) => r.t === "Z").n, 2);
 });
 test("never across branches: a branch's scores are a function of that branch's own readings, and the saved result re-derives from them", PY, () => {
-  const rowOf = (t) => ({ t, g1_rev: N[t].g1_rev, g1_eps: N[t].g1_eps, g2_rev: N[t].g2_rev, g2_eps: N[t].g2_eps, comps: N[t].comps, comps_strength: N[t].comps_strength, revisions: N[t].revisions, cash: N[t].cash, pctl: N[t].pctl });
+  const rowOf = (t) => ({ t, g1_rev: N[t].g1_rev, g1_eps: N[t].g1_eps, g2_rev: N[t].g2_rev, g2_eps: N[t].g2_eps, comps: N[t].comps, comps_strength: N[t].comps_strength, revisions: N[t].revisions, cash: N[t].cash, pctl: N[t].pctl, venture: N[t].venture });
   const ids = Object.keys(B), out = py(...ids.map((c) => ["score_branch", [B[c].run.map(rowOf)]]));
   ids.forEach((c, i) => { assert.deepEqual(out[i].order, B[c].order, B[c].label); assert.deepEqual(out[i].finalists, B[c].finalists, B[c].label); });
   assert.equal(ids.length, 63);
@@ -156,7 +157,9 @@ test("growth is measured on one calendar and only from a base that can be grown 
   /* in the saved result: the two the study worked through read up on the clean base, not down */
   for (const t of ["GOOGL", "AMZN"]) { assert.ok(N[t].one_off.length >= 1, t + " carries its one-off words"); assert.ok(N[t].g1_eps > 15 && N[t].g1_eps_as_shown < 0, `${t}: ${N[t].g1_eps_as_shown}% as shown, ${N[t].g1_eps}% clean`); }
   near(N.MU.g1_rev, 92, 1.5, "Micron's next twelve months, as its decision card has it"); near(N.MU.g1_eps, 109.5, 1.5, "Micron EPS");
-  for (const n of Object.values(N)) if (n.venture) assert.ok(n.g1_rev == null && n.g2_rev == null, n.t + ": next to no sales, so growth from nothing is not ranked");
+  const venture = Object.values(N).filter((n) => n.venture); assert.ok(venture.length >= 10 && venture.length <= 25, venture.length + " venture names");
+  for (const n of venture) { assert.ok(n.g1_rev == null && n.g2_rev == null, n.t + ": growth from so small a base is not ranked"); assert.equal(n.r2, null, n.t + " is not judged"); assert.match(n.verdict, /^not judged: sales under 1%/); assert.deepEqual(n.finalist_in, [], n.t + " is never a finalist"); }
+  for (const t of ["OKLO", "QBTS", "ASTS", "ACHR"]) assert.equal(N[t].venture, true, t); for (const t of ["MU", "NBIS", "IREN", "CBRS", "RKLB"]) assert.equal(N[t].venture, false, t + " has sales to grow from");
 });
 
 /* ---- round 3 ----------------------------------------------------------------------------------------------- */
@@ -192,13 +195,15 @@ test("went green = above the 70th percentile of its own year: the seven Alan nam
 test("finalists are the top three of a branch among those that passed round 2, and the champion is the first of them", () => {
   let slots = 0; const champs = new Set();
   for (const b of Object.values(B)) {
+    if (!b.order.length) { assert.equal(b.champion, null); assert.deepEqual(b.finalists, []); assert.ok(b.run.every((t) => N[t].r2 === null || N[t].verdict_branches.some((c) => c !== b.id)), b.label + ": nothing in it can be judged"); continue; }
     assert.ok(b.finalists.length <= 3 && b.finalists.length >= 1, b.label); assert.equal(b.champion, b.finalists[0]); slots += b.finalists.length; champs.add(b.champion);
     assert.deepEqual(b.finalists, b.order.filter((t) => b.scores[t].passes).slice(0, 3), b.label);
     const judged = b.order.length; assert.equal(b.order.filter((t) => b.scores[t].passes).length, Math.ceil(judged / 2), b.label + ": the upper half, the middle name included");
     for (const r of b.finalist_rows) { assert.ok(r.why.length > 15, r.t + " says why"); assert.ok(r.buy.words.length > 8, r.t + " says where it would be bought"); }
     for (const [t, why] of Object.entries(b.not_run)) assert.ok(why.length > 8, `${t} in ${b.label} says why it was not run`);
   }
-  assert.equal(slots, F.finalist_slots); assert.equal(champs.size, F.champions); assert.equal(K.champions.length, 63, "one champion a branch");
+  assert.equal(slots, F.finalist_slots); assert.equal(champs.size, F.champions); assert.equal(K.champions.length, F.champion_slots);
+  assert.deepEqual(Object.values(B).filter((b) => !b.champion).map((b) => b.label), ["QUANTUM"], "one branch has no name the fundamentals can judge, and says so instead of crowning one");
   assert.equal(B.MEMORY_STORAGE.champion, "MU"); assert.deepEqual(B.MEMORY_STORAGE.finalists.slice(0, 2), ["MU", "SNDK"]);
 });
 test("the loop is open: blind spots are on none of the lists, tunnel vision is on one, and neither list changes a score", () => {
@@ -208,9 +213,15 @@ test("the loop is open: blind spots are on none of the lists, tunnel vision is o
   for (const [t, n] of Object.entries(N)) if (n.finalist_in.length && !n.finalist_where_it_counts.length) assert.ok(!K.blind_spots.includes(t) && n.finalist_in.every((c) => K.rules.region_or_size.includes(c)), t);
   for (const x of K.tunnel) { assert.ok(LISTS.has(x.t), x.t + " is on a list"); assert.ok(x.why.length > 10, x.t + " says why");
     if (x.round === 2) { assert.equal(N[x.t].r2, false); assert.ok(x.branch && x.rank > Math.ceil(x.of / 2), `${x.t} is in the lower half of ${x.branch}`); }
+    if (x.round === null && N[x.t]) assert.match(x.why, /^not judged: /, x.t);
     if (x.round === 3) { assert.equal(N[x.t].r2, true); assert.equal(N[x.t].hot, true); } }
   const listed = [...LISTS], inTunnel = new Set(K.tunnel.map((x) => x.t));
-  for (const t of listed) { const n = N[t]; assert.equal(inTunnel.has(t), !n || n.r2 !== true || n.hot, t + ": on the tunnel list exactly when it is not scored, fails round 2 or must wait"); }
+  for (const t of listed) { const n = N[t]; assert.equal(inTunnel.has(t), !n || n.r2 !== true || n.hot, t + ": on the tunnel list exactly when it is not scored, not judged, fails round 2 or must wait"); }
+  /* where the lists sit in round 1: every scored company of a list is in exactly one sector row, in round-1 order */
+  assert.deepEqual(K.lists_by_sector.map((r) => r.rank), Array.from({ length: 14 }, (_, i) => i + 1));
+  for (const k of ["RADAR", "FAVORITES", "LIKED"]) { const all = K.lists_by_sector.flatMap((r) => r[k]); assert.equal(new Set(all).size, all.length, k); assert.equal(all.length, K.list_read[k].companies_scored, k + ": every scored company has its sector"); }
+  const last4 = K.lists_by_sector.slice(-4).reduce((a, r) => a + r.RADAR.length, 0), first4 = K.lists_by_sector.slice(0, 4).reduce((a, r) => a + r.RADAR.length, 0);
+  assert.ok(last4 >= 12 && first4 === 0, `the radar's tunnel: ${last4} of its companies in the four sectors ranked last, ${first4} in the four ranked first`);
   for (const k of ["RADAR", "FAVORITES", "LIKED"]) { const r = K.list_read[k]; assert.equal(r.n, K.lists[k].length); assert.equal(r.companies_scored + r.not_scored.length, r.n, k); }
   assert.deepEqual(K.list_read.RADAR.fail_r2.sort(), ["NFLX", "WDC", "WMT"], "the three radar names the fundamentals round does not support");
   assert.ok(K.list_read.RADAR.pass_both.includes("MU") && K.list_read.RADAR.pass_wait.includes("NVDA"));
