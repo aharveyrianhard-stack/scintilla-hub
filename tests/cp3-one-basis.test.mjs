@@ -214,3 +214,17 @@ test("the cards keep what they carried (technicals, risk, the plan) and take the
   assert.deepEqual(g.comps.peers_priced.slice().sort(), ["AMZN", "APP", "META", "MSFT", "PINS", "RDDT", "SNAP"]); assert.ok(g.comps.low < g.comps.centre && g.comps.centre < g.comps.high);
   for (const p of g.peers.filter((x) => x.priced)) assert.ok(p.pe_fwd_text && p.votes != null, p.ticker);
 });
+
+/* ---- the page for Alan ----------------------------------------------------------------------------------------------- */
+test("the page: pictures first, the thirty rows with no cell that differs, ten core panels, BACK / CLOSE, greys only, 11px or more, no internal code, nothing sideways", () => {
+  const html = fs.readFileSync(R("../deliverables/20261007/one-basis/ONE-BASIS.html"), "utf8"), facts = J("../deliverables/20261007/one-basis/shots/shots-facts.json");
+  assert.match(html, /<title>One forward P\/E everywhere · 7 Oct 2026 · Scintilla<\/title>/); assert.match(html, /class="scnav|scnav-css/); assert.match(html, /<details class="sc-pagespecs"><summary>PAGE SPECS<\/summary>/);
+  assert.equal((html.match(/<section id="core-/g) || []).length, 10); for (const t of ["GOOGL", "AMZN", "AVGO", "NVDA", "TSM", "VST", "MU", "ORCL", "DLR", "EQIX"]) assert.ok(html.includes(`<section id="core-${t}"`), t);
+  assert.ok(!/class="mx diff"/.test(html), "no surface prints a different multiple for any of the thirty");
+  const visible = html.replace(/<style[\s\S]*?<\/style>/g, "").replace(/<script[\s\S]*?<\/script>/g, "").replace(/<[^>]+>/g, " ");
+  assert.deepEqual(visible.match(/\b(CP[123]|ER1|CZ1|KO1|FD1|PP1|AL[78]|DM[12]|NQ1|C5b?|C6b?)\b/g) || [], [], "no internal code in anything Alan reads");
+  assert.ok(!/licensed advisor|not financial advice/i.test(visible)); assert.ok(!/\b(buy now|sell now)\b/i.test(visible));
+  for (const w of ["1680", "390"]) { const f = facts[w]; assert.equal(f.sideways, false, w + " does not scroll sideways"); assert.ok(f.smallest_font_px >= 11, w + " smallest text " + f.smallest_font_px); assert.equal(f.scnav, true); assert.deepEqual(f.colours_off_grey, []); assert.deepEqual(f.internal_codes, []);
+    assert.deepEqual(f.page_errors, []); assert.equal(f.non_get_blocked, 0); assert.equal(f.requests_off_file, 0); assert.equal(f.rows30, 30); assert.equal(f.cells_that_differ, 0); assert.equal(f.core_panels, 10); assert.ok(f.images.length >= 6 && f.images.every((i) => i.ok), "the tool's pictures load"); }
+  for (const f of ["1680-00-first-screen.png", "390-00-first-screen.png", "1680-04-core-GOOGL.png", "390-10-core-MU.png", "1680-18-tool.png"]) assert.ok(fs.statSync(R("../deliverables/20261007/one-basis/shots/" + f)).size > 20000, f);
+});

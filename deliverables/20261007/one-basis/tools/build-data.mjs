@@ -108,7 +108,9 @@ writeFileSync(DATA + "/one-basis.json", JSON.stringify(out));
 /* ---- 5 · THE CARDS, re-priced. CP1's cards keep everything they carried (technicals, risk, the plan); the fundamentals'
         forward figures, the comps block and two new blocks (debt, peers) are this run's. A TSMC card is added (it is on
         the radar): its technicals come from the universe knockout's own readings of the same close. */
-const flagsOf = (c, n) => [...(c.thin ? [`thin: ${(n.sets.priced || []).length} peers price it`] : []), ...(c.fragile ? ["fragile: " + c.fragile] : []), ...(c.no_peer_set ? ["no peer set"] : []), ...n.forward.flags.filter((f) => f.code !== "thin").map((f) => f.words)];
+/* a comps-only reference peer is named in words wherever a sentence names it (its listing code means nothing on a card) */
+const inWords = (s) => String(s).replace(/000660\.KS/g, "SK hynix").replace(/005930\.KS/g, "Samsung").replace(/285A\.T/g, "Kioxia");
+const flagsOf = (c, n) => [...(c.thin ? [`thin: ${(n.sets.priced || []).length} peers price it`] : []), ...(c.fragile ? ["fragile: " + inWords(c.fragile)] : []), ...(c.no_peer_set ? ["no peer set"] : []), ...n.forward.flags.filter((f) => f.code !== "thin").map((f) => f.words)];
 const cardOfName = (t) => { const n = N[t], c = n.runs.cp3, old = OLD.cards[t] || null, k = KD.names[t] || {};
   const base = old || { ticker: t, name: n.name, card_date: TODAY, price: n.price, price_is: "session close " + TODAY, parents: [], cohorts: (k.cohorts || []), line: n.line,
     technicals: { geiger: k.geiger ?? null, geiger_trend: k.trend ?? null, geiger_momentum: k.momentum ?? null, geiger_pctl_own_year: k.pctl ?? null, geiger_own_median: k.p50 ?? null, from: "the universe knockout's reading of the 6 Oct close", lines_below: k.near_below ? [{ label: k.near_below.label, level: k.near_below.level, pct: k.near_below.pct }] : [], lines_above: (k.above || []).map((x) => ({ label: x.label, level: x.level, pct: x.pct })), zone: k.zone || null },

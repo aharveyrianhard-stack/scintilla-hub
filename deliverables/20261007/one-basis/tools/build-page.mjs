@@ -13,7 +13,8 @@ const sg = (v, d = 0) => (v == null || !Number.isFinite(+v) ? '<span class="dim"
 const px = (v) => (v == null ? "—" : (+v >= 1000 ? Math.round(+v).toLocaleString("en-US") : (+v).toFixed(2)));
 const SHORT = { "Taiwan Semiconductor Manufacturing Company Limited": "TSMC", "Amazon.com, Inc.": "Amazon", "Digital Realty Trust, Inc.": "Digital Realty", "Samsung Electronics Co., Ltd.": "Samsung", "SK hynix Inc.": "SK hynix" };
 const short = (name) => SHORT[name] || String(name || "").replace(/,? (Inc\.?|Corporation|Corp\.?|Incorporated|Company|Co\.|plc|Limited|Ltd\.?|N\.V\.|Holdings?|Technologies|Technology|Platforms|\.com)\b.*$/i, "").replace(/ Semiconductor Manufacturing.*$/, "").trim();
-const td = (label, html, cls = "") => `<td data-l="${esc(label)}"${cls ? ` class="${cls}"` : ""}>${html}</td>`;
+/* every cell's content is ONE box: on a phone a cell is a two-column grid (its label, its value), and a value made of two pieces would otherwise fall into two rows */
+const td = (label, html, cls = "") => `<td data-l="${esc(label)}"${cls ? ` class="${cls}"` : ""}><div class="cv">${html}</div></td>`;
 const CORE = Object.keys(D.core), L = Object.fromEntries(D.leaders.map((r) => [r.ticker, r]));
 const votes = (n) => `<span class="vt" title="${n} of the four sources name it">${[0, 1, 2, 3].map((i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
 
