@@ -447,3 +447,59 @@ test('the six-month return and the usual day are recomputed here from the closes
     assert.ok(Math.abs(tag[t].usual_day_pct / ft.market.usual_day_pct - tag[t].usual_day_vs_market) <= 0.005 + 1e-9, `${t}: against the market`)
   }
 })
+
+test('the evidence for the steering is recomputed here: the grid names move with AI POWERTRAIN, the regulated utilities do not', () => {
+  const se = J(`${TR2}/steering-evidence.json`); const ft = J(`${TR2}/factor-tags.json`)
+  const rows = T('deliverables/20261006/cohort-proposal/data/closes-6m-20261006.csv').trim().split('\n').map(l => l.split(','))
+  const head = rows[0]; const body = rows.slice(1).slice(-(ft.rules.sessions + 1))
+  const ret = (t) => { const px = body.map(r => Number(r[head.indexOf(t)])); return px.slice(1).map((v, i) => Math.log(v / px[i])) }
+  const basket = (ts) => { const rs = ts.map(ret); return rs[0].map((_, i) => rs.reduce((s, r) => s + r[i], 0) / rs.length) }
+  const corr = (a, b) => { const ma = a.reduce((s, x) => s + x, 0) / a.length; const mb = b.reduce((s, x) => s + x, 0) / b.length; let n = 0, da = 0, db = 0; a.forEach((x, i) => { n += (x - ma) * (b[i] - mb); da += (x - ma) ** 2; db += (b[i] - mb) ** 2 }); return n / Math.sqrt(da * db) }
+  const pt = se.ai_powertrain
+  assert.deepEqual([...pt.after.names].sort(), membersOf('AI_POWERTRAIN').sort())
+  assert.deepEqual([...pt.before.names, ...pt.joined.names].sort(), membersOf('AI_POWERTRAIN').sort())
+  assert.deepEqual(pt.joined.names.sort(), ['AME', 'EMR', 'ETN', 'FIX', 'HUBB', 'NVT', 'PWR', 'VRT'])
+  near(pt.joined.basket_against_the_old_basket.raw, corr(basket(pt.joined.names), basket(pt.before.names)), 'the names that joined against the old basket')
+  const util = membersOf('REGULATED_UTILITIES')
+  near(pt.regulated_utilities.basket_against_ai_powertrain.raw, corr(basket(util), basket(pt.after.names)), 'regulated utilities against AI POWERTRAIN')
+  // the finding the page states, held as a test: the build-out names belong (0.5 or more), the utilities do not (under 0.2 either way)
+  assert.ok(pt.joined.basket_against_the_old_basket.raw >= 0.5, `the grid names moved ${pt.joined.basket_against_the_old_basket.raw} with the old basket`)
+  assert.ok(Math.abs(pt.regulated_utilities.basket_against_ai_powertrain.raw) < 0.2 && Math.abs(pt.regulated_utilities.with_ai_powertrain_names.avg) < 0.2)
+  // the Hub's own list is quoted from CO1's copy of 6 Oct, and the names it lacks are the tree's minus it
+  const hub = J('deliverables/20261006/cohort-proposal/data/ticker_cohorts-20261006.json').filter(r => r.cohort === 'AI_POWERTRAIN').map(r => r.ticker).sort()
+  assert.deepEqual(pt.on_the_hub_today.names, hub)
+  assert.deepEqual(pt.on_the_hub_today.in_the_tree_not_on_the_hub, membersOf('AI_POWERTRAIN').filter(t => !hub.includes(t)).sort())
+  assert.ok(!hub.includes('PWR') && !hub.includes('ETN'), 'Alan saw it right: PWR and ETN are not on the Hub list')
+  // Shopify against the software fund, recomputed
+  near(se.platforms.rows.find(r => r.ticker === 'SHOP').IGV.raw, corr(ret('SHOP'), ret('IGV')), 'SHOP with the software fund')
+  assert.deepEqual(se.platforms.rows.map(r => r.ticker), ['AMZN', 'SHOP', 'MELI', 'BABA', 'JD', 'PDD'])
+  for (const r of se.platforms.rows) assert.ok(r.cohorts.includes('INTERNET_PLATFORMS'), r.ticker)
+})
+
+test('the four lanes are a proposal drawn from the tree: every name obeys its lane\'s rule, and nothing is sent anywhere', () => {
+  const ln = J(`${TR2}/market-desk-lanes.json`); const ft = J(`${TR2}/factor-tags.json`)
+  const tag = Object.fromEntries(ft.names.map(o => [o.ticker, o]))
+  assert.match(ln.what, /^PROPOSAL \(not a queue file, sent nowhere\)/)
+  assert.deepEqual(ln.lanes.map(l => l.lane), ['CORE', 'LEADERS ON A PULLBACK', 'ROTATION LAGGARDS AT SUPPORT', 'NEW NAMES'])
+  const [core, leaders, laggards, fresh] = ln.lanes
+  // CORE: the five index lines and the SPDR fund of each of the eleven sector nodes
+  assert.deepEqual(core.items.map(i => i.ticker), ['SPY', 'QQQ', 'DIA', 'IWM', 'RSP', ...SECTORS.map(s => s[2])])
+  // on the Hub = sits in a cohort recorded as on; the factor branch is not a pick
+  const onHub = new Set(rev.members.filter(m => m.role === 'member' && N[m.cohort].hub_pick === 'on' && !m.cohort.startsWith('IDX_')).map(m => m.ticker))
+  const R = ln.rules
+  for (const i of leaders.items) {
+    assert.ok(onHub.has(i.ticker), `${i.ticker} is not on the Hub`); const o = tag[i.ticker]
+    assert.ok(o.tags.includes('MOMENTUM') && o.off_high_pct <= -R.pullback_min_off_high_pct && o.vs_avg100_pct > 0, `${i.ticker} does not meet the leaders rule`)
+  }
+  for (const i of laggards.items) {
+    assert.ok(onHub.has(i.ticker), `${i.ticker} is not on the Hub`); const o = tag[i.ticker]
+    assert.ok(o.tags.includes('LAGGING') && o.above_low_pct <= R.support_max_above_low_pct, `${i.ticker} does not meet the laggards rule`)
+  }
+  for (const l of [leaders, laggards]) { assert.ok(l.items.length <= R.per_lane_cap); assert.equal(l.items.length + l.also.length, l.count) }
+  assert.deepEqual(leaders.items.map(i => i.momentum_rank), [...leaders.items.map(i => i.momentum_rank)].sort((a, b) => b - a), 'strongest first')
+  for (const i of fresh.items) assert.ok(companies(rev).has(i.ticker) && i.listed_on >= '2024-10-06', `${i.ticker}: not a company listed within 24 months`)
+  // a reviewed line is quoted with its own label, never a bare letter-number
+  for (const l of ln.lanes) for (const i of l.items) for (const k of ['nearest_above', 'nearest_below']) if (i.lines[k]) assert.match(i.lines[k].line, /^(\d+[DWM]|T\d+) /, `${i.ticker}: ${i.lines[k].line}`)
+  // it is a file in this folder only: the handoffs queue and the Lab's folder are not written by anything here
+  for (const f of ['deliverables/20261006/tree-revision/tools/steering_evidence.py', 'deliverables/20261006/tree-revision/tools/factor_tags.py']) { assert.doesNotMatch(T(f), /INDICATOR_LAB|handoffs\/REVIEW-QUEUE|urllib|requests\.|http/); }
+})

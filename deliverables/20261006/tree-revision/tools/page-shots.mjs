@@ -6,7 +6,7 @@ const require = createRequire("/Users/alanharvey/SCINTILLA 0.5/visual-supervisor
 const { chromium } = require("playwright-core");
 const D = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 fs.mkdirSync(path.join(D, "shots"), { recursive: true });
-const SECTIONS = [["tree", "#tree"], ["cross", "#cross"], ["frontier", "#frontier"], ["consumer", "#consumer"], ["picks", "#picks"], ["funds", "#funds"], ["realestate", "#realestate"], ["migration", "#migration"]];
+const SECTIONS = [["evening", "#evening"], ["tree", "#tree"], ["cross", "#cross"], ["frontier", "#frontier"], ["consumer", "#consumer"], ["powertrain", "#powertrain"], ["platforms", "#platforms"], ["factors", "#factors"], ["picks", "#picks"], ["lanes", "#lanes"], ["funds", "#funds"], ["realestate", "#realestate"], ["migration", "#migration"]];
 const browser = await chromium.launch({ headless: true, args: ["--hide-scrollbars", "--mute-audio"] });
 let fail = false;
 try {
@@ -17,6 +17,7 @@ try {
     await page.goto(pathToFileURL(path.join(D, "TREE-REVISION.html")).href, { waitUntil: "load" });
     await page.screenshot({ path: path.join(D, "shots", `page-${w}-top.png`) });
     for (const [n, sel] of SECTIONS) { await page.evaluate((s) => document.querySelector(s).scrollIntoView(), sel); await page.screenshot({ path: path.join(D, "shots", `page-${w}-${n}.png`) }); }
+    for (const [n, sel, dy] of [["factors-2", "#factors", 1000], ["factors-3", "#factors", 2000], ["powertrain-2", "#powertrain", 800], ["lanes-2", "#lanes", 900]]) { await page.evaluate(([s, d]) => { document.querySelector(s).scrollIntoView(); window.scrollBy(0, d); }, [sel, dy]); if (w >= 500) await page.screenshot({ path: path.join(D, "shots", `page-${w}-${n}.png`) }); }
     // the picture scrolls inside its own panel on a phone: two more looks at it, at full size
     await page.evaluate(() => document.querySelector("#tree").scrollIntoView());
     for (const [n, f] of [["tree-mid", 0.45], ["tree-right", 1]]) { await page.evaluate((f) => { const p = document.querySelector(".treewrap"); p.scrollLeft = (p.scrollWidth - p.clientWidth) * f; }, f); if (w < 500) await page.screenshot({ path: path.join(D, "shots", `page-${w}-${n}.png`) }); }

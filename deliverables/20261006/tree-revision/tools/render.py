@@ -13,6 +13,7 @@ def J(n, base=D):
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else None
 T = J("revised-tree.json"); FL = J("fund-links.json"); FR = J("frontier-rehome.json"); CG = J("consumer-gaps.json"); NF = J("next-funds.json"); RE = J("real-estate.json")
 MIG = J("migration-dry-run.json"); NFD = J("next-funds-tree-dry-run.json"); SIT = J("next-sitting.json")
+SE = J("steering-evidence.json"); FT = J("factor-tags.json"); LN = J("market-desk-lanes.json")      # the evening steering (6 Oct 18:10 – 19:20 ET)
 TR1DRY = J("loader-dry-run.json", os.path.join(D, "..", "tree-adopted")) or {}
 NOTRUN = "<p class='notrun'>not run yet</p>"
 
@@ -97,7 +98,7 @@ def tree_svg():
     for s in sets:
         sub = [k for k in KIDS.get(s, []) if N[k]["layer"] == 1]
         seq += (sub + [s]) if s in headed else ([s] + sub)
-    bw = 150; step = (W - MR - bw - ML) / max(len(seq) - 1, 1)
+    bw = min(150, (W - MR - ML) / len(seq) - 8); step = (W - MR - bw - ML) / max(len(seq) - 1, 1)
     ig = {s: dict(x=ML + i * step, cx=ML + i * step + bw / 2) for i, s in enumerate(seq)}
     # layer 0 and the index layer's own box
     cxm = (ML + W - MR) / 2
@@ -107,7 +108,9 @@ def tree_svg():
     wires.append(wire([(ig[railed[0]]["cx"], Y["rail1"]), (ig[railed[-1]]["cx"], Y["rail1"])]))
     for s in seq:
         g = ig[s]; nf = len([m for m in MEM.get(s, []) if m["role"] == "index_fund"]) or len(funds_in(s))
-        boxes += [rect(g["x"], Y["sets"], bw, 44), text(g["cx"], Y["sets"] + 18, short(N[s]["label"]), "t b", w=bw - 8), text(g["cx"], Y["sets"] + 34, f"{nf} funds", "t d")]
+        byrule = N[s]["kind"] == "cohort"                              # a branch whose members are companies assigned by rule
+        boxes += [rect(g["x"], Y["sets"], bw, 44, extra='stroke-dasharray="4 3"' if byrule else ""), text(g["cx"], Y["sets"] + 18, short(N[s]["label"]), "t b", w=bw - 8),
+                  text(g["cx"], Y["sets"] + 34, f"{len(companies(s))} names by rule" if byrule else f"{nf} funds", "t d", w=bw - 6)]
         if s in railed: wires.append(wire([(g["cx"], Y["rail1"]), (g["cx"], Y["sets"])]))
         else: pg = ig[N[s]["parent_1"]]; wires.append(wire([(min(g["x"] + bw, pg["x"] + bw), Y["sets"] + 22), (max(g["x"], pg["x"]), Y["sets"] + 22)]))
     # sector funds heading → the eleven sector boxes
@@ -286,7 +289,7 @@ for k in T["candidates"]:
 
 # ── 6 · picks ───────────────────────────────────────────────────────────────────────────────────────────────────────
 def src(n):
-    note = (n.get("hub_pick_note") or "").replace("Alan, 6 Oct: ", "").replace("he has not said", "not yet said"); s = n["hub_pick_source"]
+    note = re.sub(r"^Alan, 6 Oct( ~[\d:]+ ET)?: ", "", n.get("hub_pick_note") or "").replace("he has not said", "not yet said"); s = n["hub_pick_source"]
     if s == "named": return "named by you · " + note
     if s == "inherited": return "follows its heading · " + note.replace("follows ", "")
     if s == "parents_disagree": return note
@@ -377,6 +380,154 @@ if NFD:
     NFD_HTML = f"<div class='kpi'><div><b>{n_ok} of {n_sc}</b><span>scenarios as expected for the next fund batch's tree rows</span></div><div><b>{NFD.get('funds', '—')}</b><span>funds in the batch's files</span></div><div><b>0</b><span>applied to the real tables</span></div></div>" + t_html
 else: NFD_HTML = NOTRUN.replace("not run yet", "the next fund batch's tree dry run: not run yet (next-funds-tree-dry-run.json)")
 
+
+# ── THE EVENING STEERING (6 Oct 18:10 – 19:20 ET): platforms, AI POWERTRAIN, the factor branch, the lanes ───────────
+def sg(x, unit="%", dec=1):                                   # a signed number in plain typography
+    return "—" if x is None else (f"{x:+.{dec}f}".replace("-", "−") + unit)
+def ra(o): return "—" if not o or o.get("raw") is None else f"<b>{f2(o['raw'])}</b> <span class='small'>{f2(o.get('after_market'))} after</span>"
+def lab(c): return N[c]["label"]
+def homes(t): return [m["cohort"] for m in T["members"] if m["ticker"] == t and m["role"] == "member" and not m["cohort"].startswith("IDX_FACTOR_")]
+TAGS = {o["ticker"]: o for o in FT["names"]} if FT else {}
+MARK = [("GROWTH", "G"), ("MOMENTUM", "M"), ("LOW VOLATILITY", "L")]
+def marks(t):
+    m = "".join(k for tag, k in MARK if tag in TAGS.get(t, {}).get("tags", []))
+    return f"{t}[{m}]" if m else t
+FACT = [n for n in NODES if n["parent_1"] == "IDX_FACTOR" and n["kind"] == "cohort"]
+PT = SE["ai_powertrain"] if SE else None; PL = SE["platforms"] if SE else None; HL = SE["hand_made_lists"] if SE else None; FLN = SE["fund_lines"] if SE else None
+EVENING = PT_HTML = PLAT_HTML = FACT_HTML = LANES_HTML = NOTRUN
+if SE and FT:
+    # 0 · what changed, in four panels of labels
+    grp = [g for g in PT["groups"]]
+    regime = [n for n in NODES if n["hub_pick"] == "off" and "regime read" in (n.get("hub_pick_note") or "")]
+    li = lambda rows: "<ul class='plain'>" + "".join(f"<li>{r}</li>" for r in rows) + "</ul>"
+    ev1 = li([f"<b>{e(r['ticker'])}</b> <span class='small'>— also {e(' · '.join(lab(c) for c in r['cohorts'] if c != 'INTERNET_PLATFORMS'))}</span>" for r in PL["rows"]])
+    ev2 = li([f"<b>{e(g['label'])}</b> · {len(g['names'])} <span class='small'>— {e(' '.join(g['names']))}</span>" for g in grp] +
+             [f"REGULATED UTILITIES · {PT['regulated_utilities']['names']} <span class='small'>— kept out · moved {f2(PT['regulated_utilities']['with_ai_powertrain_names']['avg'])} with these names</span>"])
+    ev3 = li([f"<b>{e(n['label'])}</b> · {len(companies(n['cohort']))} names <span class='small'>— fund lines {e(' · '.join(m['ticker'] for m in MEM[n['cohort']] if m['role'] == 'reference'))}</span>" for n in FACT] +
+             [f"every company tagged · {len(FT['names'])} <span class='small'>— as of {dmy(FT['as_of'])}</span>"])
+    DC = N.get("DC_PROPERTY")
+    ev4 = li([f"<b>{e(n['label'])}</b> · {len(names_under(n['cohort']))} names <span class='small'>— off the Hub, kept in the tree</span>" for n in regime] +
+             ([f"REAL ESTATE parent <span class='small'>— {e(lab(N['REAL_ESTATE']['parent_1']))} → {e(lab('REAL_ESTATE'))} → {e(' · '.join(lab(c) for c in KIDS.get('REAL_ESTATE', [])))}; {e(DC['label'])} ({e(' '.join(companies('DC_PROPERTY')))}) under {e(lab(DC['parent_1']))} and {e(lab(DC['parent_2']))}</span>"] if DC else []))
+    EVENING = (f"<div class='four'><div class='panel'><h3>AMAZON · SHOPIFY · THE MARKETPLACES — UNDER {e(lab(N['INTERNET_PLATFORMS']['parent_1']))} AND {e(lab(N['INTERNET_PLATFORMS']['parent_2']))}</h3>{ev1}</div>"
+               f"<div class='panel'><h3>AI POWERTRAIN — {len(PT['on_the_hub_today']['names'])} ON THE HUB TODAY → {len(PT['after']['names'])} IN THE TREE · {len(grp)} GROUPS</h3>{ev2}</div>"
+               f"<div class='panel'><h3>GROWTH · MOMENTUM · LOW VOLATILITY — A BRANCH, MEMBERS BY RULE</h3>{ev3}</div>"
+               f"<div class='panel'><h3>OFF THE HUB, KEPT FOR THE REGIME READ</h3>{ev4}</div></div>")
+
+    # AI POWERTRAIN
+    was = PT["before"]["names"]; now = PT["after"]["names"]; util_n = PT["regulated_utilities"]["names"]
+    b_txt = [lab("AI"), f"└ AI POWERTRAIN   · {len(was)} names", "    " + " ".join(was), "", lab("ENERGY_POWER")] + \
+            [f"└ {'INDEPENDENT POWER' if g['cohort'] == 'POWER_GENERATORS' else g['label']}   · {len(g['names'])} names" for g in grp if g["cohort"] != "FUEL_CELLS_STORAGE"] + [f"└ REGULATED UTILITIES   · {util_n} names"]
+    a_txt = [lab("AI"), f"└ AI POWERTRAIN   · {len(now)} names · pick {picktag(N['AI_POWERTRAIN'])}"]
+    for g in grp: a_txt += [f"  └ {g['label']}   · {len(g['names'])} names · also under {lab(N[g['cohort']]['parent_2'])}" + ("   ◂ new" if g["cohort"] in [x["cohort"] for x in DIFF["nodes_added"]] else ""), "      " + " ".join(marks(t) for t in g["names"])]
+    a_txt += ["", lab("ENERGY_POWER"), f"└ REGULATED UTILITIES   · {util_n} names · pick {picktag(N['REGULATED_UTILITIES'])} · not in AI POWERTRAIN"]
+    mt = lambda o: R(f"<b>{f2(o['avg'])}</b> <span class='small'>{o['pairs']} pairs</span>")
+    pt_rows = [tr("<b>AI POWERTRAIN before</b>", R(len(was)), mt(PT["before"]["moves_together"]), R("—")),
+               tr("<b>the names that joined</b><br><span class='small'>" + e(" ".join(PT["joined"]["names"])) + "</span>", R(len(PT["joined"]["names"])), mt(PT["joined"]["moves_together"]), R(ra(PT["joined"]["basket_against_the_old_basket"]))),
+               tr("the names that joined, each against each name already there", R("—"), mt(PT["joined"]["with_the_names_already_there"]), R("—")),
+               tr("<b>AI POWERTRAIN after</b>", R(len(now)), mt(PT["after"]["moves_together"]), R("—"))] + \
+              [tr("└ " + e(g["label"]), R(len(g["names"])), mt(g["moves_together"]), R(ra(g["against_the_rest_of_ai_powertrain"]))) for g in grp] + \
+              [tr("<b>REGULATED UTILITIES among themselves</b>", R(util_n), mt(PT["regulated_utilities"]["moves_together"]), R("—")),
+               tr("<b>REGULATED UTILITIES against AI POWERTRAIN</b>", R("—"), mt(PT["regulated_utilities"]["with_ai_powertrain_names"]), R(ra(PT["regulated_utilities"]["basket_against_ai_powertrain"])))]
+    BF = PT["baskets_against_funds"]; BFK = list(next(iter(BF.values())))
+    bf_rows = [tr(f"<b>{e(k)}</b>", *[R(ra(v[f])) for f in BFK]) for k, v in BF.items()]
+    jn_rows = [tr(f"<b>{e(r['ticker'])}</b> <span class='small'>{e(TAGS[r['ticker']]['name'] or '')}</span>", R(ra(r["with_the_old_ai_powertrain_basket"])), R(ra(r["with_chips_SMH"])), R(ra(r["with_industrials_XLI"])), R(ra(r["with_utilities_XLU"])), e(" · ".join(r["tags"]) or "—")) for r in PT["each_joined_name"]]
+    HT = PT["on_the_hub_today"]
+    PT_HTML = (f"<div class='two'><div><h3>BEFORE · THIS AFTERNOON'S TREE</h3><pre>{e(chr(10).join(b_txt))}</pre></div><div><h3>AFTER · YOUR 19:20 NOTE</h3><pre>{e(chr(10).join(a_txt))}</pre></div></div>"
+               f"<p class='cap'>[G] growth · [M] momentum · [L] low volatility, by the rules of section {{SEC_FACT}}</p>"
+               f"<h3>DO THEY BELONG? HOW THE SETS MOVED TOGETHER · {SE['window']['sessions']} SESSIONS TO {dmy(SE['as_of']).upper()} · 1.00 = EXACTLY TOGETHER</h3>"
+               + tbl(["SET", ">NAMES", ">MOVES TOGETHER · AVERAGE OF EVERY PAIR", ">ITS BASKET AGAINST THE REST"], pt_rows, 820) +
+               "<h3>AS BASKETS, AGAINST FUNDS</h3>" + tbl(["BASKET"] + [">" + {"SMH": "CHIPS SMH", "XLI": "INDUSTRIALS XLI", "XLU": "UTILITIES XLU", "PAVE": "INFRASTRUCTURE PAVE", "URA": "URANIUM URA"}.get(f, f) for f in BFK], bf_rows, 860) +
+               "<h3>EACH NAME THAT JOINED</h3>" + tbl(["NAME", ">WITH THE OLD AI POWERTRAIN BASKET", ">WITH CHIPS SMH", ">WITH INDUSTRIALS XLI", ">WITH UTILITIES XLU", "TAGS"], jn_rows, 900) +
+               f"<h3>ON THE HUB TODAY · THE HUB'S OWN AI POWERTRAIN LIST HAS {len(HT['names'])} NAMES</h3>"
+               + tbl(["ON THE HUB'S LIST TODAY", f"IN THE TREE'S AI POWERTRAIN AND NOT ON THE HUB'S LIST · {len(HT['in_the_tree_not_on_the_hub'])}"], [tr("<b>" + e(" ".join(HT["names"])) + "</b>", "<b>" + e(" ".join(HT["in_the_tree_not_on_the_hub"])) + "</b>")], 700) +
+               "<p class='cap'>Nothing on the Hub was changed: its list is still the one on the left.</p>")
+
+    # the marketplaces
+    HOLD = J("deliverables/20260928/coverage-tree/data/holdings.json", ROOT) or {"data": {}}
+    def wt(fund, t): return next((w for x, w in HOLD["data"].get(fund, {}).get("h", []) if x == t), None)
+    YD = [y["fund"] for y in PL["yardsticks"]]; YN = {y["fund"]: y["is"] for y in PL["yardsticks"]}
+    def prow(r, cmp_=False):
+        inside = " · ".join(f"{f} {wt(f, r['ticker']):.1f}%" for f in YD if wt(f, r["ticker"]))
+        where = "; ".join(f"{lab(c)} <span class='small'>({lab(N[c]['parent_1'])}" + (f" + {lab(N[c]['parent_2'])}" if N[c]["parent_2"] else "") + ")</span>" for c in r["cohorts"])
+        return tr(f"<b>{e(r['ticker'])}</b><br><span class='small'>{e(TAGS[r['ticker']]['name'] or '')}</span>", where, e(" · ".join(c.replace('___', ' · ').replace('_', ' ').lower() for c in r["hub_cohorts_today"])) or "—",
+                  *[R(ra(r[f])) for f in YD], f"<b>{e(r['closer_to'])}</b>" + (f"<br><span class='small'>it is itself {e(inside)}</span>" if inside else ""))
+    pl_rows = [prow(r) for r in PL["rows"]] + ["<tr class='grp'><td colspan='8'>FOR COMPARISON · two plain shops and two plain software companies</td></tr>"] + [prow(r, True) for r in PL["for_comparison"]]
+    PLAT_HTML = tbl(["NAME", "IN THE TREE NOW · ITS PARENTS", "ON THE HUB TODAY"] + [">WITH THE " + YN[f].upper() + " " + f for f in YD] + ["ON THE TAPE, CLOSER TO"], pl_rows, 1380) + \
+        "<p class='cap'>bold = daily moves as they were · after = after the market's own swing is taken out · a fund that holds a lot of the name flatters the number: the weight is shown</p>"
+
+    # the factor branch
+    C = FT["counts"]; RU = FT["rules"]; AG = FT["agreement_with_the_funds"]; OL = {(o["branch"], o["fund"]): o for o in FLN["our_lists_against_the_funds"]}
+    rule_txt = {"GROWTH": f"next-twelve-month revenue growth of {RU['growth_min_ntm_rev_pct']:.0f}% or more where an estimate is on file ({C['growth_estimate_on_file']} names); else the index maker's side: VUG holds it, VTV does not",
+                "MOMENTUM": f"top fifth of {C['ranked_full_window']} companies by six-month return (rank {RU['momentum_top_pct']} or higher)",
+                "LOW VOLATILITY": f"calmest fifth by usual day: the middle size of its daily move over six months (rank {RU['low_vol_bottom_pct']} or lower)"}
+    agk = {"GROWTH": "growth_vs_VUG", "MOMENTUM": "momentum_vs_MTUM", "LOW VOLATILITY": "low_volatility_vs_SPLV"}
+    fr_rule = []
+    for n in FACT:
+        a = AG[agk[n["label"]]]; f = n["spine_fund"]; o = OL.get((n["label"], f))
+        fr_rule.append(tr(f"<b>{e(n['label'])}</b>", e(rule_txt[n["label"]]), R(len(companies(n["cohort"]))), "<b>" + e(" · ".join(m["ticker"] for m in MEM[n["cohort"]] if m["role"] == "reference")) + "</b>",
+                          R(f"{a['both']} of {a['ours']}<br><span class='small'>{f} holds {a['fund_holds_of_our_companies']} of our companies</span>"), R(ra(o["move_together"]) if o else "—"),
+                          R(f"{sg(o['our_list_return_6m_pct'])} <span class='small'>ours</span><br>{sg(o['fund_return_6m_pct'])} <span class='small'>{f}</span>" if o else "—")))
+    def top(node, fmt, n=24):
+        ts = companies(node)
+        return f"<div class='panel'><h3>{e(lab(node))} · {len(ts)} NAMES · FIRST {min(n, len(ts))}</h3><ul class='plain'>" + "".join(f"<li><b>{e(t)}</b> <span class='small'>{fmt(TAGS[t])}</span></li>" for t in ts[:n]) + f"</ul><p class='cap'>then: {e(' '.join(ts[n:]))}</p></div>"
+    cols3 = (top("IDX_FACTOR_GROWTH", lambda o: (f"revenue {sg(o['growth_ntm_rev_pct'])} next 12 months" if o.get("growth_ntm_rev_pct") is not None else "VUG holds it, VTV does not · no estimate on file")) +
+             top("IDX_FACTOR_MOMENTUM", lambda o: f"{sg(o['ret_126_pct'])} in six months · rank {o['momentum_rank']:.0f}" + (" · MTUM holds it" if "MTUM" in o["held_by"] else "")) +
+             top("IDX_FACTOR_LOW_VOL", lambda o: f"usual day {o['usual_day_pct']:.2f}% · {o['usual_day_vs_market']:.1f}× the market" + (" · SPLV" if "SPLV" in o["held_by"] else "") + (" · QUAL" if "QUAL" in o["held_by"] else "")))
+    pair_rows = [tr(f"<b>{e(p['a'])} against {e(p['b'])}</b><br><span class='small'>{e(p['is'])}</span>", R(f"<b>{sg(p['a_beat_b_6m_pct'])}</b>"), R(f"<b>{sg(p['a_beat_b_20_sessions_pct'])}</b>"), R(f"{sg(p['a_return_6m_pct'])} · {sg(p['b_return_6m_pct'])}"), R(f2(p["move_together"])), e(p["reads"])) for p in FLN["pairs"]]
+    def hand_row(h, title):
+        grp_ = {}
+        for x in h["on_the_hub_list_not_by_rule"]: grp_.setdefault(x["group"], []).append(x)
+        why = "<br>".join(f"<span class='small'>{e(k)}:</span> " + e(" · ".join(x["ticker"] + (f" {x['detail']}".replace("-", "−") if x.get("detail") else "") for x in v)) for k, v in grp_.items())
+        return tr(f"<b>{e(title)}</b>", R(h["hub_names"]), e(h["rule"].lower()), R(h["rule_names"]), R(f"<b>{h['both']}</b>"), why)
+    hand_rows = [hand_row(HL["growth"], "GROWTH · your list on the Hub"), hand_row(HL["blue_chip_vs_low_volatility"], "BLUE CHIP · your list on the Hub"), hand_row(HL["blue_chip_vs_quality"], "BLUE CHIP · against QUAL")]
+    mix_rows = []; MIX = {x["cohort"]: x for x in SE["tag_mix_by_cohort"]}
+    def own_cohorts(h):                                        # the cohorts whose nearest heading above is h, in tree order, with their depth under it
+        out = []
+        def walk_m(c, d):
+            for k in KIDS.get(c, []):
+                if N[k]["kind"] == "heading": continue         # a sub-heading gets its own group below
+                out.append((k, d)); walk_m(k, d + 1)
+        walk_m(h, 0); return out
+    for h in ORDER + LONE:
+        cs = own_cohorts(h) if N[h]["kind"] == "heading" else [(h, 0)]
+        cs = [(c, d) for c, d in cs if c in MIX]
+        if not cs: continue
+        if N[h]["kind"] == "heading": mix_rows.append(f"<tr class='grp'><td colspan='7'><b>{e(lab(h))}</b> · pick {picktag(N[h])}" + (f" · under {e(lab(N[h]['parent_1']))}" if h in SUBH else "") + "</td></tr>")
+        for c, d in cs:
+            x = MIX[c]; mix_rows.append(tr(("&nbsp;&nbsp;" * d + "└ " if d else "") + e(x["label"]) + f" <span class='small'>· {PICK[x['hub_pick']]}</span>", R(x["names"]), R(x["growth"] or ""), R(x["momentum"] or ""), R(x["low_volatility"] or ""), R(x["lagging"] or ""), "<span class='small'>" + e(" ".join(marks(t) for t in companies(c))) + "</span>"))
+    all_rows = [tr(f"<b>{e(o['ticker'])}</b>", e(o["name"] or ""), e(" · ".join(o["tags"]) or "—"), R(sg(o.get("growth_ntm_rev_pct")) if o.get("growth_ntm_rev_pct") is not None else ""), e((o.get("growth_basis") or "not classified").replace("index maker ", "")), R(sg(o.get("ret_126_pct"))), R(f"{o['momentum_rank']:.0f}" if o.get("momentum_rank") is not None else ""), R(f"{o['usual_day_pct']:.2f}%" if o.get("usual_day_pct") is not None else ""), R(f"{o['usual_day_vs_market']:.1f}×" if o.get("usual_day_vs_market") is not None else ""), e(" · ".join(f"{k} {v:.2f}" for k, v in o["held_by"].items())), e("; ".join(o["notes"]))) for o in FT["names"]]
+    BC = FT["blue_chip_answer"]
+    FACT_HTML = (f"<div class='kpi'><div><b>{len(FT['names'])}</b><span>companies tagged, as of {dmy(FT['as_of'])}</span></div>" + "".join(f"<div><b>{len(companies(n['cohort']))}</b><span>{e(n['label'].lower())}</span></div>" for n in FACT) +
+                 f"<div><b>{C['tags']['VALUE']} · {C['tags']['LAGGING']} · {C['tags']['HIGH VOLATILITY']}</b><span>the other ends: value · lagging · high volatility (tags only)</span></div><div><b>{C['growth_estimate_on_file']} · {C['growth_by_index_maker']} · {C['growth_not_classified']}</b><span>growth judged on an estimate · on the index maker's side · not classified yet</span></div><div><b>{FT['market']['usual_day_pct']:.2f}%</b><span>the market's usual day (SPY)</span></div></div>"
+                 "<h3>THE THREE RULES AND THEIR FUND LINES</h3>" + tbl(["BRANCH", "THE RULE", ">NAMES", "FUND LINES", ">OF OUR NAMES, THE FUND HOLDS", ">OUR LIST MOVES WITH THE FUND", ">SIX MONTHS"], fr_rule, 1180) +
+                 f"<div class='three'>{cols3}</div><p class='cap'>growth is listed highest first; a figure in the hundreds or thousands of percent means last year's revenue was tiny (a company that has barely started selling), not that it is the strongest business</p>"
+                 "<h3>THE FUND LINES AS READINGS · HOW MUCH THE FIRST FUND BEAT THE SECOND</h3>" + tbl(["PAIR", ">SIX MONTHS", ">LAST 20 SESSIONS", ">EACH FUND, SIX MONTHS", ">MOVE TOGETHER", "HOW TO READ IT"], pair_rows, 1100) +
+                 "<h3>THE LISTS YOU MADE BY HAND ON THE HUB, AGAINST THE RULE</h3>" + tbl(["LIST", ">NAMES", "AGAINST THE RULE", ">NAMES BY RULE", ">ON BOTH", "ON YOUR LIST AND NOT BY RULE · WHY"], hand_rows, 1180) +
+                 f"<p class='cap'>{e(BC['plain'])} Of our {BC['low_volatility_names']} low-volatility names, QUAL holds {BC['of_them_held_by_QUAL']} and SPLV holds {BC['of_them_held_by_SPLV']}.</p>"
+                 "<h3>THE TAGS IN THE TREE · EACH COHORT'S NAMES WITH THEIR MARKS</h3>" + tbl(["COHORT", ">NAMES", ">GROWTH", ">MOMENTUM", ">LOW VOLATILITY", ">LAGGING", "NAMES · [G] GROWTH · [M] MOMENTUM · [L] LOW VOLATILITY"], mix_rows, 1180) +
+                 f"<details class='names'><summary>EVERY NAME AND ITS NUMBERS · {len(all_rows)}</summary>" + tbl(["TICKER", "NAME", "TAGS", ">REVENUE, NEXT 12 MONTHS", "GROWTH JUDGED ON", ">SIX-MONTH RETURN", ">RANK", ">USUAL DAY", ">× MARKET", "HELD BY", "NOTE"], all_rows, 1400) + "</details>")
+
+if LN:
+    def lines_cell(l):
+        if not l or not l.get("lines"): return "<span class='small'>" + ("reviewed, lines not in this file" if l and l.get("reviewed") else "never reviewed") + "</span>"
+        f = lambda x, w: f"{w} <b>{e(x['line'])}</b> {x['level']:,.2f} <span class='small'>({sg(x['pct_from_price'])})</span>" if x else ""
+        return f"{l['lines']} lines<br>" + "<br>".join(x for x in (f(l.get("nearest_above"), "above"), f(l.get("nearest_below"), "below")) if x)
+    LH = []
+    for L in LN["lanes"]:
+        if L["lane"] == "CORE":
+            rows = [tr(f"<b>{e(i['ticker'])}</b> <span class='small'>{e(i['name'])}</span>", e(i["kind"]), R(sg(i["ret_6m_pct"])), R(sg(i["off_high_pct"])), R(sg(i["vs_avg21_pct"])), R(sg(i["vs_avg100_pct"])), lines_cell(i["lines"])) for i in L["items"]]
+            t = tbl(["LINE", "WHAT", ">SIX-MONTH RETURN", ">AGAINST ITS SIX-MONTH HIGH", ">AGAINST ITS 21-DAY AVERAGE", ">AGAINST ITS 100-DAY AVERAGE", "REVIEWED LINES"], rows, 980)
+        elif L["lane"] == "NEW NAMES":
+            rows = [tr(f"<b>{e(i['ticker'])}</b> <span class='small'>{e(i['name'] or '')}</span>", e(dmy(i["listed_on"])), e(" · ".join(i["in_tree_cohorts"])), R(sg(i["ret_6m_pct"]) if i["ret_6m_pct"] is not None else "<span class='small'>short history</span>"), R(sg(i["off_high_pct"])), R(sg(i["growth_ntm_rev_pct"]) if i.get("growth_ntm_rev_pct") is not None else ""), lines_cell(i["lines"])) for i in L["items"]]
+            t = tbl(["NAME", "LISTED", "IN THE TREE", ">SIX-MONTH RETURN", ">AGAINST ITS HIGH SINCE", ">REVENUE, NEXT 12 MONTHS", "REVIEWED LINES"], rows, 1080)
+        else:
+            lag = L["lane"].startswith("ROTATION")
+            rows = [tr(f"<b>{e(i['ticker'])}</b> <span class='small'>{e(i['name'] or '')}</span>", e(" · ".join(i["on_hub_cohorts"][:2])), R(f"{i['momentum_rank']:.0f}"), R(sg(i["ret_6m_pct"])), R(sg(i["above_low_pct"]) if lag else sg(i["off_high_pct"])), R(sg(i["vs_avg21_pct"])), R(sg(i["vs_avg100_pct"])), R(sg(i["growth_ntm_rev_pct"]) if i.get("growth_ntm_rev_pct") is not None else ""), lines_cell(i["lines"])) for i in L["items"]]
+            t = tbl(["NAME", "ON-HUB COHORT", ">RANK OF 100", ">SIX-MONTH RETURN", ">OVER ITS SIX-MONTH LOW" if lag else ">UNDER ITS SIX-MONTH HIGH", ">AGAINST ITS 21-DAY AVERAGE", ">AGAINST ITS 100-DAY AVERAGE", ">REVENUE, NEXT 12 MONTHS", "REVIEWED LINES"], rows, 1180)
+        also = f"<p class='cap'>also in this lane today, not shown ({len(L['also'])}): {e(' '.join(L['also']))}</p>" if L.get("also") else ""
+        LH.append(f"<h3>LANE · {e(L['lane'])} · {L['count']} TODAY" + (f" · FIRST {L['shown']} SHOWN" if L.get("shown") and L["shown"] < L["count"] else "") + f"</h3>{t}<p class='cap'>{e(L['what'])} · rule: {e(L['rule'])}</p>{also}")
+    LANES_HTML = "<div class='kpi'>" + "".join(f"<div><b>{v}</b><span>{e(k.lower())}</span></div>" for k, v in LN["counts"].items()) + f"<div><b>{LN['rules']['per_lane_cap']}</b><span>names shown per lane a day (the cap)</span></div><div><b>{len(LN['reviewed_so_far'])}</b><span>instruments the Lab has reviewed lines for so far: {e(' '.join(LN['reviewed_so_far'][:10]))} …</span></div></div>" + "".join(LH)
+
 # ── facts for PAGE SPECS ────────────────────────────────────────────────────────────────────────────────────────────
 WIN = FR["method"]["window"]; VAN = {v["funds"]["VANGUARD"] for v in FL["sector_funds"].values()}
 CAPPED = ", ".join(f"{f} ({a} of {b} rows)" for f, (a, b) in FL["sanity"]["funds_truncated_by_the_pull"].items() if f in VAN)
@@ -397,13 +548,15 @@ tr.grp td{background:var(--bg);color:var(--dim);letter-spacing:.06em;padding-top
 table.grid td.h{min-width:62px;color:var(--bright)}table.grid td.p1{outline:1px solid #aeb0b2;outline-offset:-2px}table.grid td.p2{outline:1px dashed #8a8c8e;outline-offset:-2px}
 pre{font-size:11px;line-height:1.5;color:var(--ink);overflow-x:auto;background:var(--panel);border:1px solid var(--line);padding:12px;margin:10px 0}
 .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}.kpi div{background:var(--panel);border:1px solid var(--line);padding:10px 12px;min-width:0}.kpi b{display:block;font-size:20px;overflow-wrap:anywhere}.kpi span{color:var(--dim);font-size:11px}
-.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.two pre,.three .panel{margin:0}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.two pre,.three .panel,.four .panel{margin:0}.four{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+details.names{margin:14px 0}details.names summary{cursor:pointer;color:var(--bright);letter-spacing:.1em;font-size:11px;padding:8px 0}
 ul.plain{list-style:none;margin:0;padding:0;font-size:11px}ul.plain li{padding:3px 0;border-bottom:1px solid var(--line)}
 dl{margin:10px 0;font-size:12px;max-width:980px}dt{color:var(--bright);font-weight:600;margin-top:10px}dd{margin:2px 0 0 0;color:var(--ink)}
 details.sc-pagespecs{margin-top:40px;border-top:1px solid var(--line);padding-top:12px;color:var(--dim)}details.sc-pagespecs summary{cursor:pointer;color:var(--bright);letter-spacing:.12em}details.sc-pagespecs p{max-width:900px}
 .wrap{overflow-x:auto}.small{font-size:11px;color:var(--dim)}.cap{font-size:11px;color:var(--dim);margin:6px 0 0;max-width:1100px}.notrun{color:var(--dim);border:1px dashed var(--line);padding:10px 12px;margin:10px 0}code{color:var(--bright)}
 .treewrap{padding:8px}svg.tree{display:block;width:1590px;min-width:1590px;height:auto}svg.tree text.t{font:11px Menlo,ui-monospace,Consolas,monospace;fill:#c4c6c8}svg.tree text.b{fill:#ced0d2;font-weight:600}svg.tree text.d{fill:#8a8c8e}svg.tree text.tk{font-size:13px;font-weight:600;fill:#ced0d2}svg.tree text.halo{paint-order:stroke;stroke:#161718;stroke-width:4px;stroke-linejoin:round}
-@media(max-width:900px){.two,.three{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:1300px){.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.two,.three,.four{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:700px){body{padding:20px 16px 50px}}
 """
 page = f"""<!doctype html>
@@ -411,16 +564,20 @@ page = f"""<!doctype html>
 <title>TR2 · The tree revised on your notes</title>
 <style>{CSS}</style></head><body><main>
 <h1>TR2 · THE TREE REVISED ON YOUR NOTES</h1>
-<p class="sub">6 Oct 2026 · prepared, nothing applied · no table written, no Hub change, no fund admitted · branch hub/tr2-tree-revision-20261006</p>
+<p class="sub">6 Oct 2026, your afternoon notes and your evening steering · prepared, nothing applied · no table written, no Hub change, no fund admitted · branch hub/tr2-tree-revision-20261006</p>
 <div class="kpi">
 <div><b>{PLAN['nodes']['tr1']} → {PLAN['nodes']['tr2']}</b><span>nodes in the tree</span></div>
 <div><b>{len(MOVED)}</b><span>{e(GONE['label'])} dissolved: cohorts re-homed</span></div>
 <div><b>{len(SECT)}</b><span>sector nodes, each a fund with its three twins</span></div>
 <div><b>{PLAN['links']}</b><span>fund-to-cohort links, by weight</span></div>
 <div><b>{PLAN['candidates']}</b><span>candidates (not served)</span></div>
-<div><b>{len(NF['admit_next'])}</b><span>funds in the next batch (not tonight's)</span></div>
+<div><b>{len(NF['admit_next'])}</b><span>funds in the next batch (not the coming sitting's)</span></div>
 <div><b>{KP.get('on', 0)} · {KP.get('off', 0)} · {KP.get('undecided', 0)}</b><span>your picks: on · off · undecided</span></div>
+<div><b>{len(FT['names']) if FT else '—'}</b><span>companies tagged growth / momentum / low volatility by rule</span></div>
 </div>
+
+<h2 id="evening">YOUR EVENING NOTES · 18:10 – 19:20 ET · WHAT CHANGED IN THE TREE</h2>
+{EVENING}
 
 <h2 id="tree">1 · THE REVISED TREE PICTURE</h2>
 <div class="panel wrap treewrap">{SVG}</div>
@@ -449,11 +606,23 @@ page = f"""<!doctype html>
 <h3>CANDIDATES · NOT SERVED · PROPOSALS ONLY · {len(T['candidates'])}</h3>
 {tbl(["TICKER", "S&amp;P 500", ">SHARE OF THE S&amp;P 500", "BASIS", "WHICH GAP IT FILLS"], cand, 900)}
 
-<h2 id="picks">5 · YOUR ON-HUB PICKS, RECORDED</h2>
+<h2 id="powertrain">5 · AI POWERTRAIN, WITH THE GRID AND ELECTRICAL NAMES</h2>
+{PT_HTML.replace("{SEC_FACT}", "7")}
+
+<h2 id="platforms">6 · AMAZON, SHOPIFY AND THE MARKETPLACES · SOFTWARE AND CONSUMER AT ONCE</h2>
+{PLAT_HTML}
+
+<h2 id="factors">7 · GROWTH · MOMENTUM · LOW VOLATILITY · A BRANCH OF THE INDEX LAYER, AND A TAG ON EVERY NAME</h2>
+{FACT_HTML}
+
+<h2 id="picks">8 · YOUR ON-HUB PICKS, RECORDED</h2>
 <div class="three">{picks['on']}{picks['off']}{picks['undecided']}</div>
 <p class="cap">A record only. Nothing on the Hub reads it.</p>
 
-<h2 id="funds">6 · THE NEXT FUND BATCH (NOT TONIGHT'S)</h2>
+<h2 id="lanes">9 · THE MARKET DESK QUEUE AS FOUR LANES · A PROPOSAL, DRAWN FROM THE TREE · CLOSE OF {dmy(LN['as_of']).upper() if LN else ''}</h2>
+{LANES_HTML}
+
+<h2 id="funds">10 · THE NEXT FUND BATCH (THE SITTING AFTER THE NEXT ONE)</h2>
 <div class="kpi">
 <div><b>{NF['counts']['admit_next']}</b><span>funds proposed for the next sitting</span></div>
 {''.join(f"<div><b>{v}</b><span>strengthen {e(k.replace('_', ' ').lower())}</span></div>" for k, v in NF['counts'].get('admit_next_by_read', {}).items())}
@@ -467,7 +636,7 @@ page = f"""<!doctype html>
 <h3>LATER · {len(NF['later'])} &nbsp;AND&nbsp; SKIP · {len(NF['skip'])}</h3>
 {tbl(["VERDICT", "FUND", "NAME", "REASON"], ls_rows, 860)}
 
-<h2 id="realestate">7 · REAL ESTATE IN PLAIN WORDS</h2>
+<h2 id="realestate">11 · REAL ESTATE IN PLAIN WORDS</h2>
 <div class="two"><div><h3>WHAT XLRE IS MADE OF · % OF THE FUND</h3>{tbl(["PART", ">SHARE"], xl, 300)}</div>
 <div><h3>WHERE EQIX, DLR AND IRM SIT · TREE AND FUNDS</h3>{tbl(["NAME", "FILED AS", "IN THE TREE"] + [">" + f for f in WF], rw, 760)}</div></div>
 <h3>HOW THEY MOVED WITH · {RE['method']['window']['sessions']} SESSIONS · 1.00 = EXACTLY TOGETHER</h3>
@@ -477,7 +646,7 @@ page = f"""<!doctype html>
 <dl>{''.join(f"<dt>{e(t)}</dt><dd>{e(d)}</dd>" for t, d in DEFS)}</dl>
 <p class="cap">Not measured, because the field is not held: {e(' · '.join(RE['not_measured']))}.</p>
 
-<h2 id="migration">8 · THE MIGRATION AND ITS DRY RUN · NOTHING APPLIED</h2>
+<h2 id="migration">12 · THE MIGRATION AND ITS DRY RUN · NOTHING APPLIED</h2>
 <div class="kpi"><div><b>{len(NEWTABS)}</b><span>new tables: {e(' · '.join(NEWTABS))}</span></div><div><b>{len(NEWCOLS)}</b><span>new columns on cohort_tree: {e(' · '.join(NEWCOLS))}</span></div><div><b>0</b><span>pages that read any of them</span></div></div>
 <h3>THE TREE MIGRATION</h3>
 {MIG_HTML}
@@ -490,11 +659,13 @@ page = f"""<!doctype html>
 <p><b>Section 2.</b> The same links as a grid. Weights are the funds' own holdings files (pulled {e(FR['measured_from']['fund_holdings_pulled'])}), summed over the names we serve under each heading or cohort; a name is counted once per heading. "Our names are this much of it" is from <code>fund-links.json</code>: the share of the fund's weight that sits on names we serve. That file was built on TR1's cohorts, so its "names in no cohort" are names in no cohort of either tree (the set of companies did not change). The two-sector list needs the second sector's Vanguard fund to hold at least a quarter of the cohort's names.</p>
 <p><b>Section 3.</b> "Moves together" is the average of how closely each pair of names moved day by day over {WIN['sessions']} sessions, closes {dmy(WIN['first_return_date'])} to {dmy(WIN['last_return_date'])} (<code>frontier-rehome.json</code>); statisticians call it correlation. "After taking out the small-company swing" removes from each series the part explained by the small-company index fund IWM, because these are small, jumpy stocks that all rise and fall with it. The fund a cohort "follows most" is the closest of the 19 funds tested. The "why" column is the tree's own <code>parent_why</code>.</p>
 <p><b>Section 4.</b> From <code>consumer-gaps.json</code> and the candidates in <code>revised-tree.json</code>. A pair is one number, not a group test; one name has no number. Candidates are names we do not serve: they are not members of anything and nothing is admitted. S&amp;P 500 shares are State Street's file, {e(CG['spy_as_of'].replace('As of ', ''))}. Candidates outside the S&amp;P 500 are from memory.</p>
-<p><b>Section 5.</b> From <code>hub_pick</code>, <code>hub_pick_source</code> and <code>hub_pick_note</code> on each node. A cohort follows its nearest heading you named; where its two parents disagree, or it moved after you spoke, it is left undecided on purpose.</p>
-<p><b>Section 6.</b> From <code>next-funds.json</code>. "Facts" says whether a fund's name, start date and trading volume were checked against a source in this run, come from a measured local file, or are from memory. The pair numbers are how far one fund divided by the other moved over the last 126 and 20 sessions, from the local closes file; where a fund is not served there is no number.</p>
-<p><b>Section 7.</b> The tables are measured from local files (<code>real-estate.json</code>): fund weights, and how daily moves lined up over {RE['method']['window']['sessions']} sessions. {e(RE['method']['noise_floor'])}. The definition list is standard practice written out in plain words; none of it is measured here, because we hold none of those fields.</p>
-<p><b>Section 8.</b> The dry runs loaded the files into a throw-away Postgres in memory on this Mac, never the live database. "Forward" is the migration file, "rollback" the way back, and a "fingerprint" is a checksum of every row, used to prove the way back returns exactly what was there. New table names are read from <code>scripts/cohort-tree-revise-sql.mjs</code>; the new columns are the ones the revised nodes carry that TR1's did not.</p>
-<p><b>What could be wrong.</b> One half-year is one market regime: the numbers say what moved together from {dmy(WIN['first_return_date'])} to {dmy(WIN['last_return_date'])}, not what always will. Small cohorts rest on few pairs (QUANTUM is four names, six pairs). {MEMN} of the {NF['counts']['admit_next']} next-batch funds carry facts from memory. The holdings files stop at 400 rows for two Vanguard funds: {e(CAPPED)}; a small name below the cut shows as not held. The live tables were NOT read in this run: the migration checks them itself when it is applied, and refuses if they are not what TR1 loaded.</p>
+<p><b>Section 8.</b> From <code>hub_pick</code>, <code>hub_pick_source</code> and <code>hub_pick_note</code> on each node. A cohort follows its nearest heading you named; where its two parents disagree, or it moved after you spoke, it is left undecided on purpose. The evening's four (regulated utilities, housing, restaurants, aerospace) are recorded off with the words "in the tree for the regime read": they stay measured, and stay off the Hub. The three cohorts that came from the old FRONTIER (space, eVTOL, defence tech) are left undecided: "aerospace off" was said about the industrial shelf, and whether it covers those story stocks is yours to say.</p>
+<p><b>The evening block and sections 5 to 7.</b> Your steering of 6 Oct, 18:10 to 19:20 ET, applied to the afternoon's tree. <b>Section 5:</b> AI POWERTRAIN now holds the grid and electrical build-out names itself and has four groups under it; the regulated utilities are a separate cohort under ENERGY &amp; POWER, recorded off the Hub, and the migration refuses to finish if one of them sits inside AI POWERTRAIN. "Moves together" is the average of how closely each pair of names moved day by day over {SE['window']['sessions'] if SE else ''} sessions; "after" takes the market's own swing (SPY) out of both sides first. The Hub's own list is CO1's copy of the Hub's cohort lists of 6 Oct, not a fresh read. <b>Section 6:</b> a company's parents are the parents of the cohorts it sits in; the marketplaces sit in INTERNET &amp; CONSUMER PLATFORMS, whose first parent is SOFTWARE &amp; INTERNET and whose second is CONSUMER, and each keeps the cohort it was in. The tape columns say how each moved with four funds; where the fund holds a lot of the name itself the number is flattered, and the weight is printed. <b>Section 7:</b> three nodes under FACTORS in the index layer. Members are assigned by <code>tools/factor_tags.py</code>, never by hand: six-month return rank, the "usual day" (the middle size of a name's daily move, said as a multiple of SPY's), and next-twelve-month revenue growth where an analyst estimate is on file. The fund lines (VUG and VTV, MTUM, SPLV, QUAL) are what each list is compared with; "the fund holds" is from the funds' own holdings files. A name can carry more than one tag; the middle three fifths of a rank carry none.</p>
+<p><b>Section 9.</b> A proposal, from <code>market-desk-lanes.json</code>: the same review queue, sorted into four lanes by rules that read the tree. It is not a queue file and nothing was sent to the Indicator Lab. "Pullback" and "support" are stand-ins measured from closes (distance under the six-month high, over the six-month low, against the 21- and 100-day averages); where a name has reviewed lines the nearest one above and below is shown with its own label and level, read from the workshop-queue lane's file of 6 Oct. "On the Hub" means the name sits in a cohort recorded as on in section 8.</p>
+<p><b>Section 10.</b> From <code>next-funds.json</code>. "Facts" says whether a fund's name, start date and trading volume were checked against a source in this run, come from a measured local file, or are from memory. The pair numbers are how far one fund divided by the other moved over the last 126 and 20 sessions, from the local closes file; where a fund is not served there is no number.</p>
+<p><b>Section 11.</b> The tables are measured from local files (<code>real-estate.json</code>): fund weights, and how daily moves lined up over {RE['method']['window']['sessions']} sessions. {e(RE['method']['noise_floor'])}. The definition list is standard practice written out in plain words; none of it is measured here, because we hold none of those fields.</p>
+<p><b>Section 12.</b> The dry runs loaded the files into a throw-away Postgres in memory on this Mac, never the live database. "Forward" is the migration file, "rollback" the way back, and a "fingerprint" is a checksum of every row, used to prove the way back returns exactly what was there. New table names are read from <code>scripts/cohort-tree-revise-sql.mjs</code>; the new columns are the ones the revised nodes carry that TR1's did not.</p>
+<p><b>What could be wrong.</b> One half-year is one market regime: the numbers say what moved together from {dmy(WIN['first_return_date'])} to {dmy(WIN['last_return_date'])}, not what always will. Small cohorts rest on few pairs (QUANTUM is four names, six pairs). {MEMN} of the {NF['counts']['admit_next']} next-batch funds carry facts from memory. The holdings files stop at 400 rows for two Vanguard funds: {e(CAPPED)}; a small name below the cut shows as not held. The live tables were NOT read in this run: the migration checks them itself when it is applied, and refuses if they are not what TR1 loaded. The tags are one half-year: momentum is the six-month leg only (the closes file here is {FT['window']['closes_file_sessions'] if FT else ''} sessions long, so the 12-month leg is not in), and growth is judged on an analyst estimate for {FT['counts']['growth_estimate_on_file'] if FT else ''} names and on the index maker's side for {FT['counts']['growth_by_index_maker'] if FT else ''}; {FT['counts']['growth_not_classified'] if FT else ''} names (foreign listings and small companies with no estimate on file) are not classified for growth yet. A tag list goes stale: it needs a refresh date. Warner Bros. Discovery stopped trading on 6 Oct and still has its row in the tree; it carries a note and no tag.</p>
 <p><b>What was not done.</b> Nothing applied. No Hub change: no page reads the picks, the links or the candidates. No fund admitted, no candidate served. The keyed steps that sit behind a gate (the provider's 60-session check and close cross-check for each fund) were not run.</p>
 </details>
 </main>
