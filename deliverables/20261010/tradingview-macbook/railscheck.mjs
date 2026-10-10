@@ -1,0 +1,22 @@
+// Visit every approved name on the capture layout and check what the painter shows against what Alan approved.
+// Usage: node railscheck.mjs            (pauses the rotation if playing, puts the charts back where they were)
+import { connectPage } from './cdp.mjs'
+import fs from 'node:fs'
+const HERE = new URL('.', import.meta.url).pathname.replace(/%20/g, ' ')
+const RAILS = JSON.parse(fs.readFileSync(HERE + 'LT-RAILS.json', 'utf8'))
+const to = (p, ms, w) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('timeout ' + w)), ms))]); const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const list = await (await fetch('http://127.0.0.1:9222/json/list')).json(); const t = list.find(x => x.url.includes('/chart/uTCpSmag/')); if (!t) { console.log('STOP: no capture tab'); process.exit(2) }
+const p = await to(connectPage(t.id), 5000, 'connect'); const ev = (s, ms = 30000) => to(p.eval(s), ms, 'eval')
+const st = await ev(`(() => { const R = window.SCINTILLA_REVIEW_ROTATION; let rot = null; try { const s = typeof R.state === 'function' ? R.state() : R.state; rot = { playing: !!(s.playing ?? s.running), busy: !!s.busy } } catch (e) {} let box = null; try { const s = window.SCINTILLA_CAPTURE_BOX.state(); box = !!(s.open || s.loading || s.pendingRequestId) } catch (e) {} return { rot, box, sym: [0, 1].map(i => TradingViewApi.chart(i).symbol()), tf: [0, 1].map(i => TradingViewApi.chart(i).resolution()), rails: !!window.__SC_LT_RAILS } })()`)
+console.log('before:', JSON.stringify(st)); if (st.box) { console.log('STOP: capture box open'); process.exit(3) } if (!st.rails) { console.log('STOP: painter not installed'); process.exit(4) }
+if (st.rot && st.rot.playing) await ev(`window.SCINTILLA_REVIEW_ROTATION.pause()`)
+const roster = await ev(`(() => { try { const r = window.SCINTILLA_REVIEW_ROTATION.roster; const a = typeof r === 'function' ? r() : r; const arr = Array.isArray(a) ? a : (a.symbols || a.entries || Object.values(a)); const m = {}; for (const x of arr) { const full = typeof x === 'string' ? x : (x && (x.symbol || x.full || x.id)); if (full) m[String(full).split(':').pop()] = full } return m } catch (e) { return {} } })()`)
+const FALL = { 'NQ1!': 'CME_MINI:NQ1!', 'ES1!': 'CME_MINI:ES1!', BTCUSD: 'CRYPTO:BTCUSD', US10Y: 'TVC:US10Y' }; let bad = 0; const rows = []
+for (const name of Object.keys(RAILS)) { const full = roster[name] || FALL[name]; await ev(`(() => { for (const i of [0, 1]) TradingViewApi.chart(i).setSymbol(${JSON.stringify(full)}, () => {}); return 1 })()`)
+  let ok = false; for (let k = 0; k < 80 && !ok; k++) { await sleep(500); ok = await ev(`(() => [0, 1].every(i => { const c = TradingViewApi.chart(i), s = c._chartWidget.model().model().mainSeries(); return c.symbol().split(':').pop() === ${JSON.stringify(name)} && s.bars().size() > 20 && !(s.isLoading && s.isLoading()) }))()`).catch(() => false) } await sleep(900)
+  const now = await ev(`(() => { window.__SC_LT_RAILS.repaint(); return { now: window.__SC_LT_RAILS.state.now, err: window.__SC_LT_RAILS.state.err } })()`)
+  const notes = []; if (now.err) notes.push('painter error ' + now.err); for (const i of [0, 1]) { const n = now.now[i]; if (!n || n.sym !== name) { notes.push(`chart ${i} shows ${n && n.sym}`); continue } for (const rail of RAILS[name]) { const h = n.rails.find(r => r.tag === rail.tag); if (!h) notes.push(`chart ${i} ${rail.tag} not painted`); else if (!h.exact) notes.push(`chart ${i} ${rail.tag} anchor not on its bar`); else if (Math.abs(h.price / rail.y2 - 1) > 0.02) notes.push(`chart ${i} ${rail.tag} ${h.price} vs approved ${rail.y2}`) } }
+  const r1 = now.now[1] || {}; rows.push({ name, pos: r1.pos, up: r1.up, dn: r1.dn, last: r1.last, rails: (r1.rails || []).map(r => r.tag.replace('LT ', '') + ' ' + r.price) }); if (notes.length) bad++
+  console.log(name.padEnd(7), notes.length ? 'CHECK: ' + notes.join('; ') : `ok  ${(r1.rails || []).map(r => r.tag.replace('LT ', '2W ') + ' ' + r.price).join(' · ')}  | ${r1.pos}% up, top ${r1.up}%, bottom ${r1.dn}%`) }
+await ev(`(() => { TradingViewApi.chart(0).setSymbol(${JSON.stringify(st.sym[0])}, () => {}); TradingViewApi.chart(1).setSymbol(${JSON.stringify(st.sym[1])}, () => {}); return 1 })()`); if (st.rot && st.rot.playing) await ev(`window.SCINTILLA_REVIEW_ROTATION.play()`)
+fs.writeFileSync(HERE + 'LT-RAILS-CHECK.json', JSON.stringify({ at: new Date().toISOString(), rows }, null, 1)); console.log('charts put back on', st.sym.join(' '), '|', Object.keys(RAILS).length, 'names,', bad, 'need a look'); process.exit(0)
