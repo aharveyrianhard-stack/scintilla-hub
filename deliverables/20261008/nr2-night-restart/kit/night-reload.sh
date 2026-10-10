@@ -786,7 +786,14 @@ case "$TRUSTED" in
   no-gui) say "permission: not checked (window helper switched off for this run)" ;;
   *) say "permission: MISSING - System Settings > Privacy & Security > Accessibility > switch on 'Scintilla Night Reload' ($TRUSTED)"
      if [ "$MODE" != dry-run ]; then
-       note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Accessibility (and under Automation, 'System Events')."; done_for_tonight; finish
+       if [ "$RESTART_APPS" = yes ]; then
+         # 10 Oct 2026 (Alan: "Test it. Do it. So that we can let it run."): closing and opening TradingView and the Hub app needs no
+         # permission, so they are still restarted. Brave feeds X, and X cannot be reconnected without the switch, so Brave, the Station
+         # and X are left exactly as they are.
+         NO_AX=1; say "  TradingView and the Hub app need no permission and are still restarted; Brave, the Station and X are left alone"
+       else
+         note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Accessibility (and under Automation, 'System Events')."; done_for_tonight; finish
+       fi
      fi ;;
 esac
 
@@ -801,6 +808,7 @@ BEFORE="$(x_health "")"; say "X before: $BEFORE"
 
 # ---- the plan -----------------------------------------------------------------------------------------------------------------------
 make_plan
+if [ "${NO_AX:-0}" = 1 ]; then PLAN=none; WHY="macOS has not let 'Scintilla Night Reload' look at windows - switch it on in System Settings > Privacy & Security > Accessibility"; fi
 if [ "$MODE" = dry-run ]; then
   restart_preview
   say "TONIGHT, at the first quiet moment between $(clock "$WINDOW_START") and $(clock "$WINDOW_END"), the job would:"
@@ -846,7 +854,7 @@ fi
 case "$PLAN" in
   skip) ;;
   none) [ -z "$DID" ] && DID=" nothing reloaded:"; OUTCOME="$DID $WHY"
-        case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
+        case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*|*"Privacy & Security"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
   x-only) if reload_app "$X_BID" 1 X; then result "$DID X reloaded; $WHY"; else result "$DID X could not be reloaded (see the log); $WHY"; fi ;;
   station-only) if reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station"; then result "$DID the Station reloaded; $WHY"; else result "$DID the Station could not be reloaded (see the log); $WHY"; fi ;;
   full)

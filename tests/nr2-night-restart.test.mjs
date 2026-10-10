@@ -191,13 +191,27 @@ test("only the main process of each app is asked to quit, only with the ordinary
   assert.ok(text.every((l) => !/\bkill\s+-(9|KILL|s\s*KILL)|pkill|killall/.test(l)), "no stronger signal, no kill-by-name anywhere");
 });
 
-test("outside the night window, with the Mac in use, with the screen locked, or without the permission: no app is closed", () => {
+test("outside the night window, with the Mac in use, or with the screen locked: no app is closed", () => {
   for (const opts of [{ hhmm: "0359" }, { hhmm: "0530" }, { hhmm: "0915" }, { hhmm: "1630" }, { idle: ["120"] }, { idle: ["599"] },
-    { locked: "yes" }, { locked: "yes", hhmm: "0520" }, { env: { FAKE_TRUSTED: "false" } }]) {
+    { locked: "yes" }, { locked: "yes", hhmm: "0520" }]) {
     const n = night(opts);
     assert.deepEqual(n.acts.concat(n.awake), [], JSON.stringify(opts));
     assert.deepEqual(n.end.map((p) => p.pid), n.start.map((p) => p.pid));
   }
+});
+
+test("without the Accessibility permission: TradingView and the Hub app are still restarted; Brave, the Station and X are not touched; Alan is told where the switch is", () => {
+  const n = night({ env: { FAKE_TRUSTED: "false" } });
+  assert.equal(n.run.status, 0, n.run.stderr);
+  assert.deepEqual(n.acts, [
+    "CLOSE tv:main -TERM",
+    "OPEN -g -a /Applications/TradingView.app --args --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1",
+    "CLOSE hub:main -TERM", `OPEN -g -a ${n.dir}/Applications/SCINTILLA.app`,
+  ], "the two apps that need no permission, and nothing of Brave");
+  assert.deepEqual(n.changed, [], "no window is brought forward, nothing is reloaded, no key is pressed");
+  assert.ok(running(n, "brave"), "Brave is as it was");
+  assert.match(n.note, /Privacy & Security > Accessibility/);
+  assert.match(n.log, /TradingView and the Hub app need no permission and are still restarted/);
 });
 
 test("the dry run closes nothing and opens nothing, at any hour, and says what it would restart and how", () => {
