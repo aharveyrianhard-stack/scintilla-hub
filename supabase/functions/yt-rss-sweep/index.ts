@@ -509,6 +509,9 @@ Deno.serve(async (req?: Request) => {
   let keptOtherLanguage = 0;
   let keptOtherScript = 0;
   let secondWayNew = 0;
+  /* Y5: a videos call YouTube did not answer OK leaves its rows with no length, no live state and no tag. It was
+     silent (93 rows on 10 Oct 13:35Z); it is counted now. */
+  let videosNotOk = 0;
   if (fresh.length) {
     const detail: Record<string, ReturnType<typeof liveFields>> = {};
     const language: Record<string, string> = {};
@@ -518,6 +521,7 @@ Deno.serve(async (req?: Request) => {
         "videos?part=" + LIVE_PART + "&id=" + freshIds.slice(i, i + 50).join(",") + "&maxResults=50",
         apiKey,
       );
+      if (r.status !== 200) videosNotOk++;
       for (const item of r.body?.items || []) {
         detail[item.id] = liveFields(item, now);
         const snippet = item.snippet || {};
@@ -594,6 +598,7 @@ Deno.serve(async (req?: Request) => {
         apiKey,
       );
       const items = r.body?.items || [];
+      if (r.status !== 200) videosNotOk++;
       /* YouTube answered, and a row we hold as "live" is not in the answer: the video was removed or made
          private. It is not on air. Only on a clean answer — a failed call must never end a stream. */
       if (r.status === 200 && Array.isArray(r.body?.items)) {
@@ -655,6 +660,7 @@ Deno.serve(async (req?: Request) => {
     live_refreshed: refreshed,
     live_gone: liveGone,
     refresh_error: refreshError,
+    videos_calls_not_ok: videosNotOk,
     dropped,
     kept_other_language: keptOtherLanguage,
     kept_other_script: keptOtherScript,

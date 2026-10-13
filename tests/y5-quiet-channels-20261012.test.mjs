@@ -91,7 +91,7 @@ function db(config, videos) {
 let harnessCount = 0;
 /** one pass. feeds / uploads: channel id → body, or [status, body], or an Error to throw (default: an empty feed /
     "no such list"). api: video id → videos.list item. store: an earlier pass's table, to run the next pass on it. */
-async function runSweep({ config, videos = [], feeds = {}, api = {}, uploads = {}, query = "", nowMs = Date.UTC(2026, 9, 13, 2, 0, 0), store = null }) {
+async function runSweep({ config, videos = [], feeds = {}, api = {}, uploads = {}, query = "", nowMs = Date.UTC(2026, 9, 13, 2, 0, 0), store = null, videosDown = null }) {
   store = store || db(config, videos);
   store.log.fetched.length = 0; store.log.writes.length = 0; store.log.reads.length = 0;
   const realFetch = globalThis.fetch, realTimeout = globalThis.setTimeout;
@@ -103,6 +103,7 @@ async function runSweep({ config, videos = [], feeds = {}, api = {}, uploads = {
     store.log.fetched.push(u.replace(/key=[^&]+/, "key=…"));
     if (u.includes("/feeds/videos.xml")) { const id = u.split("channel_id=")[1]; return from(feeds[id], feedXml("x", []), u); }
     if (u.includes("googleapis.com/youtube/v3/videos")) {
+      if (videosDown) return answer(videosDown[0], videosDown[1], u);
       const ids = decodeURIComponent(u.match(/[?&]id=([^&]+)/)[1]).split(",");
       return answer(200, { items: ids.filter((id) => api[id]).map((id) => ({ id, ...api[id] })) }, u);
     }
@@ -185,6 +186,19 @@ test("a kept video is known on the next pass: the same videos are no longer re-a
   const second = await runSweep({ store: first.store, feeds, api, nowMs: Date.UTC(2026, 9, 13, 2, 5, 0) });
   assert.deepEqual([second.result.new_videos, second.result.rss_seen], [0, 2]);
   assert.equal(second.log.fetched.filter((u) => u.includes("/youtube/v3/videos")).length, 0, "nothing new, nothing asked — the dropped ones used to cost a call on every pass");
+});
+
+test("a videos call YouTube does not answer is no longer silent: the rows are stored as before, and the result row counts the call", async () => {
+  /* 10 Oct 13:35Z: 93 new rows were stored with no length, no live state and no tag, and nothing said why. (It is
+     also the only reason the named channel's videos were ever stored: with no tag there was nothing to drop.) */
+  const down = await runSweep({ config: cfg({ scintilla: [DESK] }), feeds: { [DESK]: feedXml("Chart Desk Daily", DESK_NEW) },
+    videosDown: [403, { error: { code: 403, errors: [{ reason: "quotaExceeded" }] } }] });
+  assert.deepEqual([down.result.new_videos, down.result.videos_calls_not_ok, down.result.write_error], [2, 2, null],
+    "two calls went unanswered: the one for the new videos, and the refresh that at once re-asks about rows with no length");
+  const stored2 = row(down.tables, "fxNewVideo1");
+  assert.deepEqual([stored2.duration_sec, stored2.live_broadcast, stored2.live_started_at], [null, null, null], "what such a row has always looked like");
+  const fine = await runSweep({ config: cfg({ scintilla: [DESK] }), feeds: { [DESK]: feedXml("Chart Desk Daily", DESK_NEW) }, api: { fxNewVideo1: apiVideo("zxx", "en"), "fxNewVideo2": apiVideo("zxx", "en") } });
+  assert.equal(fine.result.videos_calls_not_ok, 0);
 });
 
 test("the rule and its neighbours: the sweep keeps, the ticker search still filters strangers' videos, and no key is in any source", () => {
