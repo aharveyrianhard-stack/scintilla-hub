@@ -133,10 +133,15 @@ async function runSweep({ config, videos = [], feeds = {}, api = {}, uploads = {
   } finally { mock.timers.reset(); globalThis.fetch = realFetch; globalThis.setTimeout = realTimeout; fs.unlinkSync(file); delete globalThis.Deno; }
 }
 const sec = (ms) => Math.floor(ms / 1000);
+/* Y6 (13 Oct) added a cheap count before the read (tests/y6-lists-without-sign-in-20261012.test.mjs). These tests
+   hold what Y5 built — the blind read and its budget — so every config here carries {"notice":0} in the settings
+   row: with the notice off the second way is Y5's, to the unit. A settings row a test gives is merged over it. */
+const NOTICE_OFF = { notice: 0 };
 const cfg = (lists, extra = {}, listedAtMs = Date.UTC(2026, 9, 13, 1, 59, 0)) => Object.entries({
   YT_API_KEY: KEY,
   ...Object.fromEntries(Object.entries(lists).map(([account, ids]) => ["yt_sub_channels_" + account, JSON.stringify({ ids, ts: sec(listedAtMs) })])),
   ...extra,
+  [SETTINGS_KEY]: typeof extra[SETTINGS_KEY] === "string" ? extra[SETTINGS_KEY] : { ...NOTICE_OFF, ...(extra[SETTINGS_KEY] || {}) },
 }).map(([key, value]) => ({ key, value: typeof value === "string" ? value : JSON.stringify(value) }));
 const held = (v, channel, name) => ({ video_id: v.id, channel_id: channel, channel_title: name, title: v.title, published_at: v.published, source: "subscription", duration_sec: 1343, live_broadcast: "none", subscription_accounts: ["scintilla"], updated_ts: 1791639302 });
 const row = (tables, id) => tables.youtube_videos.find((r) => r.video_id === id);
@@ -273,8 +278,12 @@ test("the neighbours — the day still fits: RADAR 7,979 + the sweep's worst 1,4
   assert.ok(SEARCH_MAX_UNITS + measuredSweep + FALLBACK_DEFAULTS.per_day <= DAILY_QUOTA - 800, "on the measured day there are more than 800 units to spare");
   /* what the sweep calls: its own two kinds (videos for new rows, videos for the refresh) and, through one door only, the uploads list */
   assert.equal((sweep.match(/apiKeyRequest\(/g) || []).length, 3, "definition + the two uses it always had");
-  assert.equal((sweep.match(/readUploadsPass\(/g) || []).length, 2, "the uploads list is asked in two places: the pass (behind the plan's pick) and the look-only door");
-  assert.match(sweep, /if \(plan\.pick\.length\) reads = await readUploadsPass\(plan\.pick, apiKey, fetch,/, "the pass asks exactly the plan's pick");
+  /* Y6: the pass and the look-only door now run ONE function, secondWayPass (the count, then the reads); the door's
+     named channels are the only place the sweep's own file still asks an uploads list directly */
+  assert.equal((sweep.match(/secondWayPass\(/g) || []).length, 2, "the second way is run in two places: the pass and the look-only door");
+  assert.equal((sweep.match(/readUploadsPass\(/g) || []).length, 1, "and the uploads list is asked directly only for the look-only door's named channels");
+  const notice = code(read("supabase/functions/_shared/yt-upload-notice.mjs"));
+  assert.match(notice, /const toRead = \[\.\.\.movedPlan\.pick, \.\.\.plan\.pick\];\n  const reads = toRead\.length \? await readUploadsPass\(toRead, apiKey, fetchFn,/, "a pass reads exactly the plan's pick (and the channels whose count moved)");
   assert.doesNotMatch(sweep, /search\?|eventType=live/, "still no search call in the sweep");
   assert.match(code(read("supabase/functions/_shared/yt-feed-fallback.mjs")), /playlistItems\?part=snippet,contentDetails&playlistId=/);
   assert.doesNotMatch(FEED, /yt-feed-fallback|yt_rss_fallback|yt_rss_health/, "the search collector does not know about any of this");
@@ -536,7 +545,7 @@ test("a burst: a followed channel's feed has given 404 for 95 minutes → its up
   assert.deepEqual([f.feed_unread, f.eligible, f.asked, f.read, f.videos, f.videos_new, f.skipped_budget, f.cap, f.cap_says, f.error], [1, 1, 1, 1, 3, 2, 0, null, null, null]);
   assert.deepEqual(f.channels, [{ id: DESK, name: "Chart Desk Daily", videos: 3 }]);
   assert.deepEqual(f.could_not_read, []);
-  assert.deepEqual(f.budget, { per_pass: 6, per_day: 580, after_min: 60, max_results: 15, from: "default", day: "2026-10-12", used_today: 8, allowed_by_now: 461, quota_gone: false });
+  assert.deepEqual(f.budget, { per_pass: 6, per_day: 580, after_min: 60, max_results: 15, from: "app_config", day: "2026-10-12", used_today: 8, allowed_by_now: 461, quota_gone: false });
   assert.deepEqual(f.unread_over_a_day, { count: 0, longest_hours: 0, names: [] });
   assert.deepEqual(uploadsAsked(log), [DESK], "one call, for the one channel that was due");
   const newest = row(tables, "fxNewVideo1");
@@ -647,7 +656,7 @@ test("the numbers in app_config are the numbers used, and the result row says wh
   assert.deepEqual([f.asked, f.skipped_budget, f.cap, f.cap_says], [2, 3, "pass", "the cap of 2 channels a pass"]);
   assert.deepEqual([f.budget.per_pass, f.budget.per_day, f.budget.after_min, f.budget.max_results, f.budget.from, f.budget.allowed_by_now], [2, 100, 90, 8, "app_config", 79]);
   assert.ok(two.log.fetched.filter((u) => u.includes("playlistItems")).every((u) => u.includes("&maxResults=8&")), "the page size asked for is the row's");
-  assert.equal(JSON.stringify(two.tables.app_config.find((r) => r.key === SETTINGS_KEY)), JSON.stringify({ key: SETTINGS_KEY, value: JSON.stringify({ per_pass: 2, per_day: 100, after_min: 90, max_results: 8 }) }), "the sweep reads the settings row and never writes it");
+  assert.equal(JSON.stringify(two.tables.app_config.find((r) => r.key === SETTINGS_KEY)), JSON.stringify({ key: SETTINGS_KEY, value: JSON.stringify({ notice: 0, per_pass: 2, per_day: 100, after_min: 90, max_results: 8 }) }), "the sweep reads the settings row and never writes it");
   const off = await runSweep({ config: cfg({ scintilla: ids }, { [HEALTH_KEY]: healthRow(ch), [SETTINGS_KEY]: { per_day: 0 } }), feeds, uploads: emptyUploads(ids) });
   f = off.result.fallback;
   assert.deepEqual([f.eligible, f.asked, f.skipped_budget, f.cap, f.cap_says], [5, 0, 5, "off", "switched off in app_config (yt_rss_fallback)"]);
@@ -663,7 +672,7 @@ test("every feed answers: the pass is the pass it always was — no uploads call
     feeds: { [DESK]: feedXml("Chart Desk Daily", DESK_NEW), [TALK]: feedXml("Long Talks Radio", []), [RAIN]: feedXml("Quiet Rain Room", []) }, api: ZXX,
   });
   assert.deepEqual(result.fallback, { feed_unread: 0, eligible: 0, asked: 0, read: 0, videos: 0, videos_new: 0, skipped_budget: 0, cap: null, cap_says: null, channels: [], could_not_read: [],
-    budget: { per_pass: 6, per_day: 580, after_min: 60, max_results: 15, from: "default", day: "2026-10-12", used_today: 0, allowed_by_now: 461, quota_gone: false },
+    budget: { per_pass: 6, per_day: 580, after_min: 60, max_results: 15, from: "app_config", day: "2026-10-12", used_today: 0, allowed_by_now: 461, quota_gone: false },
     unread_over_a_day: { count: 0, longest_hours: 0, names: [] }, error: null });
   assert.deepEqual(uploadsAsked(log), []);
   assert.deepEqual([result.rss_failed, result.rss_seen, result.new_videos], [0, 2, 2]);
@@ -671,7 +680,8 @@ test("every feed answers: the pass is the pass it always was — no uploads call
   assert.equal(log.writes.filter((w) => w.key === HEALTH_KEY).length, 1, "one write of the one new row");
   const before = ["yt_rss_result", "yt_rss_running", "yt_bridge_live"];   // the rows a pass wrote before Y5
   assert.deepEqual([...new Set(log.writes.filter((w) => w.table === "app_config").map((w) => w.key))].filter((key) => !before.includes(key)), ["yt_rss_health"], "and no other new row");
-  assert.ok(!tables.app_config.some((r) => r.key === SETTINGS_KEY), "the settings row is never made by the sweep");
+  assert.ok(!log.writes.some((w) => w.key === SETTINGS_KEY), "the settings row is never written by the sweep");
+  assert.equal(tables.app_config.find((r) => r.key === SETTINGS_KEY).value, JSON.stringify(NOTICE_OFF), "it is what it was");
 });
 
 test("an OK answer that is not a feed is not a read; a pass that is already running is still left alone", async () => {
@@ -696,13 +706,13 @@ test("?dry=fallback — which channels would be asked and what came back: nothin
   assert.deepEqual([line.id, line.name, line.why, line.feed, line.last_read_min_ago, line.outcome, line.reason, line.videos, line.newest, line.not_stored],
     [DESK, "Chart Desk Daily", "feed unread", "no answer (404)", 95, "ok", null, 3, "2026-10-13T01:14:38Z", 2]);
   assert.deepEqual(line.items.map((v) => [v.video_id, v.stored]), [["fxNewVideo1", false], ["fxNewVideo2", false], ["fxHeldVideo", true]]);
-  assert.deepEqual(result.budget, { per_pass: 6, per_day: 580, after_min: 60, max_results: 15, from: "default", day: "2026-10-12", used_today: 7, allowed_by_now: 461, quota_gone: false });
+  assert.deepEqual(result.budget, { per_pass: 6, per_day: 580, after_min: 60, max_results: 15, from: "app_config", day: "2026-10-12", used_today: 7, allowed_by_now: 461, quota_gone: false });
   assert.match(result.note, /not added to the day's count/);
   assert.deepEqual(log.writes, [], "nothing written — not the result, not the lock, not the remembered row, not a video");
   assert.equal(JSON.stringify(tables.app_config), snapshot);
   assert.equal(tables.youtube_videos.length, 1);
   const configRead = log.reads.find((r) => r.table === "app_config");
-  assert.deepEqual(configRead.keys.slice().sort(), ["YT_API_KEY", HEALTH_KEY, "yt_sub_channels_personal", "yt_sub_channels_scintilla"].sort(), "the key, the saved lists and the remembered row — no OAuth secret, no refresh token");
+  assert.deepEqual(configRead.keys.slice().sort(), ["YT_API_KEY", HEALTH_KEY, SETTINGS_KEY, "yt_sub_channels_personal", "yt_sub_channels_scintilla"].sort(), "the key, the saved lists, the numbers and the remembered row — no OAuth secret, no refresh token");
   assert.equal(log.reads.filter((r) => r.table === "app_config").length, 1);
   assert.ok(!log.fetched.some((u) => u.includes("oauth2") || u.includes("/youtube/v3/videos") || u.includes("/shorts/")), "no sign-in, no videos call, no shorts check");
   assert.doesNotMatch(JSON.stringify(result) + JSON.stringify(log.fetched), new RegExp(KEY + "|NEVER-READ"));

@@ -164,7 +164,10 @@ test("the neighbours: the pass's budget fits inside the schedule's 120 s wait an
   /* Y5 (12 Oct): a third kind of call now exists on purpose — the feed's second way (playlistItems, 1 unit a channel), behind its
      own budget and its own tests (tests/y5-quiet-channels-20261012.test.mjs). The on-air check still adds none. */
   assert.equal((code.match(/apiKeyRequest\(/g) || []).length, 3, "the sweep's own two kinds of videos call are what they were (definition + 2 uses)");
-  assert.equal((code.match(/readUploadsPass\(/g) || []).length, 2, "and the uploads list is asked through one function, in two places: the pass and the look-only door");
+  /* Y6 (13 Oct): the pass and the look-only door run one function, secondWayPass (a cheap count, then the reads); the sweep's own
+     file asks an uploads list directly only for the door's named channels (tests/y6-lists-without-sign-in-20261012.test.mjs). */
+  assert.equal((code.match(/secondWayPass\(/g) || []).length, 2, "and the second way is run through one function, in two places: the pass and the look-only door");
+  assert.equal((code.match(/readUploadsPass\(/g) || []).length, 1, "the uploads list is asked directly only for the look-only door's named channels");
   assert.match(code, /const REFRESH_MAX = 200;/);
 });
 

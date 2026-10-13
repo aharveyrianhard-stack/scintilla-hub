@@ -14,6 +14,13 @@
 //      — the feed carries the newest 15 when it answers again — but a channel dark for hours has no other way
 //      in. That is rule 2: the channel's uploads list, read through the YouTube Data API, inside a hard budget.
 //
+// Y6 (13 Oct): the feed went from "fails in bursts" to "mostly gone" — 162–184 of 195 reads failing for most of
+// four hours. One blind read an hour for each channel is too slow for that and too dear to speed up, so the
+// second way became two steps: a cheap NOTICE (one call says how many videos each of 50 channels has) and a
+// read only where that number moved (_shared/yt-upload-notice.mjs). The followed lists themselves are refreshed
+// without a sign-in where YouTube allows it (_shared/yt-lists.mjs). This file stays what those two stand on:
+// the numbers, what is remembered, the day's budget, and the blind read that is still the net under both.
+//
 // Plain ESM, read by Deno (yt-rss-sweep, through _shared/yt-bridge.mjs) and Node (the tests) alike. No key is
 // ever returned, stored or put in a message here: the one function that holds it builds the request and gives
 // back facts only.
@@ -57,8 +64,23 @@ export const FALLBACK_DEFAULTS = Object.freeze({ per_pass: 6, per_day: 580, afte
 /* a typing slip in the row must not be able to spend the day: per_day never passes the whole non-search share */
 export const FALLBACK_LIMITS = Object.freeze({ per_pass: [0, 25], per_day: [0, DAILY_QUOTA - SEARCH_BUDGET_UNITS], after_min: [10, 1440], max_results: [1, 50] });
 
-/** the yt_rss_fallback row (text or object) → the numbers in force, and where they came from */
-export function fallbackSettings(raw) {
+/* Y6 · the same row carries the notice's and the lists' numbers. Every one has a built-in value, so the row
+   {"per_pass":6,"per_day":450} that is in force keeps meaning what it meant.
+     notice          1 = on, 0 = off: the cheap count of each unread channel's videos (0 leaves Y5's blind read alone)
+     moved_per_pass  how many channels whose count moved are read in one pass
+     notice_min      a channel off the SCINTILLA list is counted at least this often while its feed is unread
+                     (the SCINTILLA list's unread channels are counted on every pass)
+     baseline_min    while its feeds answer, the SCINTILLA list's counts are taken afresh this often (0 = never)
+     verify_min      a channel the count vouches for is still read through its uploads list this often
+     lists           1 = on, 0 = off: the followed lists read without a sign-in
+     list_min_pct / list_max_pct   a list read that way is taken only if it is this share of the saved one
+     list_retry_min  an account whose list is private, empty or outside those bounds is asked again this often */
+export const NOTICE_DEFAULTS = Object.freeze({ notice: 1, moved_per_pass: 20, notice_min: 15, baseline_min: 60, verify_min: 720,
+  lists: 1, list_min_pct: 60, list_max_pct: 300, list_retry_min: 360 });
+export const NOTICE_LIMITS = Object.freeze({ notice: [0, 1], moved_per_pass: [0, 50], notice_min: [5, 240], baseline_min: [0, 1440], verify_min: [60, 2880],
+  lists: [0, 1], list_min_pct: [1, 100], list_max_pct: [100, 1000], list_retry_min: [60, 1440] });
+
+function rowNumbers(raw, defaults, limits) {
   let row = null, from = "default";
   if (raw != null && raw !== "") {
     try { row = typeof raw === "string" ? JSON.parse(raw) : raw; } catch (_) { row = null; }
@@ -66,13 +88,17 @@ export function fallbackSettings(raw) {
     else { row = null; from = "default (the yt_rss_fallback row could not be read)"; }
   }
   const out = {};
-  for (const [name, standard] of Object.entries(FALLBACK_DEFAULTS)) {
-    const [low, high] = FALLBACK_LIMITS[name];
+  for (const [name, standard] of Object.entries(defaults)) {
+    const [low, high] = limits[name];
     const given = row && row[name] != null && row[name] !== "" ? Number(row[name]) : NaN;
     out[name] = Number.isFinite(given) ? Math.min(high, Math.max(low, Math.floor(given))) : standard;
   }
   return { ...out, from };
 }
+/** the yt_rss_fallback row (text or object) → the numbers in force, and where they came from */
+export function fallbackSettings(raw) { return rowNumbers(raw, FALLBACK_DEFAULTS, FALLBACK_LIMITS); }
+/** the same row → the notice's and the lists' numbers (Y6) */
+export function noticeSettings(raw) { return rowNumbers(raw, NOTICE_DEFAULTS, NOTICE_LIMITS); }
 
 /* ---- WHAT IS REMEMBERED (app_config yt_rss_health, written by the sweep only) ----
    { v, at, day, used, quota_day, ch: { <channel id>: { ok, fb, f, t, x, b, n } } }   every time in epoch seconds
@@ -80,9 +106,44 @@ export function fallbackSettings(raw) {
      t   the second way last FAILED on it  x   second-way failures in a row        b  first seen unread (never read yet)
      n   the channel's name, kept only while it is in trouble
    day / used are the Pacific quota day and the second-way calls made in it; quota_day is the day YouTube said the
-   allowance was gone. A channel the feed answers is one short entry; a channel no longer followed is dropped. */
+   allowance was gone. A channel the feed answers is one short entry; a channel no longer followed is dropped.
+   Y6 adds, all optional so a row written before reads as it did (and Y5's code reads a row written now):
+     per channel   c   how many videos YouTube says the channel has (channels.statistics.videoCount), as last seen
+                   ca  when that count was last seen
+                   cr  1 once a read of the channel (feed or uploads list) has happened at or after the count was
+                       taken — only then does "the count has not moved" mean "there is nothing new"
+     ls            { <account>: { w, a, t, k, n, p } }   the followed lists (_shared/yt-lists.mjs)
+                   w  the way this function last refreshed the list (public · sign-in)   a  when
+                   t  when the public way was last tried    k  why that try kept the saved list   n / p  what it saw
+     gone          [[account, channel id, when, videos untagged], …]   the last channels that left a list
+   used counts EVERY unit the second way spends: list pages, count calls and uploads reads alike. */
 const TIMES = ["ok", "fb", "f", "t", "x", "b"];
 export const FB_KEEP_SEC = 7 * 86400;
+export const GONE_KEPT = 30;
+const ACCOUNT_NAME = /^[a-z][a-z0-9_]{0,23}$/;
+const wholeOrNone = (v) => { const n = Math.floor(Number(v)); return v != null && v !== "" && Number.isFinite(n) && n >= 0 ? n : null; };
+function parseLists(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [account, e] of Object.entries(raw)) {
+    if (!ACCOUNT_NAME.test(account) || !e || typeof e !== "object") continue;
+    const entry = {};
+    if (e.w === "public" || e.w === "sign-in") entry.w = e.w;
+    for (const k of ["a", "t"]) { const v = wholeOrNone(e[k]); if (v) entry[k] = v; }
+    if (typeof e.k === "string" && e.k) entry.k = e.k.slice(0, 24);
+    for (const k of ["n", "p"]) { const v = wholeOrNone(e[k]); if (v != null) entry[k] = v; }
+    if (Object.keys(entry).length) out[account] = entry;
+  }
+  return out;
+}
+function parseGone(raw) {
+  const out = [];
+  for (const line of Array.isArray(raw) ? raw : []) {
+    if (!Array.isArray(line) || !ACCOUNT_NAME.test(String(line[0])) || !CHANNEL_ID.test(String(line[1]))) continue;
+    out.push([line[0], line[1], wholeOrNone(line[2]) || 0, wholeOrNone(line[3]) || 0]);
+  }
+  return out.slice(-GONE_KEPT);
+}
 export function parseHealth(raw) {
   let h = null;
   try { h = typeof raw === "string" ? JSON.parse(raw) : raw; } catch (_) { h = null; }
@@ -94,30 +155,51 @@ export function parseHealth(raw) {
       const entry = {};
       for (const k of TIMES) { const v = Math.floor(Number(e[k])); if (Number.isFinite(v) && v > 0) entry[k] = v; }
       if (typeof e.n === "string" && e.n) entry.n = e.n.slice(0, 60);
+      const count = wholeOrNone(e.c);
+      if (count != null) { entry.c = count; const at = wholeOrNone(e.ca); if (at) entry.ca = at; if (e.cr) entry.cr = 1; }
       ch[id] = entry;
     }
   }
   const whole = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const ls = parseLists(h.ls), gone = parseGone(h.gone);
   return { v: 1, at: whole(h.at), day: typeof h.day === "string" ? h.day : "", used: whole(h.used),
-    quota_day: typeof h.quota_day === "string" ? h.quota_day : "", ch };
+    quota_day: typeof h.quota_day === "string" ? h.quota_day : "", ch,
+    ...(Object.keys(ls).length ? { ls } : {}), ...(gone.length ? { gone } : {}) };
 }
 /** when a channel was last read by either way (0 = never, as far as the row remembers) */
 export const lastRead = (entry) => Math.max((entry && entry.ok) || 0, (entry && entry.fb) || 0);
+/** when we last KNEW the table held everything the channel has: a read, or — once a read has vouched for the
+    count (cr) — the last time the count was seen unmoved */
+export const lastSeen = (entry) => Math.max(lastRead(entry), (entry && entry.cr && entry.c != null && entry.ca) || 0);
 /** a channel the second way could not read either is asked again after after_min, then twice that, … at most daily */
 export const retryAfterMin = (failures, afterMin) => Math.min(1440, afterMin * 2 ** Math.max(0, (failures || 1) - 1));
 
+/** THE DAY'S EVEN SHARE SO FAR (the searches' own rule): never more than this by this minute of the Pacific day */
+export const allowedByNow = (perDay, minute) => Math.min(perDay, Math.floor(perDay * Math.min(1440, minute + SWEEP_EVERY_MIN) / 1440));
+
 /** THIS PASS'S PICK. unread = the followed channels whose feed gave no readable answer this pass, in the order
-    the sweep prefers on a tie (the SCINTILLA list first). Nothing here calls anything. */
-export function fallbackPlan({ unread, health, settings, nowSec }) {
+    the sweep prefers on a tie (the SCINTILLA list first). Nothing here calls anything.
+    Y6 — every one optional, and without them the pick is Y5's:
+      confirmed  the channels whose count was seen UNMOVED this pass, a read vouching for it: seen now
+      moved      the channels whose count was seen moved this pass: the old count vouches for nothing
+      exclude    the channels already being read this pass because their count moved
+      spent      units this pass has already spent (lists, counts, moved reads), not yet in the remembered row
+      dayCap     the most the whole day may come to (what the neighbours leave); never above per_day
+      verifyMin  a channel the count vouches for is still READ once it has gone this long without a read */
+export function fallbackPlan({ unread, health, settings, nowSec, confirmed, moved, exclude, spent = 0, dayCap, verifyMin = 0 }) {
   const clock = pacificClock(nowSec * 1000);
-  const usedToday = health.day === clock.day ? health.used : 0;
-  const allowedByNow = Math.min(settings.per_day, Math.floor(settings.per_day * Math.min(1440, clock.minute + SWEEP_EVERY_MIN) / 1440));
-  const room = Math.max(0, allowedByNow - usedToday);
+  const usedToday = (health.day === clock.day ? health.used : 0) + spent;
+  const byNow = allowedByNow(settings.per_day, clock.minute);
+  const ceiling = dayCap == null ? settings.per_day : Math.max(0, Math.min(settings.per_day, Math.floor(dayCap)));
+  const room = Math.max(0, Math.min(byNow, ceiling) - usedToday);
   const eligible = [];
   let readLately = 0, resting = 0;
   (unread || []).forEach((id, order) => {
+    if (exclude && exclude.has(id)) return;
     const entry = health.ch[id] || {}, last = lastRead(entry);
-    if (last && nowSec - last <= settings.after_min * 60) { readLately++; return; }
+    const seen = confirmed && confirmed.has(id) ? nowSec : moved && moved.has(id) ? last : lastSeen(entry);
+    const overdue = verifyMin > 0 && last > 0 && nowSec - last > verifyMin * 60;
+    if (seen && nowSec - seen <= settings.after_min * 60 && !overdue) { readLately++; return; }
     if (entry.x && entry.t && nowSec - entry.t < retryAfterMin(entry.x, settings.after_min) * 60) { resting++; return; }
     eligible.push({ id, last, order });
   });
@@ -126,19 +208,22 @@ export function fallbackPlan({ unread, health, settings, nowSec }) {
   const take = off || quotaGone ? 0 : Math.min(settings.per_pass, eligible.length, room);
   const skipped = eligible.length - take;
   /* which limit left channels unasked: the pass's own cap, or the day's — "pace" while the day's even share is
-     what holds it back, "day" once the whole day's number is what is left */
+     what holds it back, "day" once the whole day's number is what is left, "neighbours" when the day's number
+     has been cut to what RADAR's searches and this sweep's own calls leave (Y6) */
   let cap = null;
   if (skipped > 0) {
     cap = off ? "off" : quotaGone ? "quota" : room >= settings.per_pass ? "pass"
-      : allowedByNow >= settings.per_day ? "day" : "pace";
+      : ceiling < settings.per_day && ceiling <= byNow ? "neighbours"
+      : byNow >= settings.per_day ? "day" : "pace";
   }
-  return { day: clock.day, used_today: usedToday, allowed_by_now: allowedByNow, eligible: eligible.map((c) => c.id),
-    pick: eligible.slice(0, take).map((c) => c.id), skipped_budget: skipped, cap, read_lately: readLately, resting };
+  return { day: clock.day, used_today: usedToday, allowed_by_now: byNow, eligible: eligible.map((c) => c.id),
+    pick: eligible.slice(0, take).map((c) => c.id), skipped_budget: skipped, cap, read_lately: readLately, resting, ceiling };
 }
 /** the cap, in words a person reads in the result row */
 export function capWords(cap, settings, plan) {
   if (cap === "pass") return "the cap of " + settings.per_pass + " channels a pass";
   if (cap === "pace") return "the day's even share so far is spent (" + plan.used_today + " of " + plan.allowed_by_now + " allowed by now, " + settings.per_day + " a day)";
+  if (cap === "neighbours") return "RADAR's searches and this sweep's own calls leave the second way " + plan.ceiling + " of its " + settings.per_day + " today (" + plan.used_today + " used)";
   if (cap === "day") return "the day's " + settings.per_day + " calls are spent (" + plan.used_today + " before this pass)";
   if (cap === "quota") return "YouTube said the day's allowance is gone; the second way rests until midnight Pacific";
   if (cap === "off") return "switched off in app_config (" + SETTINGS_KEY + ")";
@@ -150,6 +235,33 @@ const QUOTA_REASONS = ["quotaExceeded", "dailyLimitExceeded"];
 const RATE_REASONS = ["rateLimitExceeded", "userRateLimitExceeded"];
 const KEY_REASONS = ["keyInvalid", "keyExpired", "accessNotConfigured", "ipRefererBlocked", "badRequest"];
 export const NOT_THE_CHANNEL = ["quota", "rate", "key_or_request", "timeout", "fetch_error", "no_key", "not_asked"];
+
+/** what an answer that is not a clean 200 is called — the same names readUploads gives */
+export function apiOutcome(status, reason) {
+  return QUOTA_REASONS.includes(reason) ? "quota" : RATE_REASONS.includes(reason) || status === 429 ? "rate"
+    : status === 400 || KEY_REASONS.includes(reason) ? "key_or_request" : status === 404 ? "not_found"
+    : status === 403 ? "forbidden" : status === 200 ? "unreadable" : "http_" + status;
+}
+/** ONE CALL to YouTube's Data API with the key (Y6: the count and the list reads; readUploads keeps its own).
+    Never throws and never repeats the key: { sent, status, body, reason, outcome }. outcome is ok for a 200 that
+    parsed, else one of apiOutcome's names, or timeout · fetch_error · no_key. Bounded by API_TIMEOUT_MS. */
+export const API_TIMEOUT_MS = 8000;
+export async function apiGet(pathAndQuery, apiKey, fetchFn = globalThis.fetch, timeoutMs = API_TIMEOUT_MS) {
+  if (!apiKey) return { sent: false, status: 0, body: null, reason: null, outcome: "no_key" };
+  let r;
+  try {
+    const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined;
+    r = await fetchFn("https://www.googleapis.com/youtube/v3/" + pathAndQuery + "&key=" + encodeURIComponent(apiKey), { signal });
+  } catch (e) {
+    return { sent: true, status: 0, body: null, reason: null, outcome: e && (e.name === "TimeoutError" || e.name === "AbortError") ? "timeout" : "fetch_error" };
+  }
+  let body = null;
+  try { body = JSON.parse(await r.text()); } catch (_) { body = null; }
+  const first = body && body.error && Array.isArray(body.error.errors) ? body.error.errors[0] : null;
+  const reason = first && typeof first.reason === "string" ? first.reason.slice(0, 40) : null;
+  const ok = r.status === 200 && body && typeof body === "object" && !Array.isArray(body) && !body.error;
+  return { sent: true, status: r.status, body: ok ? body : null, reason, outcome: ok ? "ok" : apiOutcome(r.status, reason) };
+}
 
 export const uploadsPlaylistId = (channelId) => "UU" + String(channelId).slice(2);
 export const uploadsPath = (channelId, maxResults = FALLBACK_DEFAULTS.max_results) =>
@@ -251,8 +363,18 @@ export async function feedAnswers(channelId, fetchFn = globalThis.fetch) {
 export const isFeed = (xml) => /<feed[\s>]/.test(String(xml || ""));
 
 /** THE ROW AFTER THIS PASS. channels = every followed channel this pass; feedOk = the ones whose feed answered;
-    reads = what readUploads gave back. Returns the new row; the old one is not touched. */
-export function nextHealth({ health, channels, feedOk, reads, nowSec }) {
+    reads = what readUploads gave back. Returns the new row; the old one is not touched.
+    Y6 — optional, and without them the row is Y5's:
+      counts     channel → the count YouTube gave this pass (only the channels it answered for)
+      units      what this pass spent besides the uploads reads: list pages and count calls
+      lists      the followed lists' own lines after this pass ({ account: { w, a, t, k, n, p } })
+      gone       the channels that left a list this pass ([[account, channel, when, videos untagged], …])
+      quotaGone  YouTube said the day's allowance is gone on a list page or a count call
+    THE COUNT, per channel:  a count seen for the first time is only remembered. A count that has not moved is
+    seen again (ca). A count that MOVED is taken over only in a pass that also read the channel — otherwise the
+    old count stays, so the channel is still "moved" on the next pass and nothing is lost to a cap. A read of the
+    channel at or after the moment its count was taken is what lets the count vouch for it (cr). */
+export function nextHealth({ health, channels, feedOk, reads, nowSec, counts, units = 0, lists, gone, quotaGone = false }) {
   const clock = pacificClock(nowSec * 1000);
   const ch = {};
   for (const id of channels || []) {
@@ -270,15 +392,18 @@ export function nextHealth({ health, channels, feedOk, reads, nowSec }) {
       if (!entry.ok && !entry.fb) entry.b = prev.b || nowSec;
       if (prev.n) entry.n = prev.n;
     }
+    if (prev.c != null) { entry.c = prev.c; if (prev.ca) entry.ca = prev.ca; if (prev.cr) entry.cr = 1; }
     ch[id] = entry;
   }
-  let calls = 0, quotaGone = false;
+  let calls = 0;
+  const readOk = new Set();
   for (const read of reads || []) {
     if (read.sent) calls += UNITS_PER_READ;
     if (read.outcome === "quota") quotaGone = true;
     const entry = ch[read.id];
     if (!entry) continue;
     if (read.outcome === "ok") {
+      readOk.add(read.id);
       entry.fb = nowSec;
       delete entry.t; delete entry.x; delete entry.b;
       if (read.name && entry.f) entry.n = String(read.name).slice(0, 60);
@@ -287,8 +412,33 @@ export function nextHealth({ health, channels, feedOk, reads, nowSec }) {
       entry.x = (entry.x || 0) + 1;
     }
   }
-  return { v: 1, at: nowSec, day: clock.day, used: (health.day === clock.day ? health.used : 0) + calls,
-    quota_day: quotaGone ? clock.day : (health.quota_day === clock.day ? health.quota_day : ""), ch };
+  for (const [id, entry] of Object.entries(ch)) {
+    const readNow = feedOk.has(id) || readOk.has(id);
+    const count = counts ? counts.get(id) : undefined;
+    if (count == null) { if (readNow && entry.c != null) entry.cr = 1; continue; }
+    if (entry.c == null || count === entry.c || readNow) {
+      const taken = entry.c == null || count !== entry.c;         // a new number: only this pass's read can vouch for it
+      entry.c = count; entry.ca = nowSec;
+      if (readNow) entry.cr = 1; else if (taken) delete entry.cr;
+    }
+  }
+  const ls = lists || health.ls || {};
+  const left = [...(health.gone || []), ...(gone || [])].slice(-GONE_KEPT);
+  return { v: 1, at: nowSec, day: clock.day, used: (health.day === clock.day ? health.used : 0) + calls + units,
+    quota_day: quotaGone ? clock.day : (health.quota_day === clock.day ? health.quota_day : ""), ch,
+    ...(Object.keys(ls).length ? { ls } : {}), ...(left.length ? { gone: left } : {}) };
+}
+
+/** THE ROW AFTER THE LISTS STEP (Y6), written at once when that step spent a unit or changed what it remembers:
+    the pages just asked count against the day whatever the rest of the pass does, and an account told "private"
+    is not asked again five minutes later. The channels' own entries are left exactly as they were. */
+export function afterLists({ health, lists, gone, units = 0, quotaGone = false, nowSec }) {
+  const clock = pacificClock(nowSec * 1000);
+  const left = [...(health.gone || []), ...(gone || [])].slice(-GONE_KEPT);
+  const { ls: _ls, gone: _gone, ...rest } = health;
+  return { ...rest, day: clock.day, used: (health.day === clock.day ? health.used : 0) + units,
+    quota_day: quotaGone ? clock.day : (health.quota_day === clock.day ? health.quota_day : ""),
+    ...(lists && Object.keys(lists).length ? { ls: lists } : {}), ...(left.length ? { gone: left } : {}) };
 }
 
 /** the channels nothing has read for more than a day — by the feed or by the second way. hours since the last

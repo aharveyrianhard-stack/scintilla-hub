@@ -17,6 +17,9 @@
 // yt-feed-fallback.mjs. They are handed on from here so the sweep keeps ONE shared address — the Node tests
 // run the function by rewriting exactly that one import.
 export * from "./yt-feed-fallback.mjs";
+// Y6 (13 Oct): the cheap notice of a new upload, and the followed lists read without a sign-in, come the same way.
+export * from "./yt-upload-notice.mjs";
+export * from "./yt-lists.mjs";
 
 const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;

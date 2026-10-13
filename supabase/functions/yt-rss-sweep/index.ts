@@ -25,11 +25,28 @@
 // What it finds goes down the same path as a feed entry. Every channel's last read is remembered in one row
 // (yt_rss_health), the result row says what the second way did and names the channels nothing has read for more
 // than a day, and a third read-only door shows it without writing:  ?dry=fallback[&channels=UC…,UC…]
+// Y6 (13 Oct): Alan: "I have tried to make some changes to the subscriptions … this was supposed to happen daily."
+// and "Why are we getting shit hidden? … Just get my shit on there, please."
+// THE LISTS WITHOUT A SIGN-IN. Every Google sign-in has answered invalid_grant since 30 Sep, so no list moved.
+// An account whose saved list is over an hour old and whose sign-in did not refresh it is read the public way,
+// with the account's own channel id (app_config YT_CHANNEL_ID_<ACCOUNT>) and the API key. A list is taken only
+// whole and only if it is 60–300 % of the saved one; a channel that left is first asked about directly, and
+// then that account's tag — and nothing else — comes off its stored videos (_shared/yt-lists.mjs). The result
+// row says for each account which way its list was last refreshed and when, and names the accounts YouTube
+// keeps private.
+// THE SECOND WAY IN TWO STEPS. With the feed mostly gone, one call per 50 channels says how many videos each
+// has; only a channel whose number moved is read, the SCINTILLA list first, then personal, then the rest
+// (_shared/yt-upload-notice.mjs). Y5's blind read stays underneath as the net. Every unit — list pages, count
+// calls, reads — comes out of the same day's number, and the result row says what the pass and the day spent.
+// A fourth read-only door:  ?dry=lists  each account's list read the public way and set against the saved one.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore  plain ESM shared with the resolver and the Node tests
 import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN,
   keepSubscribed, otherLanguage, HEALTH_KEY, SETTINGS_KEY, fallbackSettings, parseHealth, fallbackPlan, capWords, readUploadsPass, feedAnswers, isFeed,
-  nextHealth, unreadOverADay, savedChannelLists, carriers, lastRead, UNREAD_NAMED_MAX } from "../_shared/yt-bridge.mjs";
+  nextHealth, unreadOverADay, savedChannelLists, carriers, lastRead, UNREAD_NAMED_MAX,
+  noticeSettings, afterLists, passBudget, ownCallsToday, tiersOf, secondWayPass,
+  ownChannelKey, readPublicList, askStillSubscribed, stillFromAnswer, acceptList, missingFrom, settleList, untagGroups, publicWayDue, keptWords, listSays,
+  LISTS_BUDGET_MS, LIST_MAX_PAGES } from "../_shared/yt-bridge.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 
@@ -52,6 +69,9 @@ const SB_KEY = adminKey();
    contributes no channels this pass and is reported as "not connected" — it never fails the sweep. */
 const ACCOUNTS = ["personal", "scintilla", "soundscapes", "golf", "ai_research", "fitness"] as const;
 type Account = typeof ACCOUNTS[number];
+/* Y6: the lists are refreshed in this order — the SCINTILLA list first, so a short day or a slow answer costs
+   the others their turn and never it */
+const LIST_ORDER: Account[] = ["scintilla", ...ACCOUNTS.filter((account) => account !== "scintilla")];
 const iso2sec = (d: string) => {
   const m = (d || "").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
@@ -137,6 +157,44 @@ async function isShort(videoId: string) {
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 
+/* Y6 · THE TAG COMING OFF. The stored videos of channels that left an account's list lose that account's tag and
+   nothing else: no row is deleted, no other column is written, and a tag another list put on a row stays. Rows
+   are read a thousand at a time until none carries the tag, grouped by what their tags become (untagGroups), and
+   written two hundred ids at a time. Returns how many rows changed, per channel, and the channels' names. */
+async function untagChannels(sb: any, account: string, channelIds: string[]) {
+  const out = { videos: 0, by_channel: {} as Record<string, number>, names: {} as Record<string, string>, error: null as string | null };
+  for (let round = 0; round < 50 && channelIds.length; round++) {
+    const { data, error } = await sb.from("youtube_videos").select("video_id,channel_id,channel_title,subscription_accounts")
+      .in("channel_id", channelIds).contains("subscription_accounts", [account]).limit(1000);
+    if (error) { out.error = error.message; return out; }
+    for (const row of data || []) if (row.channel_title && !out.names[row.channel_id]) out.names[row.channel_id] = String(row.channel_title).slice(0, 60);
+    const groups: Record<string, any>[] = untagGroups(data || [], account);
+    if (!groups.length) break;
+    for (const group of groups) {
+      for (let i = 0; i < group.ids.length; i += 200) {
+        const batch = group.ids.slice(i, i + 200);
+        const { error: writeError } = await sb.from("youtube_videos").update({ subscription_accounts: group.next }).in("video_id", batch);
+        if (writeError) { out.error = writeError.message; return out; }
+        out.videos += batch.length;
+      }
+      for (const [channel, n] of Object.entries(group.channels)) out.by_channel[channel] = (out.by_channel[channel] || 0) + (n as number);
+    }
+    if ((data || []).length < 1000) break;
+  }
+  return out;
+}
+/* how many stored videos carry an account's tag for these channels — the look-only doors' count; reads only */
+async function taggedCount(sb: any, account: string, channelIds: string[]) {
+  const by: Record<string, { videos: number; name: string }> = {};
+  for (const id of channelIds.slice(0, 50)) {
+    const { count } = await sb.from("youtube_videos").select("video_id", { count: "exact", head: true })
+      .eq("channel_id", id).contains("subscription_accounts", [account]);
+    const { data } = await sb.from("youtube_videos").select("channel_title").eq("channel_id", id).limit(1);
+    by[id] = { videos: count || 0, name: String((data || [])[0]?.channel_title || "") };
+  }
+  return by;
+}
+
 Deno.serve(async (req?: Request) => {
   if (!SB_URL || !SB_KEY) {
     return new Response(JSON.stringify({ error: "backend credentials unavailable" }), {
@@ -168,15 +226,15 @@ Deno.serve(async (req?: Request) => {
       could_not_read: lines.filter((l) => l.state === "unknown").map((l) => l.id),
       channels: lines.map(onAirLine) });
   }
-  /* ---- READ-ONLY DOOR 3 (Y5): the feed's second way, looked at and not stored. It reads the saved channel lists
-     (it signs in nowhere), asks every followed channel's feed as a pass would, works out which channels the
-     second way would take under the same rules and budget, asks YouTube's API for exactly those, and reports
-     what came back and which of it the table already holds. &channels=UC…,UC… asks about those channels
-     whatever their feed says (never more than per_pass of them). No write, no lock, the remembered row left as
-     it is — so the units a look spends (1 a channel asked) are NOT added to the day's count; it says how many. ---- */
+  /* ---- READ-ONLY DOOR 3 (Y5, Y6): the feed's second way, looked at and not stored. It reads the saved channel
+     lists (it signs in nowhere), asks every followed channel's feed as a pass would, then runs the second way
+     exactly as a pass does (secondWayPass: the cheap count, the reads the count asks for, the blind read under
+     them) and reports what came back and which of it the table already holds. &channels=UC…,UC… asks about those
+     channels whatever their feed says (never more than per_pass of them, and no count). No write, no lock, the
+     remembered row left as it is — so the units a look spends are NOT added to the day's count; it says how many. ---- */
   if (ask.get("dry") === "fallback") {
     const { data } = await sb.from("app_config").select("key,value").in("key",
-      ["YT_API_KEY", ...ACCOUNTS.map((account) => "yt_sub_channels_" + account), "yt_sub_channels", "yt_bridge_channels", HEALTH_KEY, SETTINGS_KEY]);
+      ["YT_API_KEY", ...ACCOUNTS.map((account) => "yt_sub_channels_" + account), "yt_sub_channels", "yt_bridge_channels", HEALTH_KEY, SETTINGS_KEY, "yt_rss_result"]);
     const d: Record<string, string> = {};
     for (const row of data || []) d[row.key] = row.value;
     const lookKey = (d.YT_API_KEY || "").trim();
@@ -186,7 +244,8 @@ Deno.serve(async (req?: Request) => {
     try { bridged = bridgeChannelIds(JSON.parse(d.yt_bridge_channels || "null")); } catch (_) {}
     lists.scintilla = withBridge(lists.scintilla, bridged);
     const followed: string[] = [...carriers(lists, [...ACCOUNTS]).keys()].filter(isChannelId);
-    const health = parseHealth(d[HEALTH_KEY]), settings = fallbackSettings(d[SETTINGS_KEY]);
+    const health = parseHealth(d[HEALTH_KEY]), settings = fallbackSettings(d[SETTINGS_KEY]), notice = noticeSettings(d[SETTINGS_KEY]);
+    const budget: Record<string, any> = passBudget({ health, settings, nowSec: now, ownToday: ownCallsToday(d.yt_rss_result, now) });
     const named = [...new Set((ask.get("channels") || "").split(",").filter(isChannelId))];
     const toRead = named.length ? named : followed;
     const feedLines: Record<string, any>[] = [];
@@ -195,16 +254,28 @@ Deno.serve(async (req?: Request) => {
     }
     const answered = new Map(feedLines.map((line) => [line.id as string, line]));
     const unread = toRead.filter((id) => !answered.get(id)?.ok);
-    const plan = fallbackPlan({ unread, health, settings, nowSec: now });
-    /* a named channel is asked whatever its feed said — that is the point of naming it — but the caps still hold:
-       never more than per_pass, none when the second way is off, YouTube has said the day is gone, or the day's
-       calls are spent */
-    const off = !settings.per_pass || !settings.per_day, quotaGone = health.quota_day === plan.day;
-    const spare = Math.max(0, settings.per_day - plan.used_today);
-    const pick: string[] = !named.length ? plan.pick : off || quotaGone ? [] : named.slice(0, Math.min(settings.per_pass, spare));
-    const cap = !named.length ? plan.cap : pick.length === named.length ? null
-      : off ? "off" : quotaGone ? "quota" : spare < Math.min(settings.per_pass, named.length) ? "day" : "pass";
-    const reads: Record<string, any>[] = await readUploadsPass(pick, lookKey, fetch, { maxResults: settings.max_results, nowSec: now });
+    let plan: Record<string, any>, pick: string[], cap: string | null, reads: Record<string, any>[];
+    let sw: Record<string, any> | null = null;
+    let quotaGone = budget.quota_gone;
+    if (named.length) {
+      /* a named channel is asked whatever its feed said — that is the point of naming it — but the caps still hold:
+         never more than per_pass, none when the second way is off, YouTube has said the day is gone, or the day's
+         calls are spent */
+      plan = fallbackPlan({ unread, health, settings, nowSec: now });
+      const off = !settings.per_pass || !settings.per_day;
+      const spare = Math.max(0, settings.per_day - plan.used_today);
+      pick = off || quotaGone ? [] : named.slice(0, Math.min(settings.per_pass, spare));
+      cap = pick.length === named.length ? null
+        : off ? "off" : quotaGone ? "quota" : spare < Math.min(settings.per_pass, named.length) ? "day" : "pass";
+      reads = await readUploadsPass(pick, lookKey, fetch, { maxResults: settings.max_results, nowSec: now });
+    } else {
+      sw = await secondWayPass({ followed, tier: tiersOf(lists, [...ACCOUNTS]), feedOk: new Set(toRead.filter((id) => answered.get(id)?.ok)),
+        health, settings, notice, apiKey: lookKey, nowSec: now, budget, fetchFn: fetch });
+      plan = sw.plan; reads = sw.reads; cap = plan.cap;
+      pick = [...sw.movedPlan.pick, ...plan.pick];
+      quotaGone = budget.quota_gone;
+    }
+    const movedNow = new Set<string>(sw ? sw.said.moved : []);
     const found = reads.flatMap((read) => read.rows.map((video: Record<string, any>) => video.video_id as string));
     const have = new Set<string>();
     for (let i = 0; i < found.length; i += 200) {
@@ -219,7 +290,8 @@ Deno.serve(async (req?: Request) => {
         from: settings.from, day: plan.day, used_today: plan.used_today, allowed_by_now: plan.allowed_by_now, quota_gone: quotaGone },
       asked: reads.map((read) => {
         const entry = health.ch[read.id] || {}, last = lastRead(entry), feed = answered.get(read.id);
-        return { id: read.id, name: read.name || entry.n || "", why: named.length ? "named in the call" : "feed unread",
+        return { id: read.id, name: read.name || entry.n || "", why: named.length ? "named in the call" : movedNow.has(read.id) ? "its count moved" : "feed unread",
+          ...(movedNow.has(read.id) ? { count: { was: entry.c, now: sw!.counted.counts.get(read.id) } } : {}),
           feed: feed?.ok ? "answered" : "no answer (" + (feed?.status || "no reply") + ")",
           last_read_min_ago: last ? Math.round((now - last) / 60) : null,
           outcome: read.outcome, reason: read.reason, videos: read.rows.length,
@@ -228,10 +300,66 @@ Deno.serve(async (req?: Request) => {
           items: read.rows.map((video: Record<string, any>) => ({ video_id: video.video_id, published_at: video.published_at,
             title: String(video.title).slice(0, 80), stored: have.has(video.video_id) })) };
       }),
-      units_spent: reads.filter((read) => read.sent).length,
+      units_spent: (sw ? sw.counted.sent : 0) + reads.filter((read) => read.sent).length,
+      ...(sw ? { notice: sw.report, the_day: { may_come_to: budget.ceiling, own_videos_calls_so_far: ownCallsToday(d.yt_rss_result, now), what_the_neighbours_leave: budget.guard } } : {}),
       note: "a look writes nothing: the units it spends are not added to the day's count in " + HEALTH_KEY,
       unread_over_a_day: { count: unreadDay.length, longest_hours: unreadDay.length ? unreadDay[0].hours : 0,
         names: unreadDay.slice(0, UNREAD_NAMED_MAX).map((line) => line.name || line.id) } });
+  }
+  /* ---- READ-ONLY DOOR 4 (Y6): the followed lists, read the public way and set against the saved ones. Every
+     account with a channel id on file is asked (1 unit a page; "private" costs its unit too), a list is judged
+     by the same 60–300 % rule, and a channel missing from the answer is asked about directly, as a pass would.
+     It signs in nowhere and reads no sign-in row. No write, no lock, nothing remembered — so the units a look
+     spends are NOT added to the day's count; it says how many. ---- */
+  if (ask.get("dry") === "lists") {
+    const { data } = await sb.from("app_config").select("key,value").in("key",
+      ["YT_API_KEY", ...ACCOUNTS.map((account) => "yt_sub_channels_" + account), "yt_sub_channels", "yt_bridge_channels",
+        ...ACCOUNTS.map((account) => ownChannelKey(account)), HEALTH_KEY, SETTINGS_KEY]);
+    const d: Record<string, string> = {};
+    for (const row of data || []) d[row.key] = row.value;
+    const lookKey = (d.YT_API_KEY || "").trim();
+    if (!lookKey) return json({ dry: "lists", wrote: "nothing", error: "missing YouTube API key" });
+    const saved: Record<string, string[]> = savedChannelLists(d, [...ACCOUNTS]);
+    let bridged: string[] = [];
+    try { bridged = bridgeChannelIds(JSON.parse(d.yt_bridge_channels || "null")); } catch (_) {}
+    const health = parseHealth(d[HEALTH_KEY]), notice = noticeSettings(d[SETTINGS_KEY]);
+    const lines: Record<string, any>[] = [];
+    let units = 0;
+    for (const account of LIST_ORDER) {
+      const ownId = (d[ownChannelKey(account)] || "").trim(), have = saved[account];
+      let savedTs = 0;
+      try { savedTs = +JSON.parse(d["yt_sub_channels_" + account] || (account === "scintilla" ? d.yt_sub_channels : "") || "{}").ts || 0; } catch (_) {}
+      const line: Record<string, any> = { account, saved: have.length, saved_at: savedTs ? new Date(savedTs * 1000).toISOString() : null,
+        remembered: listSays({ line: (health.ls || {})[account], savedTs, savedCount: have.length, nowSec: now, notice }) };
+      lines.push(line);
+      if (!ownId) { line.outcome = "not asked"; line.would = "keep the saved list"; line.says = keptWords("no_id", null, have.length); continue; }
+      const read: Record<string, any> = await readPublicList(ownId, lookKey, fetch);
+      units += read.sent;
+      line.outcome = read.outcome; line.pages = read.pages;
+      if (read.reason) line.reason = read.reason;
+      if (read.outcome !== "ok") { line.would = "keep the saved list"; line.says = keptWords(read.outcome, null, have.length); if (read.outcome === "quota") break; continue; }
+      const verdict = acceptList({ saved: have.length, fresh: read.ids.length, notice });
+      line.read = read.ids.length; line.pct_of_saved = verdict.pct;
+      if (!verdict.take) { line.would = "keep the saved list"; line.says = keptWords(verdict.code, { n: read.ids.length, p: verdict.pct }, have.length); continue; }
+      const riding = account === "scintilla" ? bridged : [];
+      const missing: string[] = missingFrom(have, read.ids, riding);
+      let still: Set<string> | null = null;
+      if (missing.length) {
+        const question: Record<string, any> = await askStillSubscribed(ownId, missing, lookKey, fetch);
+        units += question.sent; still = question.still;
+        line.asked_directly = { channels: missing.length, outcome: question.outcome, still_followed: question.still ? question.still.size : null };
+      }
+      const settled = settleList({ saved: have, fresh: read.ids, riding, still });
+      const tagged = await taggedCount(sb, account, settled.left);
+      line.would = "take the list read";
+      line.becomes = settled.ids.length;
+      line.joined = settled.ids.filter((id: string) => !have.includes(id)).map((id: string) => ({ id, name: read.names[id] || "" }));
+      line.left = settled.left.map((id: string) => ({ id, name: tagged[id]?.name || "", videos_that_would_lose_the_tag: tagged[id]?.videos || 0 }));
+      line.held = settled.held;
+    }
+    return json({ dry: "lists", wrote: "nothing", at: new Date().toISOString(), accounts: lines, units_spent: units,
+      rule: { taken_if_pct_of_saved: [notice.list_min_pct, notice.list_max_pct], pages_at_most: LIST_MAX_PAGES },
+      note: "a look writes nothing: no list is saved, no tag is taken off, and the units it spends are not added to the day's count in " + HEALTH_KEY });
   }
   const configKeys = [
     "YT_API_KEY",
@@ -245,6 +373,10 @@ Deno.serve(async (req?: Request) => {
     "yt_bridge_live",
     HEALTH_KEY,
     SETTINGS_KEY,
+    /* Y6: each account's own channel id (the public way to its list), and the last result row (it carries the
+       day's count of this sweep's own videos calls) */
+    ...ACCOUNTS.map((account) => ownChannelKey(account)),
+    "yt_rss_result",
   ];
   const { data: cfg } = await sb.from("app_config").select("key,value").in("key", configKeys);
   const c: Record<string, string> = {};
@@ -269,7 +401,26 @@ Deno.serve(async (req?: Request) => {
   const accountChannels = Object.fromEntries(ACCOUNTS.map((account) => [account, [] as string[]])) as Record<Account, string[]>;
   const accountErrors: Partial<Record<Account, string>> = {};
 
-  for (const account of ACCOUNTS) {
+  /* ---- Y6 · WHAT THE SECOND WAY REMEMBERS AND MAY SPEND is read before the lists: a list's pages are paid out
+     of the same day as the counts and the reads (_shared/yt-feed-fallback.mjs, yt-upload-notice.mjs) ---- */
+  const health0: Record<string, any> = parseHealth(c[HEALTH_KEY]);
+  const settings: Record<string, any> = fallbackSettings(c[SETTINGS_KEY]);
+  const notice: Record<string, any> = noticeSettings(c[SETTINGS_KEY]);
+  const ownBefore: number = ownCallsToday(c.yt_rss_result, now);
+  const budget: Record<string, any> = passBudget({ health: health0, settings, nowSec: now, ownToday: ownBefore });
+  /* the channels that ride with the SCINTILLA list (the bridge) — read here, because a channel that rides does
+     not "leave" when the account stops following it */
+  let bridgeIds: string[] = [];
+  try { bridgeIds = bridgeChannelIds(JSON.parse(c.yt_bridge_channels || "null")); } catch (_) {}
+  /* what is remembered about each list (ls), when each list in force was saved and how long it is, why a list
+     was not even tried this pass, and what the step did */
+  const ls: Record<string, any> = { ...(health0.ls || {}) };
+  const savedAt: Record<string, number> = {}, ownSize: Record<string, number> = {}, listNote: Record<string, string> = {};
+  const listsNow = { units: 0, quota: false, touched: false, error: null as string | null,
+    refreshed: [] as Record<string, any>[], left: [] as Record<string, any>[], held: [] as Record<string, any>[], gone: [] as any[][] };
+  const listsStarted = Date.now();
+
+  for (const account of LIST_ORDER) {
     const suffix = account.toUpperCase();
     const cacheKey = "yt_sub_channels_" + account;
     // The old unsuffixed cache is known to be the SCINTILLA identity. Keeping
@@ -284,6 +435,11 @@ Deno.serve(async (req?: Request) => {
     } catch (_) {}
 
     if (!channels.length || now - cacheTs > 3600) {
+      /* Y6: a list read this pass and taken, the way it came, and how YouTube is asked directly about the
+         channels it lacks */
+      let fresh: string[] | null = null;
+      let way: "sign-in" | "public" | null = null;
+      let stillAsked: ((ids: string[]) => Promise<Set<string> | null>) | null = null;
       const auth = await accessToken(
         c.YT_OAUTH_CLIENT_ID || "",
         c.YT_OAUTH_CLIENT_SECRET || "",
@@ -292,7 +448,7 @@ Deno.serve(async (req?: Request) => {
       if (!auth.token) {
         accountErrors[account] = auth.error || "not connected";
       } else {
-        const fresh: string[] = [];
+        const got: string[] = [];
         let pageToken = "";
         for (let page = 0; page < 10; page++) {
           const r = await oauthRequest(
@@ -306,28 +462,112 @@ Deno.serve(async (req?: Request) => {
           }
           for (const item of r.body.items || []) {
             const id = item.snippet?.resourceId?.channelId;
-            if (id) fresh.push(id);
+            if (id) got.push(id);
           }
           pageToken = r.body.nextPageToken || "";
           if (!pageToken) break;
         }
-        if (fresh.length || !accountErrors[account]) {
-          channels = [...new Set(fresh)];
+        if (got.length || !accountErrors[account]) {
+          fresh = [...new Set(got)];
+          way = "sign-in";
+          const token = auth.token;
+          stillAsked = async (ids) => {
+            const r = await oauthRequest("subscriptions?part=snippet&mine=true&maxResults=50&forChannelId=" + ids.join(","), token);
+            return stillFromAnswer(r.status, r.body, ids);
+          };
+        }
+      }
+      /* ---- THE PUBLIC WAY (Y6): the sign-in did not refresh this list. If the account has a channel id on
+         file, the public way has not been tried too lately (an hour; six for "private", empty or out of
+         bounds), and the day has a unit left, the list is read with the API key alone — every page or
+         nothing — and taken only if it is 60–300 % of the saved one. What was tried and what came of it is
+         remembered either way, so the result row can say it on every pass. ---- */
+      if (!fresh) {
+        const ownId = (c[ownChannelKey(account)] || "").trim();
+        if (!notice.lists || budget.off) listNote[account] = "off";
+        else if (!ownId) listNote[account] = "no_id";
+        else if (!publicWayDue(ls[account], now, notice)) { /* told lately: what it was told is remembered */ }
+        else if (Date.now() - listsStarted > LISTS_BUDGET_MS) listNote[account] = "no_time";
+        else if (budget.room() < 1) listNote[account] = budget.why();
+        else {
+          const read: Record<string, any> = await readPublicList(ownId, apiKey, fetch, { maxPages: budget.room() });
+          budget.spend(read.sent);
+          listsNow.units += read.sent;
+          listsNow.touched = true;
+          if (read.outcome === "quota") { budget.quota_gone = true; listsNow.quota = true; }
+          const line: Record<string, any> = { ...(ls[account] || {}), t: now };
+          delete line.k; delete line.n; delete line.p;
+          if (read.outcome !== "ok") line.k = read.outcome;
+          else {
+            const verdict = acceptList({ saved: channels.length, fresh: read.ids.length, notice });
+            line.n = read.ids.length;
+            if (verdict.pct != null) line.p = verdict.pct;
+            if (!verdict.take) line.k = verdict.code;
+            else {
+              fresh = read.ids;
+              way = "public";
+              stillAsked = async (ids) => {
+                if (budget.room() < 1) return null;
+                const question: Record<string, any> = await askStillSubscribed(ownId, ids, apiKey, fetch);
+                budget.spend(question.sent);
+                listsNow.units += question.sent;
+                if (question.outcome === "quota") { budget.quota_gone = true; listsNow.quota = true; }
+                return question.still;
+              };
+            }
+          }
+          ls[account] = line;
+        }
+      }
+      /* ---- A LIST WAS TAKEN, by either way. A channel the saved list had and this one lacks is asked about
+         directly; only one YouTube does not give back has left, and if the question cannot be asked nobody
+         leaves. A channel that left has this account's tag taken off its stored videos BEFORE the list is
+         saved; if the tags do not come off, the list is not saved and the next hour tries again. ---- */
+      if (fresh && way) {
+        const riding = account === "scintilla" ? bridgeIds : [];
+        const missing: string[] = missingFrom(channels, fresh, riding);
+        const still = missing.length && stillAsked ? await stillAsked(missing) : null;
+        const settled: Record<string, any> = settleList({ saved: channels, fresh, riding, still });
+        const untagged = settled.left.length ? await untagChannels(sb, account, settled.left)
+          : { videos: 0, by_channel: {} as Record<string, number>, names: {} as Record<string, string>, error: null as string | null };
+        listsNow.touched = true;
+        if (untagged.error) {
+          ls[account] = { ...(ls[account] || {}), t: now, k: "untag" };
+          listsNow.error = "the tags could not be taken off (" + account + "): " + untagged.error;
+        } else {
+          const joined = settled.ids.filter((id: string) => !channels.includes(id)).length;
+          channels = settled.ids;
+          cacheTs = now;
           await sb.from("app_config").upsert({
             key: cacheKey,
             value: JSON.stringify({ ids: channels, ts: now }),
           });
+          ls[account] = { w: way, a: now, ...(way === "public" ? { t: now, n: fresh.length } : {}) };
+          listsNow.refreshed.push({ account, way, channels: channels.length, joined, left: settled.left.length, held: settled.held.length, untagged_videos: untagged.videos });
+          for (const id of settled.left as string[]) {
+            listsNow.left.push({ account, id, name: untagged.names[id] || "", videos: untagged.by_channel[id] || 0 });
+            listsNow.gone.push([account, id, now, untagged.by_channel[id] || 0]);
+          }
+          for (const id of settled.held as string[]) listsNow.held.push({ account, id, why: still ? "YouTube says the account still follows it" : "YouTube could not be asked about it" });
         }
       }
     }
     accountChannels[account] = channels;
+    savedAt[account] = cacheTs;
+    ownSize[account] = channels.length;
+  }
+  /* what the lists step spent and learned is written at once: its pages count against the day whatever the rest
+     of the pass does, and an account told "private" is not asked again five minutes later */
+  let health1: Record<string, any> = health0;
+  if (listsNow.touched) {
+    health1 = afterLists({ health: health0, lists: ls, gone: listsNow.gone, units: listsNow.units, quotaGone: listsNow.quota, nowSec: now });
+    const { error } = await sb.from("app_config").upsert({ key: HEALTH_KEY, value: JSON.stringify(health1) });
+    if (error) listsNow.error = listsNow.error || ("the remembered row was not written: " + error.message);
   }
 
   /* ---- THE BRIDGE: the X accounts' channels ride with our own list ----
      Added to this pass only — the SCINTILLA account's own cache (yt_sub_channels_scintilla) is never written
      with them, so removing the yt_bridge_channels row takes them out again on the next pass. */
-  let bridgeIds: string[] = [];
-  try { bridgeIds = bridgeChannelIds(JSON.parse(c.yt_bridge_channels || "null")); } catch (_) {}
   const ownScintilla = accountChannels.scintilla.length;
   accountChannels.scintilla = withBridge(accountChannels.scintilla, bridgeIds);
   const bridgeAdded = accountChannels.scintilla.length - ownScintilla;
@@ -393,24 +633,28 @@ Deno.serve(async (req?: Request) => {
      into the same candidates as a feed entry, under the accounts that carry the channel — so the already-stored
      check, the videos call, shorts and live treat it exactly as they treat the feed. A cap that leaves channels
      unasked is said in the result row. THE NEIGHBOURS: at most per_pass calls, asked together, each bounded to
-     8 s — inside the schedule's 120 s wait and the 180 s "busy" lock. Nothing here can fail the pass. */
-  let settings: Record<string, any> = fallbackSettings(null);
+     8 s — inside the schedule's 120 s wait and the 180 s "busy" lock. Nothing here can fail the pass.
+     Y6 · IN TWO STEPS (secondWayPass, _shared/yt-upload-notice.mjs). First the NOTICE: one call per 50 channels
+     says how many videos each has — every unread channel of the SCINTILLA list on every pass, the others in the
+     places left over. Then the READS: a channel whose number is not the one remembered is read at once, the
+     SCINTILLA list first, then personal, then the rest; and the blind read above is still made for a channel the
+     count cannot vouch for, and every verify_min for one it can. THE NEIGHBOURS now: at most 4 count calls and
+     moved_per_pass + per_pass reads, each bounded to 8 s, the counts together and then the reads together. */
   let plan: Record<string, any> = { day: "", used_today: 0, allowed_by_now: 0, eligible: [], pick: [], skipped_budget: 0, cap: null };
   let reads: Record<string, any>[] = [];
   let unread: string[] = [];
   let unreadDay: Record<string, any>[] = [];
-  let healthNow: Record<string, any> = parseHealth(null);
+  let healthNow: Record<string, any> = health1;
   let secondWayError: string | null = null;
+  let noticed: Record<string, any> | null = null;
+  let countCalls = 0;
   const secondWayVideos = new Set<string>();
   try {
-    const health = parseHealth(c[HEALTH_KEY]);
-    healthNow = health;
-    settings = fallbackSettings(c[SETTINGS_KEY]);
     const feedCarriers: Map<string, Set<Account>> = carriers(accountChannels, [...ACCOUNTS]);
     const followed = [...feedCarriers.keys()].filter(isChannelId);
-    unread = followed.filter((id) => !feedOk.has(id));
-    plan = fallbackPlan({ unread, health, settings, nowSec: now });
-    if (plan.pick.length) reads = await readUploadsPass(plan.pick, apiKey, fetch, { maxResults: settings.max_results, nowSec: now });
+    const sw: Record<string, any> = await secondWayPass({ followed, tier: tiersOf(accountChannels, [...ACCOUNTS]), feedOk, health: health0, settings, notice,
+      apiKey, nowSec: now, budget, fetchFn: fetch });
+    unread = sw.unread; plan = sw.plan; reads = sw.reads; noticed = sw.report; countCalls = sw.counted.sent;
     for (const read of reads) {
       if (read.outcome !== "ok") continue;
       const carriedBy = feedCarriers.get(read.id) || new Set<Account>();
@@ -423,7 +667,7 @@ Deno.serve(async (req?: Request) => {
     }
     /* what is remembered is written at once: the calls just made count against the day whatever the rest of
        the pass does */
-    healthNow = nextHealth({ health, channels: followed, feedOk, reads, nowSec: now });
+    healthNow = nextHealth({ health: health1, channels: followed, feedOk, reads, nowSec: now, counts: sw.counted.counts, units: sw.counted.sent, quotaGone: sw.counted.quota });
     unreadDay = unreadOverADay(healthNow, now);
     for (const line of unreadDay.filter((entry) => !entry.name).slice(0, 10)) {
       /* a channel dark for a day is named from the videos already held, once; the name then stays in the row */
@@ -512,11 +756,14 @@ Deno.serve(async (req?: Request) => {
   /* Y5: a videos call YouTube did not answer OK leaves its rows with no length, no live state and no tag. It was
      silent (93 rows on 10 Oct 13:35Z); it is counted now. */
   let videosNotOk = 0;
+  /* Y6: this sweep's own videos calls, counted — the second way's day gives way to them (dayGuard) */
+  let videosCalls = 0;
   if (fresh.length) {
     const detail: Record<string, ReturnType<typeof liveFields>> = {};
     const language: Record<string, string> = {};
     const freshIds = fresh.map((row) => row.video_id);
     for (let i = 0; i < freshIds.length; i += 50) {
+      videosCalls++;
       const r = await apiKeyRequest(
         "videos?part=" + LIVE_PART + "&id=" + freshIds.slice(i, i + 50).join(",") + "&maxResults=50",
         apiKey,
@@ -593,6 +840,7 @@ Deno.serve(async (req?: Request) => {
     const watchIds = [...new Set([...forceRefresh, ...(stillLive || []).map((row) => row.video_id as string),
       ...(watching || []).map((row) => row.video_id as string)])].slice(0, REFRESH_MAX);
     for (let i = 0; i < watchIds.length; i += 50) {
+      videosCalls++;
       const r = await apiKeyRequest(
         "videos?part=" + LIVE_PART + "&id=" + watchIds.slice(i, i + 50).join(",") + "&maxResults=50",
         apiKey,
@@ -623,11 +871,34 @@ Deno.serve(async (req?: Request) => {
     refreshError = String((e as Error)?.message || e);
   }
 
+  /* Y6 · one account's list in words: which way it was last refreshed and when; when the last try kept the saved
+     list, why */
+  const listLine = (account: Account) => {
+    const said: Record<string, any> = listSays({ line: ls[account], savedTs: savedAt[account] || 0, savedCount: ownSize[account] || 0, nowSec: now, notice });
+    if (listNote[account] && !(ls[account] && ls[account].k)) { said.way = "kept"; said.why = keptWords(listNote[account], null, ownSize[account] || 0); }
+    return said;
+  };
+  const uploadsCalls = reads.filter((read) => read.sent).length;
   const result = {
     accounts: Object.fromEntries(ACCOUNTS.map((account) => [account, {
       channels: accountChannels[account].length,
       error: accountErrors[account] || null,
+      list: listLine(account),
     }])),
+    /* Y6 · the lists this pass: the accounts YouTube keeps private (named on every pass, not only when asked),
+       every account whose saved list was kept and why, what was refreshed, who left and how many stored videos
+       lost that account's tag, who was held back, and the last channels to leave */
+    lists: {
+      private: ACCOUNTS.filter((account) => ls[account] && ls[account].k === "private"),
+      kept: Object.fromEntries(ACCOUNTS.filter((account) => (ls[account] && ls[account].k) || listNote[account]).map((account) => [account, listLine(account).why])),
+      refreshed: listsNow.refreshed,
+      left: listsNow.left,
+      held: listsNow.held,
+      untagged_videos: listsNow.left.reduce((n, line) => n + (line.videos as number), 0),
+      recently_left: ((healthNow.gone || []) as any[][]).slice(-10).map(([account, id, at, videos]) => ({ account, id, at: new Date(at * 1000).toISOString(), videos })),
+      units: listsNow.units,
+      error: listsNow.error,
+    },
     rss_seen: ids.length,
     rss_failed: rssFailed,
     rss_channels: ACCOUNTS.reduce((n, account) => n + accountChannels[account].length, 0),
@@ -654,6 +925,17 @@ Deno.serve(async (req?: Request) => {
       unread_over_a_day: { count: unreadDay.length, longest_hours: unreadDay.length ? unreadDay[0].hours : 0,
         names: unreadDay.slice(0, UNREAD_NAMED_MAX).map((line) => line.name || line.id) },
       error: secondWayError,
+    },
+    /* Y6 · the notice this pass: how many channels were counted in how many calls, how many of the unread ones
+       had moved, how many of those were read and how many wait and for which cap */
+    notice: noticed,
+    /* Y6 · what was spent: this pass, and the Pacific day so far — the second way's own number (list pages, count
+       calls and uploads reads together) beside this sweep's own videos calls, and what the second way may come
+       to today once RADAR's searches and those calls are allowed for */
+    units: {
+      pass: { lists: listsNow.units, counts: countCalls, uploads: uploadsCalls, videos: videosCalls, total: listsNow.units + countCalls + uploadsCalls + videosCalls },
+      today: { day: healthNow.day || budget.day, second_way: healthNow.used, videos_calls: ownBefore + videosCalls,
+        total: healthNow.used + ownBefore + videosCalls, second_way_per_day: settings.per_day, second_way_may_come_to: budget.ceiling },
     },
     new_videos: wrote,
     membership_updates: membershipUpdates,
