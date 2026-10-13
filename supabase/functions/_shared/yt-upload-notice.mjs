@@ -7,9 +7,10 @@
 //     feed answering, then came runs of 99–190 of 194 failing, and 162–184 of 195 for most of the last hour. Y5's
 //     blind read — 6 channels a pass, a channel once an hour — needs two and a half hours to go round 186.
 //   · channels.list?part=statistics answers for 50 channels in ONE call (1 unit, 154 ms) with each channel's
-//     videoCount, and the number is fresh: 50 channels watched with a look every 75 seconds posted seven videos
-//     in 43 minutes, and every one was in the number at the first look after its publish time — 3 to 70 seconds
-//     later — and in none before.
+//     videoCount, and the number is fresh, mostly: 50 channels watched for 75 minutes with a look every 75
+//     seconds. Of 14 rises that matched a new publish, 12 were in the number at the first look after it (3 to
+//     70 seconds); the other two, both on one channel that posts Shorts in pairs, took 4 and 6½ minutes. The
+//     number also fell (22, then 6: videos removed) and rose twice with no new publish behind it.
 //   · What the number counts: videos, Shorts, and streams once they have started. A stream still to come sits in
 //     the uploads list and is NOT counted (one channel: 678 in the list, 663 counted, 15 streams still to come).
 //   · The uploads list "UU…" holds all three kinds; it is exactly "UULF…" (videos) + "UULV…" (streams) + "UUSH…"
@@ -41,6 +42,10 @@
 //            A channel the count cannot vouch for — never read, or its count call failed — keeps Y5's hour.
 //            The blind read keeps Y5's order too, the longest unread first whatever its list: it is the net
 //            under everything, and with the counts down it must still reach every list.
+//   HOW LATE  A pass every five minutes, and a count that is on time, put a new video in the table five to six
+//            minutes after it is posted at worst (6 min 3 s over a made-up day of 165 uploads; 1.6 and 6.9
+//            minutes for the two real ones caught while this was written). A count that runs late adds its
+//            lateness: still inside 10 minutes at 4 minutes late, 11½ minutes at the 6½ measured once.
 //   STREAMS AND SHORTS   The read is the whole uploads list, as in Y5, not "UULF…": a burst must not change WHAT
 //            reaches the table, and the feed carries all three kinds. A Short moves the count like a video and
 //            is stored with is_short, as from the feed. A stream that starts moves the count and is read; one

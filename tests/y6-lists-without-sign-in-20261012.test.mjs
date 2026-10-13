@@ -6,7 +6,8 @@
      · every Google sign-in answers invalid_grant; YouTube gives ONE account's list without a sign-in (56 channels on
        two pages, 49 + 7), says "private" (403) for three, and for one answers 200 with NO channels against 47 saved;
      · the public feed is mostly gone (162–184 of 195 reads failing for most of an hour);
-     · one call says how many videos each of 50 channels has, and that number moved within 66 seconds of a publish.
+     · one call says how many videos each of 50 channels has; of 14 rises that matched a new publish, 12 were in the number
+       inside 70 seconds and two (one channel) took 4 and 6½ minutes.
    These tests hold the collector to what was built on that. No network: YouTube's answers and the table are written
    here, in the shapes YouTube served; the sweep function itself is run against them.
    EVERY CHANNEL, ACCOUNT AND VIDEO HERE IS MADE UP. This repository is public; which channels Alan follows is not in it. */
@@ -1038,7 +1039,7 @@ test("what Y6 added stays inside its lines: no key, no delete, one new kind of w
    ===================================================================================================== */
 /* 186 channels in the live shape (78 in the SCINTILLA turn, 25 personal, 83 on the other lists). Uploads follow the
    measured weekday: about 165 on the SCINTILLA list and 50 on the others, through the day in the shape the table
-   shows by hour. The made-up YouTube's count runs `lag` seconds behind a publish (measured: 3–70 s); a feed that
+   shows by hour. The made-up YouTube's count runs `lag` seconds behind a publish (measured: 3–70 s in 12 of 14, 4 and 6½ minutes in two); a feed that
    answers shows a video four minutes after it is posted. Nothing here is a real channel. */
 const BY_HOUR_UTC = [51, 53, 47, 49, 22, 29, 25, 18, 8, 12, 17, 60, 91, 111, 125, 86, 141, 135, 96, 107, 84, 94, 89, 68];
 const dice = (seed) => () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -1102,6 +1103,16 @@ test("a whole day with EVERY feed down, at the recommended 1,200: each SCINTILLA
   assert.ok(d.personal.within_10_min >= 40 && d.personal.worst_s <= 1200, "the personal list: counted every 15 minutes — " + d.personal.within_10_min + " of " + d.personal.videos + " inside 10, the worst " + d.personal.worst_s + " s");
   assert.ok(d.unread_hours <= 12.1, "no channel went more than 12 hours without a read (" + d.unread_hours + ")");
   assert.ok(SEARCH_MAX_UNITS + 550 + 1200 <= DAILY_QUOTA - 250, "RADAR 7,979 + this sweep's own 550 (measured) + 1,200 = 9,729 of 10,000");
+});
+
+test("a count that runs late adds its lateness and no more: still inside 10 minutes at 4 minutes late, about 11½ at the 6½ minutes measured once", async () => {
+  const four = await wholeDay({ row: RECOMMENDED, lag: 250 });
+  assert.deepEqual([four.scintilla.within_10_min, four.scintilla.videos, four.unseen], [165, 165, [0, 0, 0]]);
+  assert.ok(four.scintilla.worst_s <= 250 + 300, "the worst waited " + four.scintilla.worst_s + " s: the count's 250 and one pass");
+  const six = await wholeDay({ row: RECOMMENDED, lag: 390 });
+  assert.ok(six.scintilla.worst_s > 600 && six.scintilla.worst_s <= 390 + 300, "the worst waited " + six.scintilla.worst_s + " s — over the 10 minutes, by the count's own lateness");
+  assert.ok(six.scintilla.within_10_min >= 100 && six.scintilla.within_10_min < 165, six.scintilla.within_10_min + " of 165 inside 10 minutes");
+  assert.deepEqual(six.unseen, [0, 0, 0], "late, never lost");
 });
 
 test("the evening as it was measured — bursts for 70 % of the day — costs about half of that; a day with every feed answering costs 48", async () => {
