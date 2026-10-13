@@ -13,6 +13,11 @@
 // /live tab (https://github.com/yt-dlp/yt-dlp — the youtube:tab extractor follows /live to the watch page and
 // reads isLive from the player response); a /live address that is not on air answers with the channel page.
 
+// Y5 (12 Oct): what the sweep keeps from a followed channel, and the feed's second way in, live in
+// yt-feed-fallback.mjs. They are handed on from here so the sweep keeps ONE shared address — the Node tests
+// run the function by rewriting exactly that one import.
+export * from "./yt-feed-fallback.mjs";
+
 const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 export const isChannelId = (v) => typeof v === "string" && CHANNEL_ID.test(v);

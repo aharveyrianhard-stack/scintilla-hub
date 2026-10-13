@@ -13,9 +13,15 @@
 // channel's Live tab when the /live read could not be read, and stores one line per channel. Two read-only doors,
 // neither touching a table or the YouTube API:  ?probe=live&channel=UC…[&video=…]  what each way of asking looks
 // like from here;  ?dry=live[&also=UC…][&ways=both]  the whole on-air pass, reported, nothing written.
+// Y5 (12 Oct): Alan, about a channel on the SCINTILLA list: "The videos are not coming through to the Scintilla channel."
+// Its feed was answering; every one of its videos is tagged "zxx" (no spoken language) and this function threw
+// away any new video whose tag did not start with "en". A followed channel's video is now kept whatever its tag
+// or its title's script says (keepSubscribed, _shared/yt-feed-fallback.mjs — Alan, 6 Oct: "Everything subscribed"),
+// and the result row counts what the old rule would have dropped (kept_other_language, kept_other_script).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore  plain ESM shared with the resolver and the Node tests
-import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN } from "../_shared/yt-bridge.mjs";
+import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN,
+  keepSubscribed, otherLanguage } from "../_shared/yt-bridge.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 
@@ -361,7 +367,7 @@ Deno.serve(async (req?: Request) => {
   const seen = new Set<string>();
   const fresh = [...candidates.values()].filter((candidate) => {
     if (known.has(candidate.video_id)) return false;
-    if (FOREIGN.test(String(candidate.title || ""))) return false;
+    if (!keepSubscribed(candidate) && FOREIGN.test(String(candidate.title || ""))) return false;
     if (seen.has(candidate.video_id)) return false;
     seen.add(candidate.video_id);
     return true;
@@ -370,6 +376,8 @@ Deno.serve(async (req?: Request) => {
   let wrote = 0;
   let writeError: string | null = null;
   let dropped = 0;
+  let keptOtherLanguage = 0;
+  let keptOtherScript = 0;
   if (fresh.length) {
     const detail: Record<string, ReturnType<typeof liveFields>> = {};
     const language: Record<string, string> = {};
@@ -390,7 +398,8 @@ Deno.serve(async (req?: Request) => {
        appear once some later pass happened to catch it after it went on air. */
     const keep = fresh.filter((row) => {
       const lang = language[row.video_id] || "";
-      if (lang && lang.slice(0, 2) !== "en") { dropped++; return false; }
+      /* Y4: "Everything subscribed." A carried channel's video is kept whatever its language tag says. */
+      if (lang && lang.slice(0, 2) !== "en" && !keepSubscribed(row, lang)) { dropped++; return false; }
       return true;
     });
     for (let i = 0; i < keep.length; i += 16) {
@@ -398,6 +407,9 @@ Deno.serve(async (req?: Request) => {
         row.is_short = await isShort(row.video_id);
       }));
     }
+    /* Y5: what the old rule threw away on every pass, counted now that it is kept (the channel Alan named: tag "zxx") */
+    keptOtherLanguage = keep.filter((row) => otherLanguage(language[row.video_id])).length;
+    keptOtherScript = keep.filter((row) => FOREIGN.test(String(row.title || ""))).length;
     const rows = keep.map((row) => {
       const accounts = [...row.accounts].sort();
       const { accounts: _, ...plain } = row;
@@ -489,6 +501,8 @@ Deno.serve(async (req?: Request) => {
     live_gone: liveGone,
     refresh_error: refreshError,
     dropped,
+    kept_other_language: keptOtherLanguage,
+    kept_other_script: keptOtherScript,
     write_error: writeError,
     at: new Date().toISOString(),
   };
