@@ -28,6 +28,14 @@
 //            same pass: the SCINTILLA list first, then personal, then the rest, longest-unread first inside
 //            each, up to moved_per_pass. A moved count is taken over only by a pass that read the channel
 //            (nextHealth), so a cap can delay a read and can never lose one.
+//   EXPLAIN  YouTube's count and its uploads list are two answers, and need not agree to the second. So a count
+//            that went UP is taken over only when the read shows the videos that account for it: as many
+//            published since the old count was last seen (ten minutes' grace for a count that runs late) as
+//            the count rose by. If it does not, the old count stays and the channel is read again on the next
+//            pass; after two such reads the count is taken as it stands — a video made public again and a
+//            stream that has just started both raise the count without a new publish time. A count that went
+//            DOWN (videos removed: one channel dropped 22 and then 6 inside two minutes while this was
+//            measured) needs no explaining; it is read once, because a new video can hide behind a removal.
 //   VOUCH    "The count has not moved" means "nothing new" only once a read has stood behind that count. Such a
 //            channel is no longer read blind every hour (Y5): the blind read becomes a check every verify_min.
 //            A channel the count cannot vouch for — never read, or its count call failed — keeps Y5's hour.
@@ -54,6 +62,9 @@ export const COUNTS_PER_CALL = 50;
 /* this sweep's own videos calls: measured 137 in 72 passes before Y5 (1.9 a pass), 5 in the first 3 after */
 export const OWN_CALLS_A_PASS = 2;
 export const GUARD_MARGIN = 50;
+/* a count that went up and a read that does not account for it: read again on this many further passes, then believe the count */
+export const UNEXPLAINED_READS = 2;
+export const COUNT_GRACE_SEC = 600;
 
 /** which turn a channel takes: 0 the SCINTILLA list and the channels that ride with it, 1 personal, 2 the rest */
 export function tiersOf(accountChannels, accounts) {
@@ -236,11 +247,22 @@ export async function secondWayPass({ followed, tier, feedOk, health, settings, 
   const toRead = [...movedPlan.pick, ...plan.pick];
   const reads = toRead.length ? await readUploadsPass(toRead, apiKey, fetchFn, { maxResults: settings.max_results, nowSec }) : [];
   const readOk = new Set(reads.filter((read) => read.outcome === "ok").map((read) => read.id));
-  return { unread, ask, counted, said, movedPlan, plan, reads,
+  /* A MOVE MUST BE EXPLAINED (see EXPLAIN above): which of the moved channels just read did not show the videos
+     their count rose by */
+  const unexplained = new Set();
+  for (const read of reads) {
+    if (read.outcome !== "ok" || !movedPlan.pick.includes(read.id)) continue;
+    const e = health.ch[read.id] || {}, count = counted.counts.get(read.id);
+    if (count == null || e.c == null || count <= e.c || (e.cu || 0) >= UNEXPLAINED_READS) continue;
+    const since = (e.ca || 0) - COUNT_GRACE_SEC;
+    const shown = read.rows.filter((row) => Date.parse(row.published_at) / 1000 > since).length;
+    if (shown < Math.min(count - e.c, Math.max(1, read.rows.length))) unexplained.add(read.id);
+  }
+  return { unread, ask, counted, said, movedPlan, plan, reads, unexplained,
     report: { on: !!notice.notice, calls: counted.sent, asked: ask.ask.length, answered: counted.counts.size, for_the_scintilla_list: ask.must, refresh: ask.refresh,
       filled_free: ask.fill, not_counted: ask.short, not_counted_why: ask.why,
       unread_counted: unread.filter((id) => counted.counts.has(id)).length, moved: said.moved.length,
-      moved_read: movedPlan.pick.filter((id) => readOk.has(id)).length, moved_waiting: movedPlan.waiting, moved_resting: movedPlan.resting, moved_cap: movedPlan.cap,
+      moved_read: movedPlan.pick.filter((id) => readOk.has(id)).length, moved_unexplained: unexplained.size, moved_waiting: movedPlan.waiting, moved_resting: movedPlan.resting, moved_cap: movedPlan.cap,
       unmoved: said.confirmed.size, first_count: said.first.length,
       calls_not_ok: counted.calls.filter((call) => call.outcome !== "ok").map((call) => ({ outcome: call.outcome, reason: call.reason, channels: call.asked })) } };
 }

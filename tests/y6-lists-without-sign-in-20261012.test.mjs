@@ -19,7 +19,7 @@ import { stripTypeScriptTypes } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HEALTH_KEY, SETTINGS_KEY, FALLBACK_DEFAULTS, NOTICE_DEFAULTS, NOTICE_LIMITS, SEARCH_MAX_UNITS, fallbackSettings, noticeSettings, parseHealth, fallbackPlan, capWords,
   lastRead, lastSeen, nextHealth, afterLists, unreadOverADay, apiGet, apiOutcome, allowedByNow, GONE_KEPT } from "../supabase/functions/_shared/yt-feed-fallback.mjs";
-import { COUNTS_PER_CALL, OWN_CALLS_A_PASS, GUARD_MARGIN, tiersOf, dayGuard, ownCallsToday, passBudget, noticePlan, countsCall, readCounts, readCountsAgainst, movedPick,
+import { COUNTS_PER_CALL, OWN_CALLS_A_PASS, GUARD_MARGIN, UNEXPLAINED_READS, COUNT_GRACE_SEC, tiersOf, dayGuard, ownCallsToday, passBudget, noticePlan, countsCall, readCounts, readCountsAgainst, movedPick,
   secondWayPass } from "../supabase/functions/_shared/yt-upload-notice.mjs";
 import { LIST_MAX_PAGES, LISTS_BUDGET_MS, SLOW_AGAIN, ownChannelKey, publicListPath, stillSubscribedPath, readPublicList, askStillSubscribed, stillFromAnswer, acceptList,
   missingFrom, settleList, untagGroups, publicWayDue, keptWords, listSays } from "../supabase/functions/_shared/yt-lists.mjs";
@@ -724,6 +724,13 @@ test("what is remembered of a count: a moved count is taken over only by a pass 
   assert.deepEqual(after.ch[readOnly], { ok: minAgo(30), fb: NOW, f: 7, n: "n", c: 100, ca: minAgo(10), cr: 1 }, "read after its count was taken: now the count can vouch");
   assert.equal(after.used, 44, "two uploads reads and the two units given (list pages, count calls) — one number for the day");
   assert.deepEqual([lastSeen(after.ch[same]), lastSeen(after.ch[first]), lastSeen(after.ch[movedWait]), lastRead(after.ch[same])], [NOW, 0, minAgo(5), minAgo(30)], "seen: a read, or the last unmoved count a read stands behind");
+  /* a count that went up and a read that did not account for it: the old number stays once more, and the try is counted */
+  const puzzled = nextHealth({ health: before, channels: [movedRead], feedOk: new Set(), nowSec: NOW, counts: new Map([[movedRead, 101]]), unexplained: new Set([movedRead]),
+    reads: [{ id: movedRead, sent: true, outcome: "ok", name: "n", rows: [] }] });
+  assert.deepEqual(puzzled.ch[movedRead], { ok: minAgo(30), fb: NOW, f: 7, n: "n", c: 100, ca: minAgo(5), cr: 1, cu: 1 });
+  const again = nextHealth({ health: puzzled, channels: [movedRead], feedOk: new Set(), nowSec: NOW + 300, counts: new Map([[movedRead, 101]]), reads: [{ id: movedRead, sent: true, outcome: "ok", name: "n", rows: [] }] });
+  assert.deepEqual(again.ch[movedRead], { ok: minAgo(30), fb: NOW + 300, f: 8, n: "n", c: 101, ca: NOW + 300, cr: 1 }, "explained on the next pass: taken over, and the tries forgotten");
+  assert.deepEqual(parseHealth({ ch: { [movedRead]: { c: 5, cu: "2" }, [same]: { c: 5, cu: 0 }, [first]: { cu: 3 } } }).ch, { [movedRead]: { c: 5, cu: 2 }, [same]: { c: 5 }, [first]: {} });
   /* a number taken over without a read loses its voucher */
   const lost = nextHealth({ health: parseHealth(healthRow({ [first]: { f: 3, b: minAgo(15), c: 12, ca: minAgo(5), cr: 1 } })), channels: [first], feedOk: new Set(), reads: [], nowSec: NOW, counts: new Map([[first, 12]]) });
   assert.deepEqual(lost.ch[first], { f: 4, b: minAgo(15), c: 12, ca: NOW, cr: 1 });
@@ -809,7 +816,7 @@ test("the neighbours: the second way's day gives way to RADAR's searches and to 
 /* lists saved ten minutes ago, so the lists step asks nobody: these tests are about the feed's second way */
 const fresh = (lists, extra = {}) => cfg(lists, extra, { listedMinAgo: 10, own: [] });
 const NOTICE_BLOCK = { on: true, calls: 0, asked: 0, answered: 0, for_the_scintilla_list: 0, refresh: false, filled_free: 0, not_counted: 0, not_counted_why: null,
-  unread_counted: 0, moved: 0, moved_read: 0, moved_waiting: 0, moved_resting: 0, moved_cap: null, unmoved: 0, first_count: 0, calls_not_ok: [] };
+  unread_counted: 0, moved: 0, moved_read: 0, moved_unexplained: 0, moved_waiting: 0, moved_resting: 0, moved_cap: null, unmoved: 0, first_count: 0, calls_not_ok: [] };
 
 test("every feed read fails and a SCINTILLA channel has posted: one count call notices it, one read brings it — 2 units, in the same pass", async () => {
   const [a, b, c2] = many(3, 60000), [p1] = many(1, 61000);
@@ -850,6 +857,34 @@ test("the SCINTILLA list first, then personal, then the rest — and a channel t
   assert.deepEqual([h[s1].c, h[p1].c, h[r1].c, h[r1].ca], [101, 101, 100, minAgo(16)], "the channel that waited keeps its OLD number: a cap delays a read, it cannot lose one");
   const second = await runSweep({ store: first.store, feedsDown: true, counts: { [s1]: 101, [p1]: 101, [r1]: 101 }, uploads: { ...up(s1, 201), ...up(p1, 202), ...up(r1, 203) }, nowMs: T0 + 300000 });
   assert.deepEqual([uploadsAsked(second.log), second.result.notice.moved, second.result.new_videos, row(second.tables, vid(203)).subscription_accounts], [[r1], 1, 1, ["golf"]], "five minutes later it is read");
+});
+
+test("a move must be explained: a count that went up while the uploads list does not show the video yet is NOT taken over — the next pass reads again and finds it", async () => {
+  const [a] = many(1, 73000);
+  const older = { id: vid(700), title: "held", published: "2026-10-11T12:00:00Z" }, posted = { id: vid(701), title: "the one the count already knew of", published: iso(NOW - 90) };
+  const start = () => fresh({ scintilla: [a] }, { [HEALTH_KEY]: healthRow(counted([a], { readAgo: 30, extra: { f: 6 } })) });
+  /* YouTube's two answers disagree for a moment: the count says 101, the uploads list still ends at the old video */
+  const first = await runSweep({ config: start(), videos: [held(vid(700), a, ["scintilla"])], feedsDown: true, counts: { [a]: 101 }, uploads: { [a]: uploadsBody(a, "Channel a", [older]) } });
+  assert.deepEqual([uploadsAsked(first.log), first.result.notice.moved, first.result.notice.moved_read, first.result.notice.moved_unexplained, first.result.new_videos], [[a], 1, 1, 1, 0]);
+  assert.deepEqual(stored(first.tables, HEALTH_KEY).ch[a], { ok: minAgo(30), fb: NOW, f: 7, n: "Channel a", c: 100, ca: minAgo(5), cr: 1, cu: 1 }, "the OLD count stays: the video is still owed");
+  const second = await runSweep({ store: first.store, feedsDown: true, counts: { [a]: 101 }, uploads: { [a]: uploadsBody(a, "Channel a", [posted, older]) }, nowMs: T0 + 300000 });
+  assert.deepEqual([uploadsAsked(second.log), second.result.notice.moved_unexplained, second.result.new_videos, row(second.tables, vid(701)).subscription_accounts], [[a], 0, 1, ["scintilla"]], "five minutes later the list shows it, and it is stored");
+  assert.deepEqual(stored(second.tables, HEALTH_KEY).ch[a], { ok: minAgo(30), fb: NOW + 300, f: 8, n: "Channel a", c: 101, ca: NOW + 300, cr: 1 });
+  /* a count that rose by TWO and a list that shows one new video: one is still owed */
+  const two = await runSweep({ config: start(), videos: [held(vid(700), a, ["scintilla"])], feedsDown: true, counts: { [a]: 102 }, uploads: { [a]: uploadsBody(a, "Channel a", [posted, older]) } });
+  assert.deepEqual([two.result.notice.moved_unexplained, two.result.new_videos, stored(two.tables, HEALTH_KEY).ch[a].c], [1, 1, 100], "the one that is there is stored; the count is not believed yet");
+  /* never explained (a video made public again; a stream that has just started): read on two more passes, then the count is taken as it stands */
+  assert.deepEqual([UNEXPLAINED_READS, COUNT_GRACE_SEC], [2, 600]);
+  let pass = await runSweep({ config: start(), videos: [held(vid(700), a, ["scintilla"])], feedsDown: true, counts: { [a]: 101 }, uploads: { [a]: uploadsBody(a, "Channel a", [older]) } });
+  const tries = [];
+  for (let n = 1; n <= 4; n++) {
+    tries.push([uploadsAsked(pass.log).length, pass.result.notice.moved_unexplained, stored(pass.tables, HEALTH_KEY).ch[a].c, stored(pass.tables, HEALTH_KEY).ch[a].cu || 0]);
+    if (n < 4) pass = await runSweep({ store: pass.store, feedsDown: true, counts: { [a]: 101 }, uploads: { [a]: uploadsBody(a, "Channel a", [older]) }, nowMs: T0 + n * 300000 });
+  }
+  assert.deepEqual(tries, [[1, 1, 100, 1], [1, 1, 100, 2], [1, 0, 101, 0], [0, 0, 101, 0]], "three reads in all, then it rests");
+  /* a count that went DOWN needs no explaining: read once (a new video can hide behind a removal), taken over at once */
+  const down = await runSweep({ config: start(), videos: [held(vid(700), a, ["scintilla"])], feedsDown: true, counts: { [a]: 78 }, uploads: { [a]: uploadsBody(a, "Channel a", [older]) } });
+  assert.deepEqual([uploadsAsked(down.log), down.result.notice.moved_unexplained, stored(down.tables, HEALTH_KEY).ch[a].c], [[a], 0, 78]);
 });
 
 test("the first pass ever in a burst: every count is new, so nothing has 'moved' — the blind read still goes round, and from the next pass a new upload is noticed", async () => {
@@ -935,12 +970,12 @@ test("?dry=fallback runs the same second way a pass runs — the count, the read
   const [a, b] = many(2, 71000);
   const config = fresh({ scintilla: [a, b] }, { [HEALTH_KEY]: healthRow(counted([a, b], { readAgo: 30, extra: { f: 6 } }), { used: 9 }), yt_rss_running: { ts: 0 } });
   const snapshot = JSON.stringify(config);
-  const { result, tables, log } = await runSweep({ config, videos: [held(vid(500), a, ["scintilla"])], query: "?dry=fallback", feedsDown: true, counts: { [a]: 102, [b]: 100 },
+  const { result, tables, log } = await runSweep({ config, videos: [held(vid(500), a, ["scintilla"])], query: "?dry=fallback", feedsDown: true, counts: { [a]: 101, [b]: 100 },
     uploads: { [a]: uploadsBody(a, "Channel a", [{ id: vid(501), title: "new", published: iso(NOW - 90) }, { id: vid(500), title: "held", published: "2026-10-01T12:00:00Z" }]) } });
   assert.deepEqual([result.dry, result.wrote, result.feed_unread, result.would_ask, result.units_spent, result.cap], ["fallback", "nothing", 2, [a], 2, null]);
   assert.deepEqual(result.notice, { ...NOTICE_BLOCK, calls: 1, asked: 2, answered: 2, for_the_scintilla_list: 2, unread_counted: 2, moved: 1, moved_read: 1, unmoved: 1 });
   const line = result.asked[0];
-  assert.deepEqual([line.id, line.why, line.count, line.outcome, line.videos, line.not_stored, line.items.map((v) => [v.video_id, v.stored])], [a, "its count moved", { was: 100, now: 102 }, "ok", 2, 1, [[vid(501), false], [vid(500), true]]]);
+  assert.deepEqual([line.id, line.why, line.count, line.outcome, line.videos, line.not_stored, line.items.map((v) => [v.video_id, v.stored])], [a, "its count moved", { was: 100, now: 101 }, "ok", 2, 1, [[vid(501), false], [vid(500), true]]]);
   assert.deepEqual(result.the_day, { may_come_to: 580, own_videos_calls_so_far: 0, what_the_neighbours_leave: 1887 });
   assert.deepEqual(log.writes, [], "nothing written — not the result, not the lock, not the remembered row, not a video");
   assert.deepEqual([JSON.stringify(tables.app_config), tables.youtube_videos.length], [snapshot, 1]);

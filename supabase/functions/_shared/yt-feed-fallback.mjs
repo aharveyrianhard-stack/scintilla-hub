@@ -112,6 +112,7 @@ export function noticeSettings(raw) { return rowNumbers(raw, NOTICE_DEFAULTS, NO
                    ca  when that count was last seen
                    cr  1 once a read of the channel (feed or uploads list) has happened at or after the count was
                        taken — only then does "the count has not moved" mean "there is nothing new"
+                   cu  how many reads in a row have failed to explain a count that went up (see nextHealth)
      ls            { <account>: { w, a, t, k, n, p } }   the followed lists (_shared/yt-lists.mjs)
                    w  the way this function last refreshed the list (public · sign-in)   a  when
                    t  when the public way was last tried    k  why that try kept the saved list   n / p  what it saw
@@ -156,7 +157,7 @@ export function parseHealth(raw) {
       for (const k of TIMES) { const v = Math.floor(Number(e[k])); if (Number.isFinite(v) && v > 0) entry[k] = v; }
       if (typeof e.n === "string" && e.n) entry.n = e.n.slice(0, 60);
       const count = wholeOrNone(e.c);
-      if (count != null) { entry.c = count; const at = wholeOrNone(e.ca); if (at) entry.ca = at; if (e.cr) entry.cr = 1; }
+      if (count != null) { entry.c = count; const at = wholeOrNone(e.ca); if (at) entry.ca = at; if (e.cr) entry.cr = 1; const cu = wholeOrNone(e.cu); if (cu) entry.cu = cu; }
       ch[id] = entry;
     }
   }
@@ -370,11 +371,14 @@ export const isFeed = (xml) => /<feed[\s>]/.test(String(xml || ""));
       lists      the followed lists' own lines after this pass ({ account: { w, a, t, k, n, p } })
       gone       the channels that left a list this pass ([[account, channel, when, videos untagged], …])
       quotaGone  YouTube said the day's allowance is gone on a list page or a count call
+      unexplained  the channels whose count went up and whose read, this pass, showed nothing to account for it
     THE COUNT, per channel:  a count seen for the first time is only remembered. A count that has not moved is
     seen again (ca). A count that MOVED is taken over only in a pass that also read the channel — otherwise the
-    old count stays, so the channel is still "moved" on the next pass and nothing is lost to a cap. A read of the
-    channel at or after the moment its count was taken is what lets the count vouch for it (cr). */
-export function nextHealth({ health, channels, feedOk, reads, nowSec, counts, units = 0, lists, gone, quotaGone = false }) {
+    old count stays, so the channel is still "moved" on the next pass and nothing is lost to a cap. And not even
+    then if the read did not explain it (unexplained): the old count stays once more, cu counts the try, and the
+    next pass reads again. A read of the channel at or after the moment its count was taken is what lets the
+    count vouch for it (cr). */
+export function nextHealth({ health, channels, feedOk, reads, nowSec, counts, units = 0, lists, gone, quotaGone = false, unexplained }) {
   const clock = pacificClock(nowSec * 1000);
   const ch = {};
   for (const id of channels || []) {
@@ -392,7 +396,7 @@ export function nextHealth({ health, channels, feedOk, reads, nowSec, counts, un
       if (!entry.ok && !entry.fb) entry.b = prev.b || nowSec;
       if (prev.n) entry.n = prev.n;
     }
-    if (prev.c != null) { entry.c = prev.c; if (prev.ca) entry.ca = prev.ca; if (prev.cr) entry.cr = 1; }
+    if (prev.c != null) { entry.c = prev.c; if (prev.ca) entry.ca = prev.ca; if (prev.cr) entry.cr = 1; if (prev.cu) entry.cu = prev.cu; }
     ch[id] = entry;
   }
   let calls = 0;
@@ -417,8 +421,9 @@ export function nextHealth({ health, channels, feedOk, reads, nowSec, counts, un
     const count = counts ? counts.get(id) : undefined;
     if (count == null) { if (readNow && entry.c != null) entry.cr = 1; continue; }
     if (entry.c == null || count === entry.c || readNow) {
+      if (unexplained && unexplained.has(id) && entry.c != null && count !== entry.c) { entry.cu = (entry.cu || 0) + 1; continue; }
       const taken = entry.c == null || count !== entry.c;         // a new number: only this pass's read can vouch for it
-      entry.c = count; entry.ca = nowSec;
+      entry.c = count; entry.ca = nowSec; delete entry.cu;
       if (readNow) entry.cr = 1; else if (taken) delete entry.cr;
     }
   }

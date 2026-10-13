@@ -290,7 +290,7 @@ Deno.serve(async (req?: Request) => {
         from: settings.from, day: plan.day, used_today: plan.used_today, allowed_by_now: plan.allowed_by_now, quota_gone: quotaGone },
       asked: reads.map((read) => {
         const entry = health.ch[read.id] || {}, last = lastRead(entry), feed = answered.get(read.id);
-        return { id: read.id, name: read.name || entry.n || "", why: named.length ? "named in the call" : movedNow.has(read.id) ? "its count moved" : "feed unread",
+        return { id: read.id, name: read.name || entry.n || "", why: named.length ? "named in the call" : movedNow.has(read.id) ? (sw!.unexplained.has(read.id) ? "its count moved (this read does not account for it: read again next pass)" : "its count moved") : "feed unread",
           ...(movedNow.has(read.id) ? { count: { was: entry.c, now: sw!.counted.counts.get(read.id) } } : {}),
           feed: feed?.ok ? "answered" : "no answer (" + (feed?.status || "no reply") + ")",
           last_read_min_ago: last ? Math.round((now - last) / 60) : null,
@@ -667,7 +667,7 @@ Deno.serve(async (req?: Request) => {
     }
     /* what is remembered is written at once: the calls just made count against the day whatever the rest of
        the pass does */
-    healthNow = nextHealth({ health: health1, channels: followed, feedOk, reads, nowSec: now, counts: sw.counted.counts, units: sw.counted.sent, quotaGone: sw.counted.quota });
+    healthNow = nextHealth({ health: health1, channels: followed, feedOk, reads, nowSec: now, counts: sw.counted.counts, units: sw.counted.sent, quotaGone: sw.counted.quota, unexplained: sw.unexplained });
     unreadDay = unreadOverADay(healthNow, now);
     for (const line of unreadDay.filter((entry) => !entry.name).slice(0, 10)) {
       /* a channel dark for a day is named from the videos already held, once; the name then stays in the row */
