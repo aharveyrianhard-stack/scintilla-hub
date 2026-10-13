@@ -7,9 +7,15 @@
 // nobody has to subscribe. Every 20 minutes each bridged channel's /live address is read (free, no quota) and a
 // stream found on air enters the feed at once instead of waiting for YouTube's RSS. A stored row that says "live"
 // is re-asked about however old it is, so a stream that ended days ago stops saying LIVE.
+// v9 (Y2b, 5 Oct evening): the first v8 pass from this data centre read 29 channels, found nobody on air and could
+// not read one, while WOLF Trading was on air in a browser — and the three counts it stored could not say which
+// channel or what came back. The check (onAirPass / checkOnAir, _shared/yt-bridge.mjs) now reads scoped markers, asks the
+// channel's Live tab when the /live read could not be read, and stores one line per channel. Two read-only doors,
+// neither touching a table or the YouTube API:  ?probe=live&channel=UC…[&video=…]  what each way of asking looks
+// like from here;  ?dry=live[&also=UC…][&ways=both]  the whole on-air pass, reported, nothing written.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore  plain ESM shared with the resolver and the Node tests
-import { bridgeChannelIds, withBridge, parseLivePage, liveProbeDue, liveProbePick, liveCandidateRow, livePageUrl, LIVE_PAGE_HEADERS, LIVE_EVERY_MIN } from "../_shared/yt-bridge.mjs";
+import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN } from "../_shared/yt-bridge.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 
@@ -115,14 +121,39 @@ async function isShort(videoId: string) {
   }
 }
 
-Deno.serve(async () => {
+const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
+
+Deno.serve(async (req?: Request) => {
   if (!SB_URL || !SB_KEY) {
     return new Response(JSON.stringify({ error: "backend credentials unavailable" }), {
       headers: { "Content-Type": "application/json" },
     });
   }
+  let ask = new URLSearchParams();
+  try { ask = new URL(req!.url).searchParams; } catch (_) {}
+  /* ---- READ-ONLY DOOR 1: what YouTube answers this data centre for one channel. No table, no API, no key. ---- */
+  if (ask.get("probe") === "live") {
+    const channel = ask.get("channel") || "", video = ask.get("video") || "";
+    if (!isChannelId(channel)) return json({ error: "channel must be a YouTube channel id (UC…)" });
+    return json({ probe: "live", wrote: "nothing", ...(await probeLive(channel, isVideoId(video) ? video : null)) });
+  }
   const sb = createClient(SB_URL, SB_KEY);
   const now = Math.floor(Date.now() / 1000);
+  /* ---- READ-ONLY DOOR 2: the whole on-air pass, reported and not stored. One read of the bridge row; no write,
+     no API call, no lock taken, the 20-minute clock and the cursor left as they are. ---- */
+  if (ask.get("dry") === "live") {
+    const { data } = await sb.from("app_config").select("key,value").in("key", ["yt_bridge_channels"]);
+    let ids: string[] = [];
+    try { ids = bridgeChannelIds(JSON.parse((data || [])[0]?.value || "null")); } catch (_) {}
+    const also = (ask.get("also") || "").split(",").filter(isChannelId).filter((id) => !ids.includes(id)).slice(0, 5);
+    const lines: Record<string, any>[] = await onAirPass([...ids, ...also], fetch, { both: ask.get("ways") === "both" });
+    return json({ dry: "live", wrote: "nothing", at: new Date().toISOString(), bridged: ids.length, probe_only: also,
+      checked: lines.length,
+      on_air: lines.filter((l) => l.live).map((l) => ({ id: l.id, video: l.video, title: l.live.title, channel: l.live.channel_title, marker: l.marker, way: l.way, bridged: ids.includes(l.id) })),
+      upcoming: lines.filter((l) => l.state === "upcoming").map((l) => l.id),
+      could_not_read: lines.filter((l) => l.state === "unknown").map((l) => l.id),
+      channels: lines.map(onAirLine) });
+  }
   const configKeys = [
     "YT_API_KEY",
     "YT_OAUTH_CLIENT_ID",
@@ -274,7 +305,8 @@ Deno.serve(async () => {
      youtube.com/channel/<id>/live lands on the stream when the channel is on air and on the channel page when it
      is not. Free (no quota), bounded (MAX_LIVE_PROBES a pass, a rotating cursor), every LIVE_EVERY_MIN minutes.
      A stream found here goes down the same path as a new RSS entry, so the YouTube API — not the page — is what
-     finally says "live" and gives the real start time. A page we could not read is counted as unknown. */
+     finally says "live" and gives the real start time. A page we could not read is counted as unknown, and the
+     channel's Live tab is asked instead (Y2b); only when neither can be read does the channel stay unknown. */
   let liveState: Record<string, any> = {};
   try { liveState = JSON.parse(c.yt_bridge_live || "{}") || {}; } catch (_) {}
   const liveProbe: Record<string, any> = { ran: false, checked: 0, on_air: [] as string[], unknown: 0 };
@@ -282,27 +314,22 @@ Deno.serve(async () => {
   if (bridgeIds.length && liveProbeDue(now * 1000, +liveState.last_ms || 0, LIVE_EVERY_MIN)) {
     const { pick, cursor } = liveProbePick(bridgeIds, liveState.cursor);
     liveProbe.ran = true;
-    for (let i = 0; i < pick.length; i += 8) {
-      await Promise.all(pick.slice(i, i + 8).map(async (channelId: string) => {
-        let html = "";
-        try {
-          const r = await fetch(livePageUrl(channelId), { headers: LIVE_PAGE_HEADERS });
-          if (r.ok) html = await r.text();
-        } catch (_) {}
-        const live = parseLivePage(html);
-        liveProbe.checked++;
-        if (live.state === "unknown") { liveProbe.unknown++; return; }
-        if (live.state !== "live" || !live.video_id) return;
-        liveProbe.on_air.push(live.video_id);
-        forceRefresh.push(live.video_id);
-        const current = candidates.get(live.video_id);
-        if (current) current.accounts.add("scintilla");
-        else candidates.set(live.video_id, { ...liveCandidateRow(channelId, live, now), accounts: new Set<Account>(["scintilla"]) });
-      }));
+    const lines: Record<string, any>[] = await onAirPass(pick, fetch);
+    for (const line of lines) {
+      liveProbe.checked++;
+      if (line.state === "unknown") { liveProbe.unknown++; continue; }
+      if (!line.live || !line.video) continue;
+      liveProbe.on_air.push(line.video);
+      forceRefresh.push(line.video);
+      const current = candidates.get(line.video);
+      if (current) current.accounts.add("scintilla");
+      else candidates.set(line.video, { ...liveCandidateRow(line.id, line.live, now), accounts: new Set<Account>(["scintilla"]) });
     }
+    /* one line per channel read this pass (id · outcome · marker · way · video · where the read ended), so the next
+       miss can be read off the row instead of guessed at */
     await sb.from("app_config").upsert({ key: "yt_bridge_live", value: JSON.stringify({
       last_ms: now * 1000, cursor, checked: liveProbe.checked, on_air: liveProbe.on_air, unknown: liveProbe.unknown,
-      at: new Date(now * 1000).toISOString() }) });
+      at: new Date(now * 1000).toISOString(), channels: lines.map(onAirLine) }) });
   }
 
   const ids = [...candidates.keys()];
