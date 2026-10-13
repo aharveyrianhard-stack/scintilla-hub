@@ -4,7 +4,7 @@
 --   osascript gui.applescript front                   bundle id of the app in front
 --   osascript gui.applescript windows <bundle id>     one line per ordinary window: title <tab> min|open
 --   osascript gui.applescript find-reload <bundle id> found:<menu> > <item>:enabled|disabled | none     (looks only)
---   osascript gui.applescript activate <bundle id>    ok | not-front    brings that ONE app to the front and checks that it is
+--   osascript gui.applescript activate <bundle id>    ok | not-front    brings that ONE app to the front (open -b) and reads back that it is
 --   osascript gui.applescript raise <bundle id> <n>   ok | skipped:minimised   brings that app's n-th window to the top of its own windows
 --   osascript gui.applescript reload <bundle id>      ok:menu | ok:key | refused:<why>
 --   osascript gui.applescript shortcut <bundle id>    sent | refused:<why>   Option+Shift+S, the X extension's shortcut
@@ -44,7 +44,7 @@ on run argv
 				if mi is missing value then return "none"
 				return my describeItem(mi)
 			else if verb is "activate" then
-				return my bringToFront(p)
+				return my bringToFront(p, bid)
 			else if verb is "raise" then
 				if (count of argv) < 3 then return "error:no window number"
 				set n to (item 3 of argv) as integer
@@ -62,15 +62,19 @@ on run argv
 				if why is not "" then return "refused:" & why
 				set mi to my findReload(p)
 				if mi is not missing value then
+					set canClick to false
 					tell application "System Events"
-						if enabled of mi then
+						try
+							set canClick to (enabled of mi)
+						end try
+						if canClick then
 							click mi
 							return "ok:menu"
 						end if
 					end tell
-					return "refused:the reload menu item is switched off"
 				end if
-				-- no such menu item in this app: type Command-R, re-checking who is in front at this very moment
+				-- no usable menu item: type Command-R, re-checking who is in front at this very moment. (12 Oct 2026, measured on the iMac:
+				-- Brave web apps report "Reload This Page" as switched off even for the app in front, so the item alone must not stop a reload.)
 				set why to my notReady(p, bid)
 				if why is not "" then return "refused:" & why
 				tell application "System Events" to keystroke "r" using {command down}
@@ -102,14 +106,24 @@ on notReady(p, bid)
 	return ""
 end notReady
 
-on bringToFront(p)
-	tell application "System Events"
-		set frontmost of p to true
-		repeat 20 times
-			if frontmost of p then return "ok"
-			delay 0.15
-		end repeat
-	end tell
+on bringToFront(p, bid)
+	-- 12 Oct 2026, measured on the iMac: for a Brave web app, System Events "set frontmost" answers true while the OTHER web app stays in
+	-- front, so the Station was never really brought forward and its reload was refused. Launch Services brings the right one forward;
+	-- the app really in front is then read back and must be the one asked for on two reads in a row before the answer is ok.
+	try
+		do shell script "/usr/bin/open -b " & quoted form of bid
+	end try
+	set steady to 0
+	repeat 30 times
+		tell application "System Events" to set frontBid to (bundle identifier of (first application process whose frontmost is true)) as text
+		if frontBid is bid then
+			set steady to steady + 1
+			if steady is greater than or equal to 2 then return "ok"
+		else
+			set steady to 0
+		end if
+		delay 0.2
+	end repeat
 	return "not-front"
 end bringToFront
 
