@@ -42,7 +42,7 @@ cat <<MSG
 Installed in $DEST. Nothing is switched on.
 
 NEXT, with Alan, after the market close:
-  1. the permission (once):  System Settings > Privacy & Security > Accessibility > + > choose "Scintilla Night Reload" in
+  1. the permission (once):  System Settings > Privacy & Security > Device Control and Data Access > + > choose "Scintilla Night Reload" in
      $DEST > switch it on.
   2. look only (closes nothing, presses nothing):   "$DEST/supervised-test.sh" --look
      The first time, macOS asks whether Scintilla Night Reload may control "System Events": click Allow.

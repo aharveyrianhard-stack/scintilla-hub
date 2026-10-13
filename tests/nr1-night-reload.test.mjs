@@ -110,7 +110,7 @@ test("a locked screen: nothing is reloaded and no key is sent; one line for Alan
 test("without the Accessibility permission nothing is touched and Alan is told where the switch is", () => {
   const n = night({ env: { FAKE_TRUSTED: "false" } });
   assert.deepEqual(n.changed, []);
-  assert.match(n.note, /Privacy & Security > Accessibility/);
+  assert.match(n.note, /Privacy & Security > Device Control and Data Access/);
 });
 
 test("X does not come back: exactly ONE retry of the X half, then the note", () => {

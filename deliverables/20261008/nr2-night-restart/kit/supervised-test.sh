@@ -37,7 +37,7 @@ IF IT DOES NOT WORK - what you would see, and what to do
   - Nothing happens for three minutes, then "hands were never off": somebody kept touching the Mac. Nothing was closed.
     Run it again, hands off the keyboard and mouse.
   - A box says macOS did not let "Scintilla Night Reload" look at windows: its switch is off. Nothing was closed.
-    System Settings > Privacy & Security > Accessibility > switch on "Scintilla Night Reload", then run it again.
+    System Settings > Privacy & Security > Device Control and Data Access > switch on "Scintilla Night Reload", then run it again.
   - An app closed and did not come back: the box names it. Open it from the Dock as usual. No other app was closed after it.
   - An app did not close: the box names it. It may be asking a question (unsaved changes, for example) - answer it.
     Nothing was forced, and the app is as it was.

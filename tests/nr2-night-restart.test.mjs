@@ -210,7 +210,7 @@ test("without the Accessibility permission: TradingView and the Hub app are stil
   ], "the two apps that need no permission, and nothing of Brave");
   assert.deepEqual(n.changed, [], "no window is brought forward, nothing is reloaded, no key is pressed");
   assert.ok(running(n, "brave"), "Brave is as it was");
-  assert.match(n.note, /Privacy & Security > Accessibility/);
+  assert.match(n.note, /Privacy & Security > Device Control and Data Access/);
   assert.match(n.log, /TradingView and the Hub app need no permission and are still restarted/);
 });
 

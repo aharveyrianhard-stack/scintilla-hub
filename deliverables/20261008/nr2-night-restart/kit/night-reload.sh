@@ -784,7 +784,8 @@ TRUSTED="$(gui trusted)"
 case "$TRUSTED" in
   true) say "permission: 'Scintilla Night Reload' is allowed to control the Mac (Accessibility) - good" ;;
   no-gui) say "permission: not checked (window helper switched off for this run)" ;;
-  *) say "permission: MISSING - System Settings > Privacy & Security > Accessibility > switch on 'Scintilla Night Reload' ($TRUSTED)"
+  # macOS 27 shows this list under "Device Control and Data Access" (older macOS called the page "Accessibility"); Alan could not find it under the old name on 12 Oct 2026.
+  *) say "permission: MISSING - System Settings > Privacy & Security > Device Control and Data Access > switch on 'Scintilla Night Reload' ($TRUSTED)"
      if [ "$MODE" != dry-run ]; then
        if [ "$RESTART_APPS" = yes ]; then
          # 10 Oct 2026 (Alan: "Test it. Do it. So that we can let it run."): closing and opening TradingView and the Hub app needs no
@@ -792,7 +793,7 @@ case "$TRUSTED" in
          # and X are left exactly as they are.
          NO_AX=1; say "  TradingView and the Hub app need no permission and are still restarted; Brave, the Station and X are left alone"
        else
-         note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Accessibility (and under Automation, 'System Events')."; done_for_tonight; finish
+         note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Device Control and Data Access (and under Automation, 'System Events')."; done_for_tonight; finish
        fi
      fi ;;
 esac
@@ -808,7 +809,7 @@ BEFORE="$(x_health "")"; say "X before: $BEFORE"
 
 # ---- the plan -----------------------------------------------------------------------------------------------------------------------
 make_plan
-if [ "${NO_AX:-0}" = 1 ]; then PLAN=none; WHY="macOS has not let 'Scintilla Night Reload' look at windows - switch it on in System Settings > Privacy & Security > Accessibility"; fi
+if [ "${NO_AX:-0}" = 1 ]; then PLAN=none; WHY="macOS has not let 'Scintilla Night Reload' look at windows - switch it on in System Settings > Privacy & Security > Device Control and Data Access"; fi
 if [ "$MODE" = dry-run ]; then
   restart_preview
   say "TONIGHT, at the first quiet moment between $(clock "$WINDOW_START") and $(clock "$WINDOW_END"), the job would:"
