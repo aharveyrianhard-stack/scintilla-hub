@@ -32,7 +32,7 @@ cat <<MSG
 Installed in $DEST. Nothing is switched on.
 
 NEXT, with Alan:
-  1. the permission (once):  System Settings > Privacy & Security > Accessibility > + > choose "Scintilla Night Reload" in
+  1. the permission (once):  System Settings > Privacy & Security > Device Control and Data Access > + > choose "Scintilla Night Reload" in
      $DEST > switch it on.
   2. a dry run (looks, sends nothing):   open "$APP"
      The first time, macOS asks whether Scintilla Night Reload may control "System Events": click Allow.

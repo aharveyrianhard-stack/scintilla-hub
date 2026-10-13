@@ -2,7 +2,7 @@
 # rollback.sh - switches the night reload off: unloads the timetable and deletes it. Nothing else on the Mac is touched.
 #   rollback.sh          off (the kit stays in ~/Scintilla/night-reload, so switch-on.sh can bring it back)
 #   rollback.sh --all    off, and the kit folder, its launcher app and its two logs are deleted as well
-# The one thing a script cannot undo for Alan: System Settings > Privacy & Security > Accessibility > select "Scintilla Night Reload"
+# The one thing a script cannot undo for Alan: System Settings > Privacy & Security > Device Control and Data Access > select "Scintilla Night Reload"
 # > click the minus sign. (With the app deleted the entry does nothing; removing it is tidiness.)
 set -u
 DEST="$HOME/Scintilla/night-reload"; LABEL=com.scintilla.night-reload

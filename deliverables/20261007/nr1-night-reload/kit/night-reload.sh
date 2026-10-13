@@ -300,9 +300,9 @@ TRUSTED="$(gui trusted)"
 case "$TRUSTED" in
   true) say "permission: 'Scintilla Night Reload' is allowed to control the Mac (Accessibility) - good" ;;
   no-gui) say "permission: not checked (window helper switched off for this run)" ;;
-  *) say "permission: MISSING - System Settings > Privacy & Security > Accessibility > switch on 'Scintilla Night Reload' ($TRUSTED)"
+  *) say "permission: MISSING - System Settings > Privacy & Security > Device Control and Data Access > switch on 'Scintilla Night Reload' ($TRUSTED)"
      if [ "$MODE" != dry-run ]; then
-       note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Accessibility (and under Automation, 'System Events')."; done_for_tonight; finish
+       note "nothing was reloaded: macOS did not let 'Scintilla Night Reload' look at windows. Check its switch in System Settings > Privacy & Security > Device Control and Data Access (and under Automation, 'System Events')."; done_for_tonight; finish
      fi ;;
 esac
 
