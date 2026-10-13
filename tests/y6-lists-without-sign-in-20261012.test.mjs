@@ -659,6 +659,14 @@ test("while its feeds answer, the SCINTILLA list's counts are taken afresh once 
   const joined = healthRow(counted(ALL)); delete joined.ch[S[3]].c; delete joined.ch[S[3]].ca;
   assert.deepEqual([plan(ALL, joined).refresh, plan(ALL, joined).calls], [true, 2]);
   assert.deepEqual([plan(ALL, healthRow(counted(ALL, { countedAgo: 600 })), { notice: noticeSettings({ baseline_min: 0 }) }).calls], [0], "0 switches the hourly refresh off");
+  /* a small day number on a quiet day: the hourly refresh is not a rate to be carried to midnight, so it is not thinned (2 units an hour either way) */
+  const quiet450 = passBudget({ health: parseHealth(healthRow(counted(ALL, { countedAgo: 60 }))), settings: fallbackSettings({ per_day: 450 }), nowSec: NOW, ownToday: 0 });
+  p = noticePlan({ followed: ALL, tier: TIER, feedOk: new Set(ALL), health: parseHealth(healthRow(counted(ALL, { countedAgo: 60 }))), notice: NOTICE, nowSec: NOW, budget: quiet450 });
+  assert.deepEqual([quiet450.held, p.calls, p.refresh, p.must], [false, 2, true, 78]);
+  /* and should one call be all the day has, the refresh takes the 50 counted longest ago — not the same 50 every pass */
+  const mixedAges = healthRow({ ...counted(S.slice(0, 50), { countedAgo: 5 }), ...counted(S.slice(50), { countedAgo: 65 }), ...counted([...P, ...R]) }, { used: 1199 });
+  p = plan(ALL, mixedAges);
+  assert.deepEqual([p.calls, p.refresh, p.ask.slice(0, 28), p.why], [1, true, S.slice(50), "day"]);
   /* the first pass ever, with every feed answering: everything is counted once (4 units), a read standing behind each count */
   p = plan(ALL, healthRow({}));
   assert.deepEqual([p.calls, p.must_calls, p.refresh, p.ask.length], [2, 2, true, 100]);

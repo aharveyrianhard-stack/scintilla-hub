@@ -130,8 +130,9 @@ export function noticePlan({ followed, tier, feedOk, health, notice, nowSec, bud
   const list = (followed || []).filter((id) => CHANNEL_ID.test(String(id)));
   const unread = list.filter((id) => !feedOk.has(id)), answered = list.filter((id) => feedOk.has(id));
   /* longest-uncounted first, so that when a call is all there is, it is not always the same 50 */
-  const first = unread.filter((id) => turn(id) === 0).sort((a, b) => (entry(a).ca || 0) - (entry(b).ca || 0));
-  const firstAnswered = answered.filter((id) => turn(id) === 0);
+  const longestUncounted = (a, b) => (entry(a).ca || 0) - (entry(b).ca || 0);
+  const first = unread.filter((id) => turn(id) === 0).sort(longestUncounted);
+  const firstAnswered = answered.filter((id) => turn(id) === 0).sort(longestUncounted);
   const refresh = notice.baseline_min > 0 && firstAnswered.some((id) => due(id, notice.baseline_min));
   const must = [...first, ...(refresh ? firstAnswered : [])];
   const others = unread.filter((id) => turn(id) !== 0).sort(oldestCountFirst);
@@ -143,7 +144,9 @@ export function noticePlan({ followed, tier, feedOk, health, notice, nowSec, bud
      through the whole day instead of leaving the evening dark. (The reads of channels that moved are never
      thinned this way: a video known to be there is worth more than another look.) */
   const mustNeeded = Math.ceil(must.length / COUNTS_PER_CALL);
-  if (mustNeeded && budget.room() < mustNeeded * budget.passes_left) budget.held = true;
+  /* "this rate" is what the UNREAD channels need on every pass; the hourly refresh is not a rate and is not held */
+  const everyPass = Math.ceil(first.length / COUNTS_PER_CALL);
+  if (everyPass && budget.room() < everyPass * budget.passes_left) budget.held = true;
   const mustCalls = Math.min(mustNeeded, budget.held ? budget.paced() : budget.room());
   const wantCalls = Math.ceil((must.length + wanting.length) / COUNTS_PER_CALL);
   const whole = mustCalls * COUNTS_PER_CALL >= must.length;                 // the day had room for all the SCINTILLA list needs
