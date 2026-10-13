@@ -161,7 +161,10 @@ test("the neighbours: the pass's budget fits inside the schedule's 120 s wait an
   const code = RSS.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/mg, "");
   assert.match(code, /net\.http_get|running\.ts && now - running\.ts < 180/, "the 180 s lock is still the sweep's");
   assert.doesNotMatch(code, /search\?|eventType=live/, "no search call was added");
-  assert.equal((code.match(/apiKeyRequest\(/g) || []).length, 3, "the sweep still makes its two kinds of YouTube API call and no third (definition + 2 uses)");
+  /* Y5 (12 Oct): a third kind of call now exists on purpose — the feed's second way (playlistItems, 1 unit a channel), behind its
+     own budget and its own tests (tests/y5-quiet-channels-20261012.test.mjs). The on-air check still adds none. */
+  assert.equal((code.match(/apiKeyRequest\(/g) || []).length, 3, "the sweep's own two kinds of videos call are what they were (definition + 2 uses)");
+  assert.equal((code.match(/readUploadsPass\(/g) || []).length, 2, "and the uploads list is asked through one function, in two places: the pass and the look-only door");
   assert.match(code, /const REFRESH_MAX = 200;/);
 });
 

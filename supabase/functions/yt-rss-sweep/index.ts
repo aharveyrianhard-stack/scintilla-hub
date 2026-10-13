@@ -18,10 +18,18 @@
 // away any new video whose tag did not start with "en". A followed channel's video is now kept whatever its tag
 // or its title's script says (keepSubscribed, _shared/yt-feed-fallback.mjs — Alan, 6 Oct: "Everything subscribed"),
 // and the result row counts what the old rule would have dropped (kept_other_language, kept_other_script).
+// THE SECOND WAY IN. YouTube's public feed fails in bursts (measured 12–13 Oct: 99–190 of 194 feeds answering
+// 404 / 500 for 95 minutes). A followed channel whose feed gave no answer this pass and that nothing has read for
+// more than an hour is read through its uploads list instead (YouTube Data API, 1 unit a channel), inside a hard
+// budget whose numbers live in app_config (yt_rss_fallback; rules and arithmetic in _shared/yt-feed-fallback.mjs).
+// What it finds goes down the same path as a feed entry. Every channel's last read is remembered in one row
+// (yt_rss_health), the result row says what the second way did and names the channels nothing has read for more
+// than a day, and a third read-only door shows it without writing:  ?dry=fallback[&channels=UC…,UC…]
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore  plain ESM shared with the resolver and the Node tests
 import { bridgeChannelIds, withBridge, onAirPass, onAirLine, probeLive, isChannelId, isVideoId, liveProbeDue, liveProbePick, liveCandidateRow, LIVE_EVERY_MIN,
-  keepSubscribed, otherLanguage } from "../_shared/yt-bridge.mjs";
+  keepSubscribed, otherLanguage, HEALTH_KEY, SETTINGS_KEY, fallbackSettings, parseHealth, fallbackPlan, capWords, readUploadsPass, feedAnswers, isFeed,
+  nextHealth, unreadOverADay, savedChannelLists, carriers, lastRead, UNREAD_NAMED_MAX } from "../_shared/yt-bridge.mjs";
 
 const SB_URL = Deno.env.get("SUPABASE_URL") || "";
 
@@ -160,6 +168,71 @@ Deno.serve(async (req?: Request) => {
       could_not_read: lines.filter((l) => l.state === "unknown").map((l) => l.id),
       channels: lines.map(onAirLine) });
   }
+  /* ---- READ-ONLY DOOR 3 (Y5): the feed's second way, looked at and not stored. It reads the saved channel lists
+     (it signs in nowhere), asks every followed channel's feed as a pass would, works out which channels the
+     second way would take under the same rules and budget, asks YouTube's API for exactly those, and reports
+     what came back and which of it the table already holds. &channels=UC…,UC… asks about those channels
+     whatever their feed says (never more than per_pass of them). No write, no lock, the remembered row left as
+     it is — so the units a look spends (1 a channel asked) are NOT added to the day's count; it says how many. ---- */
+  if (ask.get("dry") === "fallback") {
+    const { data } = await sb.from("app_config").select("key,value").in("key",
+      ["YT_API_KEY", ...ACCOUNTS.map((account) => "yt_sub_channels_" + account), "yt_sub_channels", "yt_bridge_channels", HEALTH_KEY, SETTINGS_KEY]);
+    const d: Record<string, string> = {};
+    for (const row of data || []) d[row.key] = row.value;
+    const lookKey = (d.YT_API_KEY || "").trim();
+    if (!lookKey) return json({ dry: "fallback", wrote: "nothing", error: "missing YouTube API key" });
+    const lists: Record<string, string[]> = savedChannelLists(d, [...ACCOUNTS]);
+    let bridged: string[] = [];
+    try { bridged = bridgeChannelIds(JSON.parse(d.yt_bridge_channels || "null")); } catch (_) {}
+    lists.scintilla = withBridge(lists.scintilla, bridged);
+    const followed: string[] = [...carriers(lists, [...ACCOUNTS]).keys()].filter(isChannelId);
+    const health = parseHealth(d[HEALTH_KEY]), settings = fallbackSettings(d[SETTINGS_KEY]);
+    const named = [...new Set((ask.get("channels") || "").split(",").filter(isChannelId))];
+    const toRead = named.length ? named : followed;
+    const feedLines: Record<string, any>[] = [];
+    for (let i = 0; i < toRead.length; i += 16) {
+      feedLines.push(...await Promise.all(toRead.slice(i, i + 16).map((id) => feedAnswers(id, fetch))));
+    }
+    const answered = new Map(feedLines.map((line) => [line.id as string, line]));
+    const unread = toRead.filter((id) => !answered.get(id)?.ok);
+    const plan = fallbackPlan({ unread, health, settings, nowSec: now });
+    /* a named channel is asked whatever its feed said — that is the point of naming it — but the caps still hold:
+       never more than per_pass, none when the second way is off, YouTube has said the day is gone, or the day's
+       calls are spent */
+    const off = !settings.per_pass || !settings.per_day, quotaGone = health.quota_day === plan.day;
+    const spare = Math.max(0, settings.per_day - plan.used_today);
+    const pick: string[] = !named.length ? plan.pick : off || quotaGone ? [] : named.slice(0, Math.min(settings.per_pass, spare));
+    const cap = !named.length ? plan.cap : pick.length === named.length ? null
+      : off ? "off" : quotaGone ? "quota" : spare < Math.min(settings.per_pass, named.length) ? "day" : "pass";
+    const reads: Record<string, any>[] = await readUploadsPass(pick, lookKey, fetch, { maxResults: settings.max_results, nowSec: now });
+    const found = reads.flatMap((read) => read.rows.map((video: Record<string, any>) => video.video_id as string));
+    const have = new Set<string>();
+    for (let i = 0; i < found.length; i += 200) {
+      const { data: rows } = await sb.from("youtube_videos").select("video_id").in("video_id", found.slice(i, i + 200));
+      for (const row of rows || []) have.add(row.video_id);
+    }
+    const unreadDay: Record<string, any>[] = unreadOverADay(health, now);
+    return json({ dry: "fallback", wrote: "nothing", at: new Date().toISOString(), followed: followed.length,
+      feeds_read: toRead.length, feed_unread: unread.length, eligible: named.length ? named.length : plan.eligible.length,
+      would_ask: pick, skipped_budget: named.length ? named.length - pick.length : plan.skipped_budget, cap, cap_says: capWords(cap, settings, plan),
+      budget: { per_pass: settings.per_pass, per_day: settings.per_day, after_min: settings.after_min, max_results: settings.max_results,
+        from: settings.from, day: plan.day, used_today: plan.used_today, allowed_by_now: plan.allowed_by_now, quota_gone: quotaGone },
+      asked: reads.map((read) => {
+        const entry = health.ch[read.id] || {}, last = lastRead(entry), feed = answered.get(read.id);
+        return { id: read.id, name: read.name || entry.n || "", why: named.length ? "named in the call" : "feed unread",
+          feed: feed?.ok ? "answered" : "no answer (" + (feed?.status || "no reply") + ")",
+          last_read_min_ago: last ? Math.round((now - last) / 60) : null,
+          outcome: read.outcome, reason: read.reason, videos: read.rows.length,
+          newest: read.rows.map((video: Record<string, any>) => video.published_at as string).sort().pop() || null,
+          not_stored: read.rows.filter((video: Record<string, any>) => !have.has(video.video_id)).length,
+          items: read.rows.map((video: Record<string, any>) => ({ video_id: video.video_id, published_at: video.published_at,
+            title: String(video.title).slice(0, 80), stored: have.has(video.video_id) })) };
+      }),
+      units_spent: reads.filter((read) => read.sent).length,
+      note: "a look writes nothing: the units it spends are not added to the day's count in " + HEALTH_KEY,
+      unread_over_a_day: { count: unreadDay.length, longest_hours: unreadDay.length ? unreadDay[0].hours : 0,
+        names: unreadDay.slice(0, UNREAD_NAMED_MAX).map((line) => line.name || line.id) } });
+  }
   const configKeys = [
     "YT_API_KEY",
     "YT_OAUTH_CLIENT_ID",
@@ -170,6 +243,8 @@ Deno.serve(async (req?: Request) => {
     "yt_rss_running",
     "yt_bridge_channels",
     "yt_bridge_live",
+    HEALTH_KEY,
+    SETTINGS_KEY,
   ];
   const { data: cfg } = await sb.from("app_config").select("key,value").in("key", configKeys);
   const c: Record<string, string> = {};
@@ -263,6 +338,8 @@ Deno.serve(async (req?: Request) => {
      normally sees ~2,360 entries saw 0–255 from 01:05Z). One retry after a short pause, and the channels still
      failing are COUNTED in the result (rss_failed) instead of vanishing silently. */
   let rssFailed = 0;
+  /* Y5: the channels whose feed gave a readable answer this pass — every other followed channel is "unread" */
+  const feedOk = new Set<string>();
   const rssFetch = async (url: string) => {
     let r = await fetch(url).catch(() => null);
     if (!r || !r.ok) { await new Promise((ok) => setTimeout(ok, 700)); r = await fetch(url).catch(() => null); }
@@ -273,6 +350,7 @@ Deno.serve(async (req?: Request) => {
       const r = await rssFetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + channelId);
       if (!r || !r.ok) { rssFailed++; return; }
       const xml = await r.text();
+      if (isFeed(xml)) feedOk.add(channelId);
       const author = unesc((xml.match(/<name>([^<]*)/) || [])[1] || "");
       for (const match of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
         const entry = match[1];
@@ -306,6 +384,58 @@ Deno.serve(async (req?: Request) => {
       }
     } catch (_) {}
   })));
+
+  /* ---- THE SECOND WAY IN (Y5) ----
+     A followed channel whose feed gave no readable answer this pass, and that nothing has read for more than
+     after_min minutes, is read through its uploads list (YouTube Data API playlistItems, 1 unit a channel):
+     oldest-unread first, never more than per_pass a pass, never more than the even share of per_day the Pacific
+     day has reached (the rules and the day's arithmetic: _shared/yt-feed-fallback.mjs). What comes back goes
+     into the same candidates as a feed entry, under the accounts that carry the channel — so the already-stored
+     check, the videos call, shorts and live treat it exactly as they treat the feed. A cap that leaves channels
+     unasked is said in the result row. THE NEIGHBOURS: at most per_pass calls, asked together, each bounded to
+     8 s — inside the schedule's 120 s wait and the 180 s "busy" lock. Nothing here can fail the pass. */
+  let settings: Record<string, any> = fallbackSettings(null);
+  let plan: Record<string, any> = { day: "", used_today: 0, allowed_by_now: 0, eligible: [], pick: [], skipped_budget: 0, cap: null };
+  let reads: Record<string, any>[] = [];
+  let unread: string[] = [];
+  let unreadDay: Record<string, any>[] = [];
+  let healthNow: Record<string, any> = parseHealth(null);
+  let secondWayError: string | null = null;
+  const secondWayVideos = new Set<string>();
+  try {
+    const health = parseHealth(c[HEALTH_KEY]);
+    healthNow = health;
+    settings = fallbackSettings(c[SETTINGS_KEY]);
+    const feedCarriers: Map<string, Set<Account>> = carriers(accountChannels, [...ACCOUNTS]);
+    const followed = [...feedCarriers.keys()].filter(isChannelId);
+    unread = followed.filter((id) => !feedOk.has(id));
+    plan = fallbackPlan({ unread, health, settings, nowSec: now });
+    if (plan.pick.length) reads = await readUploadsPass(plan.pick, apiKey, fetch, { maxResults: settings.max_results, nowSec: now });
+    for (const read of reads) {
+      if (read.outcome !== "ok") continue;
+      const carriedBy = feedCarriers.get(read.id) || new Set<Account>();
+      for (const row of read.rows) {
+        secondWayVideos.add(row.video_id);
+        const current = candidates.get(row.video_id);
+        if (current) for (const account of carriedBy) current.accounts.add(account);
+        else candidates.set(row.video_id, { ...row, accounts: new Set<Account>(carriedBy) });
+      }
+    }
+    /* what is remembered is written at once: the calls just made count against the day whatever the rest of
+       the pass does */
+    healthNow = nextHealth({ health, channels: followed, feedOk, reads, nowSec: now });
+    unreadDay = unreadOverADay(healthNow, now);
+    for (const line of unreadDay.filter((entry) => !entry.name).slice(0, 10)) {
+      /* a channel dark for a day is named from the videos already held, once; the name then stays in the row */
+      const { data: named } = await sb.from("youtube_videos").select("channel_title").eq("channel_id", line.id).limit(1);
+      const name = String((named || [])[0]?.channel_title || "");
+      if (name) { line.name = name; healthNow.ch[line.id].n = name.slice(0, 60); }
+    }
+    const { error } = await sb.from("app_config").upsert({ key: HEALTH_KEY, value: JSON.stringify(healthNow) });
+    if (error) secondWayError = "the remembered row was not written: " + error.message;
+  } catch (e) {
+    secondWayError = String((e as Error)?.message || e).split(apiKey).join("…").slice(0, 200);
+  }
 
   /* ---- ON AIR NOW, WITHOUT WAITING FOR RSS ----
      youtube.com/channel/<id>/live lands on the stream when the channel is on air and on the channel page when it
@@ -378,6 +508,7 @@ Deno.serve(async (req?: Request) => {
   let dropped = 0;
   let keptOtherLanguage = 0;
   let keptOtherScript = 0;
+  let secondWayNew = 0;
   if (fresh.length) {
     const detail: Record<string, ReturnType<typeof liveFields>> = {};
     const language: Record<string, string> = {};
@@ -426,6 +557,7 @@ Deno.serve(async (req?: Request) => {
       const { error } = await sb.from("youtube_videos").upsert(batch, { onConflict: "video_id" });
       if (error) writeError = error.message;
       else wrote += batch.length;
+      if (!error) secondWayNew += batch.filter((written) => secondWayVideos.has(String(written.video_id))).length;
     }
   }
 
@@ -495,6 +627,29 @@ Deno.serve(async (req?: Request) => {
     rss_failed: rssFailed,
     rss_channels: ACCOUNTS.reduce((n, account) => n + accountChannels[account].length, 0),
     bridge: { channels: bridgeIds.length, added_to_scintilla: bridgeAdded, live_check: liveProbe },
+    /* Y5 · the second way this pass: how many channels' feeds gave no readable answer, how many of those were due
+       (unread for more than after_min), how many were asked and read, the videos that brought and how many of
+       them were new, how many were left for the budget and which cap did it, and the channels nothing has read
+       for more than a day */
+    fallback: {
+      feed_unread: unread.length,
+      eligible: plan.eligible.length,
+      asked: reads.filter((read) => read.sent).length,
+      read: reads.filter((read) => read.outcome === "ok").length,
+      videos: secondWayVideos.size,
+      videos_new: secondWayNew,
+      skipped_budget: plan.skipped_budget,
+      cap: plan.cap,
+      cap_says: capWords(plan.cap, settings, plan),
+      channels: reads.filter((read) => read.outcome === "ok").map((read) => ({ id: read.id, name: read.name, videos: read.rows.length })),
+      could_not_read: reads.filter((read) => read.outcome !== "ok").map((read) => ({ id: read.id, outcome: read.outcome, reason: read.reason })),
+      budget: { per_pass: settings.per_pass, per_day: settings.per_day, after_min: settings.after_min, max_results: settings.max_results,
+        from: settings.from, day: healthNow.day, used_today: healthNow.used, allowed_by_now: plan.allowed_by_now,
+        quota_gone: !!healthNow.quota_day && healthNow.quota_day === healthNow.day },
+      unread_over_a_day: { count: unreadDay.length, longest_hours: unreadDay.length ? unreadDay[0].hours : 0,
+        names: unreadDay.slice(0, UNREAD_NAMED_MAX).map((line) => line.name || line.id) },
+      error: secondWayError,
+    },
     new_videos: wrote,
     membership_updates: membershipUpdates,
     live_refreshed: refreshed,
