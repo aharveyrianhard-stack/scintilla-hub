@@ -112,6 +112,9 @@ async function runSweep({ config, videos = [], feeds = {}, api = {}, uploads = {
       return from(uploads[id], [404, { error: { code: 404, errors: [{ reason: "playlistNotFound" }] } }], u);
     }
     if (u.includes("/shorts/")) return answer(303, "", u);
+    /* an on-air check, should a pass make one: every channel is plainly off (its own page comes back) */
+    const page = u.match(/^https:\/\/www\.youtube\.com\/channel\/(UC[\w-]{22})\/(?:live|streams)$/);
+    if (page) return answer(200, '<html><head><link rel="canonical" href="https://www.youtube.com/channel/' + page[1] + '"></head><body>"externalId":"' + page[1] + '"</body></html>', u);
     throw new Error("unexpected request " + u);
   };
   globalThis.setTimeout = (fn, _ms, ...rest) => realTimeout(fn, 0, ...rest);   // the feed's 700 ms retry pause, not waited for in a test
@@ -666,7 +669,9 @@ test("every feed answers: the pass is the pass it always was — no uploads call
   assert.deepEqual([result.rss_failed, result.rss_seen, result.new_videos], [0, 2, 2]);
   assert.deepEqual(stored(tables, HEALTH_KEY), { v: 1, at: NOW, day: "2026-10-12", used: 0, quota_day: "", ch: { [DESK]: { ok: NOW }, [TALK]: { ok: NOW }, [RAIN]: { ok: NOW } } });
   assert.equal(log.writes.filter((w) => w.key === HEALTH_KEY).length, 1, "one write of the one new row");
-  assert.deepEqual(log.writes.filter((w) => w.table === "app_config").map((w) => w.key).sort(), ["yt_rss_health", "yt_rss_result", "yt_rss_running", "yt_rss_running"], "and no other new row");
+  const before = ["yt_rss_result", "yt_rss_running", "yt_bridge_live"];   // the rows a pass wrote before Y5
+  assert.deepEqual([...new Set(log.writes.filter((w) => w.table === "app_config").map((w) => w.key))].filter((key) => !before.includes(key)), ["yt_rss_health"], "and no other new row");
+  assert.ok(!tables.app_config.some((r) => r.key === SETTINGS_KEY), "the settings row is never made by the sweep");
 });
 
 test("an OK answer that is not a feed is not a read; a pass that is already running is still left alone", async () => {
