@@ -1,0 +1,51 @@
+-- Y6 (13 Oct 2026) — the second way's number for the day, once the database stopgap is removed.     NOT APPLIED.
+--
+-- APPLY THIS AFTER the hourly backup (cron yt-backup-ask / yt-backup-ingest) has been removed, not before: the
+-- stopgap spends 990 units a day, and the row in force — {"per_pass":6,"per_day":450} — was sized to sit beside it.
+--
+-- WHAT THE DAY'S NUMBER NOW PAYS FOR (the collector yt-rss-sweep, all of it counted in app_config yt_rss_health → used):
+--   the followed lists read without a sign-in   1 unit a page, an hour apart for a list YouTube shows,
+--                                               six hours apart for one it keeps private or shows empty
+--   the notice                                  1 unit for the video counts of 50 channels
+--   the reads                                   1 unit for a channel whose count moved, and for the blind read under it
+--
+-- WHY 1,200.  Measured on this Mac against a made-up YouTube in the live shape (186 channels, 78 of them in the
+-- SCINTILLA turn; a weekday's 215 uploads), tests/y6-lists-without-sign-in-20261012.test.mjs:
+--     every feed answering all day        48 units    (the SCINTILLA list's counts once an hour)
+--     bursts as on 12–13 Oct (70 % of it) about 640
+--     EVERY feed down, midnight to midnight  1,135 + the lists' 64 = 1,199
+--   In all three every SCINTILLA upload was in the table inside 10 minutes (with every feed down the worst waited
+--   6 minutes 3 seconds; with feeds answering it is the feed's own delay that sets the wait).
+--   At 450 or 580 the SCINTILLA list is still served to midnight, later (121 and 146 of 165 inside 10 minutes on the
+--   all-day case) — and on that day the other lists get nothing. Those numbers were for the blind read alone.
+-- THE DAY STILL FITS.  RADAR's searches 7,979 + this sweep's own videos calls (measured 480–550) + 1,200 = at most
+--   9,729 of 10,000. And the number gives way by itself: the second way may never come to more than 10,000 less
+--   7,979, less this sweep's own calls so far today, less two a pass for the passes still to come, less 50
+--   (yt_rss_result → units.today.second_way_may_come_to). 1,200 is a ceiling asked for, not a promise to spend.
+--
+-- OTHER NUMBERS THAT MAY RIDE IN THE SAME ROW — all optional, each with its built-in value:
+--   per_pass        blind reads in one pass                                         6      (0 … 25)
+--   after_min       minutes unread before a blind read                              60     (10 … 1440)
+--   max_results     videos asked for in one read                                    15     (1 … 50)
+--   notice          1 on · 0 off — with it off the second way is Y5's blind read    1
+--   moved_per_pass  channels whose count moved, read in one pass                    20     (0 … 50)
+--   notice_min      a channel off the SCINTILLA list is counted at least this often 15     (5 … 240)
+--   baseline_min    the SCINTILLA list's counts, taken afresh while its feeds answer 60    (0 = never … 1440)
+--   verify_min      a channel the count vouches for is still read this often        720    (60 … 2880)
+--   lists           1 on · 0 off — the lists read without a sign-in                 1
+--   list_min_pct    a list read is taken only if it is at least this share of the saved one   60   (1 … 100)
+--   list_max_pct    … and at most this share                                        300    (100 … 1000)
+--   list_retry_min  a private / empty / out-of-bounds list is asked again this often 360   (60 … 1440)
+--
+-- Expect "INSERT 0 1". The next pass (≤ 5 min) uses it; yt_rss_result → fallback.budget says the numbers in force.
+insert into public.app_config (key, value)
+values ('yt_rss_fallback', '{"per_pass":6,"per_day":1200}')
+on conflict (key) do update set value = excluded.value, updated_ts = now();
+
+-- SWITCHES, should one be wanted in a hurry (no deploy; the next pass obeys). Each keeps the two numbers above.
+--   the notice off — the second way is Y5's blind read again, to the unit:
+--     … values ('yt_rss_fallback', '{"per_pass":6,"per_day":1200,"notice":0}') …
+--   the lists off — no list is read the public way, no tag is taken off:
+--     … values ('yt_rss_fallback', '{"per_pass":6,"per_day":1200,"lists":0}') …
+--   everything the second way spends, off (the feed, the sign-in and the language fix carry on):
+--     … values ('yt_rss_fallback', '{"per_day":0}') …
