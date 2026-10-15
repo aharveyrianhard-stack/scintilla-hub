@@ -3198,6 +3198,29 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .se-drow .s{ margin-left:auto; font-size:8px; }
 .se-drow.beat .s{ color:var(--up); } .se-drow.miss .s{ color:var(--dn); } .se-drow.inline .s{ color:var(--dim); }
 .se-dnone{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--mute); padding:2px 0 6px; }
+/* E1 (15 Oct) — the day's cut in one line; the "NEW · transcript in" chips; the folds in the extras column */
+.se-dcut{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); padding:0 2px 7px; }
+.ern-trnew{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; padding:5px 10px 3px; scrollbar-width:thin; }
+.ern-trnew::-webkit-scrollbar{ height:4px; } .ern-trnew::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:3px; }
+.ern-trchip{ flex:none; white-space:nowrap; }
+/* E1 — inside a square the card's header wraps: the readable time label takes its own line under the name and the date */
+.se-card .sc-ern__top{ flex-wrap:wrap; row-gap:4px; }
+.se-card .sc-ern__pill{ order:9; flex:0 0 100%; margin-left:0; width:fit-content; max-width:100%; white-space:normal; line-height:1.45; }
+.se-card .sc-ern__days{ white-space:nowrap; }
+.ern-trnew__lbl{ flex:none; white-space:nowrap; font-family:var(--mono); font-size:8px; letter-spacing:.2em; color:var(--ink3); margin-right:2px; }
+.ern-trchip{ display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:9px; color:var(--ink); background:transparent;
+  border:.6px solid rgba(0,212,255,.34); border-radius:3px; padding:3px 8px; cursor:pointer; }
+.ern-trchip b{ color:var(--crk); font-weight:600; letter-spacing:.1em; font-size:8px; }
+.ern-trchip span{ color:var(--ink); }
+.ern-trchip i{ font-style:normal; color:var(--dim); font-size:8px; }
+.ern-trchip:hover{ border-color:var(--crk); }
+.ern-trin{ color:var(--crk); }
+.sc-ern__in{ color:var(--dim); font-weight:400; }
+.ev-fold{ position:relative; }
+.ev-foldx{ position:absolute; right:12px; top:9px; cursor:pointer; color:var(--dim); font-size:11px; line-height:1; padding:2px 5px; border:.6px solid var(--line2); border-radius:2px; }
+.ev-foldx:hover{ color:var(--ink); border-color:var(--crk); }
+.ev-fold.is-shut .ev-foldx{ transform:rotate(-90deg); }
+.ev-fold.is-shut > .ev-ulkwrap, .ev-fold.is-shut > .ev-pastwrap, .ev-fold.is-shut > #evRelPanel{ display:none; }
 .se-dmore{ margin-top:12px; border-top:.5px solid var(--line); padding-top:8px; }
 .se-dmore > summary{ font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase;
   color:var(--dim); cursor:pointer; list-style:none; }
@@ -15247,10 +15270,14 @@ function eventsRoomHTML() {
       '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>earnings extras</span>' + SECFS_BTN + '</div><div class="rail" id="evExtras">' +
         '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt ev-upwrap" id="evUpcoming">—</div></div>' +
         /* R2 (2 Oct) — IPO LOCK-UPS: every Hub stock whose lock-up ends in the next 12 months, the last 6 months' dimmed */
+        /* E1 (15 Oct) — Alan: "earnings, extras, upcoming earnings, seems a little bit like … shit everywhere." The pieces he
+           loves stay, every one; the ones he does not read every day fold away. UPCOMING stays open. IPO LOCK-UPS and the
+           RELEASES panel open shut; PAST · REPORTED opens open. A fold remembers its state (hub.ern.fold.*). The chevron is
+           the control; the headings are untouched. */
         (typeof unlockSectionHTML === "function" && UNLOCK_ON
-          ? '<div class="card"><h4>IPO LOCK-UPS · NEXT 12 MONTHS</h4><div class="ev-ulkwrap" id="evLockups">' + unlockSectionHTML() + "</div></div>" : "") +
-        '<div class="card"><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
-        '<div id="evRelPanel"></div>' +
+          ? '<div class="card ev-fold' + (ernFoldShut("lockups", true) ? " is-shut" : "") + '"><span class="ev-foldx" data-act="ernfold" data-k="lockups" title="fold / unfold">▾</span><h4>IPO LOCK-UPS · NEXT 12 MONTHS</h4><div class="ev-ulkwrap" id="evLockups">' + unlockSectionHTML() + "</div></div>" : "") +
+        '<div class="card ev-fold' + (ernFoldShut("past", false) ? " is-shut" : "") + '"><span class="ev-foldx" data-act="ernfold" data-k="past" title="fold / unfold">▾</span><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
+        '<div class="ev-fold' + (ernFoldShut("releases", true) ? " is-shut" : "") + '"><span class="ev-foldx" data-act="ernfold" data-k="releases" title="fold / unfold">▾</span><div id="evRelPanel"></div></div>' +
       "</div></div></div></div>";
 }
 /* FIX 1 (events leg) — SAME strict scope as the board/news: rows filtered to the
@@ -15265,6 +15292,8 @@ function eventsRoomHTML() {
    release so the coordinator can put either back in one line; nothing calls them. */
 const ernTab = () => "DASH";
 function ernTabsHTML() { return ""; }   /* 28 Sep — one tab is no tabs: the DASHBOARD · PAST REPORTED · THE OLDER LIST strip is gone */
+/* E1 — a fold's state: remembered per browser, else its default */
+function ernFoldShut(k, dflt) { const v = lsGet("hub.ern.fold." + k); return v == null ? !!dflt : v === "1"; }
 function renderEvents(cohort) {
   const list = el("evList");
   if (!list) return;
@@ -16461,10 +16490,14 @@ function ercDayHTML(rows) {
   const when = d === today ? "TODAY" : d > today ? "AHEAD" : "PAST";
   const why = ERC_AUTO_DAY === d && d > today
     ? '<span class="sub">nothing reports today — this is the next day that does</span>' : "";
+  /* E1 (15 Oct) — the day says its own cut in one line ("7 before the open · 1 after the close"), and below, only the
+     groups that hold a name are drawn: Alan, of the empty ones, "all these lines … shit everywhere". */
+  const cut = list.length ? ERC_DAY_SLOTS.map((sl) => { const n = list.filter((r) => ernSlot(r) === sl[0]).length; return n ? n + " " + sl[1] : ""; }).filter(Boolean).join(" · ") : "";
   const head = '<div class="se-dhd"><span>' + esc(ernWeekday(d)) + "</span><b>" + esc(ernMonthDay(d) + " " + d.slice(0, 4)) + "</b>" +
     '<span>' + esc(when) + "</span>" +
     '<span class="sub">' + (list.length ? list.length + (list.length === 1 ? " report" : " reports") : "nothing here") +
-      (coh !== "ALL" ? " · " + allN + " across all names" : "") + "</span>" + why + "</div>";
+      (coh !== "ALL" ? " · " + allN + " across all names" : "") + "</span>" + why + "</div>" +
+    (cut ? '<div class="se-dcut">' + esc(cut) + "</div>" : "");
   if (!list.length) {
     const next = ercNextBusy(d);
     return head + '<div class="se-dnone">' +
@@ -24525,6 +24558,11 @@ document.addEventListener("click", (e) => {
     }
     /* one tap back to the whole universe */
     case "ernall": { S.ernCohPick = "ALL"; S.ernPick = null; renderEvents(S.coh); ercRead(false); break; }
+    case "ernfold": {   /* E1 — fold or unfold one of the extras; remembered */
+      const box = a.closest ? a.closest(".ev-fold") : null;
+      if (box) { const shut = !box.classList.contains("is-shut"); box.classList.toggle("is-shut", shut); lsSet("hub.ern.fold." + (a.dataset.k || ""), shut ? "1" : "0"); }
+      break;
+    }
     case "ernjump": { S.ernDay = a.dataset.d || todayISO(); S.ernPick = null; ERC_AUTO_DAY = null; renderEvents(S.coh); ercRead(false); break; }
     case "ernday": {
       S.ernDay = a.dataset.d || todayISO(); S.ernSpan = "WEEK"; S.ernPick = null;
