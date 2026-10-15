@@ -3255,7 +3255,7 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .se-sq .se-dcol{ flex:1 1 138px; }
 .se-sq .se-dlist{ max-height:none; overflow:visible; grid-template-columns:repeat(auto-fill, minmax(88px, 1fr)); }
 .se-sq .se-dhd{ padding-bottom:6px; }
-.se-sq .se-card{ margin-top:8px; }
+.se-sq .se-card{ margin:2px 0 10px; }   /* E1 — above the names now, so it keeps its distance below */
 .se-oldsay{ font-family:var(--mono); font-size:8px; letter-spacing:.12em; color:var(--dim);
   padding:8px 10px 6px; border-bottom:.5px solid var(--line); margin-bottom:8px; }
 
@@ -15724,6 +15724,12 @@ function ercChipHTML(r) {
     (res && res.sur ? '<span class="s' + (wild ? " is-scint" : "") + '"' + (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") +
       ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "") + "</span>";
 }
+/* E1 (15 Oct) — the squares scroll inside themselves: after a pick the card is scrolled into view where it was drawn */
+function ercShowPick() {
+  if (!S.ernPick || typeof document === "undefined" || !document.querySelector) return;
+  const card = document.querySelector("#evList .se-card");
+  if (card && typeof card.scrollIntoView === "function") { try { card.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {} }
+}
 function ercCardHTML(r) {
   return '<div class="se-card"><div class="se-card__hd"><span>' + esc(r.ticker) + " · " + esc(fmtEvDate(r.date)) + "</span>" +
     '<span class="se-card__x" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '">✕ close</span></div>' +
@@ -15744,11 +15750,12 @@ function ercWeekHTML(byDay) {
         inSlot.map(ercChipHTML).join("") + "</div></div>";
     }).join("") : '<div class="se-empty">no reports</div>';
     const open = (S.ernPick && S.ernPick.d === d) ? (list.filter((r) => r.ticker === S.ernPick.t)[0] || null) : null;
-    return '<div class="se-day' + (d === today ? " is-today" : d < today ? " is-past" : "") + '">' +
+    /* E1 (15 Oct) — the picked card sits ABOVE its day, not under thirty chips (see ercDayHTML) */
+    return (open ? ercCardHTML(open) : "") + '<div class="se-day' + (d === today ? " is-today" : d < today ? " is-past" : "") + '">' +
         '<div class="se-dlbl">' + esc(ernWeekday(d)) + "<b>" + esc(ernMonthDay(d)) + "</b>" +
         (list.length ? '<span class="cnt">' + list.length + " reporting</span>" : "") + "</div>" +
         "<div>" + body + "</div>" +
-      "</div>" + (open ? ercCardHTML(open) : "");
+      "</div>";
   }).join("") + "</div>";
 }
 /* ---- THE TIMELINE: the earnings room's own instrument ------------------------
@@ -16474,12 +16481,15 @@ function ercDayHTML(rows) {
        every name sits in one slot, and four equal columns would push it off the
        bottom of the panel — the very scroll this view exists to end. */
     const grow = Math.min(6, 1 + Math.round(inSlot.length / 3));
+    if (!inSlot.length) return "";   /* E1 — an empty group is not drawn; the cut line above already says what the day holds */
     return '<div class="se-dcol" style="flex-grow:' + grow + '"><h5>' + esc(sl[1]) + (inSlot.length ? "<b>" + inSlot.length + "</b>" : "") + "</h5>" +
-      (inSlot.length ? '<div class="se-dlist">' + inSlot.map(ercDayRowHTML).join("") + "</div>"
-                     : '<div class="se-dnone">—</div>') + "</div>";
+      '<div class="se-dlist">' + inSlot.map(ercDayRowHTML).join("") + "</div></div>";
   }).join("");
   const open = (S.ernPick && S.ernPick.d === d) ? (list.filter((r) => r.ticker === S.ernPick.t)[0] || null) : null;
-  return head + '<div class="se-dcols">' + cols + "</div>" + (open ? ercCardHTML(open) : "");
+  /* E1 (15 Oct) — Alan: "I click on TSM. Oh, it brings it out at the bottom. I could barely see that." MEASURED on live
+     7b66061 at 1680×1050: the card was appended UNDER the columns — top at y=872, bottom at 1,123, below the 1,050 px
+     window. The card now sits ABOVE the names, directly under the day's header, where the eye already is. */
+  return head + (open ? ercCardHTML(open) : "") + '<div class="se-dcols">' + cols + "</div>";
 }
 /* ============================================================================
    PAST REPORTED — a tab of its own again, and revamped
@@ -24351,6 +24361,7 @@ document.addEventListener("click", (e) => {
       const t = a.dataset.t, d = a.dataset.d;
       S.ernPick = (S.ernPick && S.ernPick.t === t && S.ernPick.d === d) ? null : { t: t, d: d };
       renderEvents(S.coh);
+      if (typeof ercShowPick === "function") ercShowPick();   /* E1 — and the card is brought into view inside its square */
       break;
     }
     case "cohgeigertoggle": {   // R37 — expand the hero cohort geiger to show median/min/max
