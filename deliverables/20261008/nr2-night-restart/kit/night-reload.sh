@@ -108,6 +108,10 @@ QUIT_WAIT="${QUIT_WAIT:-30}"                  # seconds an app normally gets to 
 QUIT_PATIENCE="${QUIT_PATIENCE:-60}"          # more seconds for an app that is still closing; after that it is left as it is, never forced
 OPEN_WAIT="${OPEN_WAIT:-60}"                  # seconds to wait for an app (and its window) to be back, per try
 SETTLE_WAIT="${SETTLE_WAIT:-15}"              # seconds for Brave's reopened web apps to draw before the reload stage looks at them
+# Brave's own windows (15 Oct 2026): written down before Brave is asked to quit, opened again after. See "Brave's own windows" below.
+REOPEN_BRAVE_WINDOWS="${REOPEN_BRAVE_WINDOWS:-yes}"
+BRAVE_PROFILE="${BRAVE_PROFILE:-$HOME/Library/Application Support/BraveSoftware/Brave-Browser/Default}"
+REFRESH_WEBAPPS="${REFRESH_WEBAPPS:-yes}"     # on a night Brave itself cannot be restarted: close and reopen the Station and X windows instead
 NR_KILL="${NR_KILL:-/bin/kill}"               # these three are replaced by stand-ins in the tests, never on a real Mac
 NR_OPEN="${NR_OPEN:-/usr/bin/open}"
 NR_CAFFEINATE="${NR_CAFFEINATE:-/usr/bin/caffeinate}"
@@ -121,6 +125,7 @@ SEEN_BACK=0; RESTART_RAN=0; RESTART_LINES=""; RESTART_NOTE=""; RESTARTED=""; BRA
 PS_SNAP=""; REG_SNAP=""; TOP_SNAP=""; STOPPED=0; PLAN=""; WHY=""; BEFORE=""
 TV_PID=""; TV_BID=""; TV_CMD=""; TV_ARGS=""; TV_PIDS=""; HUB_PID=""; HUB_BID=""; HUB_NAME=""; HUB_CMD=""; HUB_PIDS=""
 BR_PID=""; BR_BID=""; BR_KIND=""; BR_CMD=""; BR_SHIMS=""; BR_PIDS=""
+BR_REC=""; BR_REC_HOW=""; BR_OWN=0; BR_CONSENT=""; BR_PARTS=""; WEBAPPS_REFRESHED=0; REFRESH_LINE=""
 TV_B="0 0 0"; HUB_B="0 0 0"; BR_B="0 0 0"; SYS_B="0 0"; TV_WHY=""; HUB_WHY=""; BR_WHY=""; TV_W0=0; HUB_W0=0; X_TITLE0=""
 TV_PID0=""; TV_ARGS0=""; TV_BID0=""; HUB_PID0=""; HUB_BID0=""; HUB_NAME0=""; HUB_CMD0=""; BR_PID0=""; BR_BID0=""; BR_SHIMS0=""; TV_A="0 0 0"; HUB_A="0 0 0"; BR_A="0 0 0"; SYS_A="0 0"; R1=""; R2=""
 
@@ -187,8 +192,8 @@ sys_memory() {      # the whole Mac: "<kilobytes pushed out to disk> <percent of
 # ---- the windows: every call goes through here, and nothing that changes a window can run in dry-run ---------------------------------
 gui() {
   case "$1" in
-    trusted|front|windows|find-reload) ;;
-    activate|raise|reload|shortcut)
+    trusted|front|windows|find-reload|everywhere|consent|tabs) ;;
+    activate|raise|reload|shortcut|unminimise|active-tab)
       if [ "$MODE" != run ] && [ "$MODE" != test ]; then say "  (dry run - not done: $*)"; echo dry; return 0; fi ;;
     *) echo "error:unknown verb"; return 2 ;;
   esac
@@ -299,9 +304,79 @@ count_windows() {   # prints "<open windows> <minimised ones>" for one app
   case "$out" in no-gui|no-process|error:*|"") echo "0 0"; return ;; esac
   echo "$(printf '%s\n' "$out" | grep -c .) $(printf '%s\n' "$out" | grep -c "$(printf '\t')min$")"
 }
-count_all() {       # how many windows the Station and X have
-  if [ -n "$STATION_BID" ]; then set -- $(count_windows "$STATION_BID"); STATION_WINDOWS="$1"; STATION_MIN="$2"; say "  the Station has $STATION_WINDOWS window(s), $STATION_MIN minimised"; fi
-  if [ -n "$X_BID" ]; then set -- $(count_windows "$X_BID"); X_WINDOWS="$1"; X_MIN="$2"; say "  X has $X_WINDOWS window(s), $X_MIN minimised"; fi
+# ---- the windows wherever they are (15 Oct 2026) ------------------------------------------------------------------------------------
+# Alan, 15 Oct: "It says night reload. The station and X were not reloaded. The station has no open window ... I mean, it was open."
+# Accessibility ("windows") lists only the windows on the desktop in front. A window on another desktop, minimised, or in macOS native
+# full screen (which lives on a desktop of its own) read as "0 windows". The window server ("everywhere", windows.js) knows every window
+# on every desktop, so the job can tell the four cases apart and act on each before it gives up:
+#   minimised -> bring it back from the Dock;  another desktop or native full screen -> switch to that desktop (open -b, as "activate"
+#   already does);  closed (the app runs without a window) -> open the web app again (it comes back on its start page). Then count again.
+# "none" is the plan only when the window truly cannot be reached, and the morning line then says which of the four it was.
+where_words() {     # $1 = where -> plain words
+  case "$1" in
+    reachable) echo "open on this desktop" ;;
+    fullscreen-here) echo "in native full screen on this desktop" ;;
+    minimised) echo "minimised (in the Dock)" ;;
+    elsewhere) echo "on another desktop" ;;
+    fullscreen) echo "in native full screen, on a desktop of its own" ;;
+    closed) echo "closed (the app runs but has no window)" ;;
+    gone) echo "not running" ;;
+    *) echo "$1" ;;
+  esac
+}
+fix_words() {       # $1 = where -> what the job does about it
+  case "$1" in
+    minimised) echo "bring it back from the Dock" ;;
+    elsewhere) echo "switch to that desktop" ;;
+    fullscreen) echo "switch to its full-screen desktop" ;;
+    closed) echo "open it again (it comes back on its start page)" ;;
+    *) echo "nothing" ;;
+  esac
+}
+look_everywhere() { # $1 = bundle id -> "<on this desktop> <elsewhere> <of those, full screen>", from the window server
+  local out; out="$(gui everywhere "$1")"
+  case "$out" in no-gui|no-process|none|error:*|"") echo "0 0 0"; return ;; esac
+  echo "$(printf '%s\n' "$out" | grep -c '^on') $(printf '%s\n' "$out" | grep -c '^off') $(printf '%s\n' "$out" | grep -c "^off$(printf '\t')full")"
+}
+L_WINDOWS=0; L_MIN=0; L_WHERE=""; L_WHY=""
+locate() {          # $1 = bundle id, $2 = what to call it. Finds its window wherever it is and, in run and test, brings it within reach.
+                    # Leaves L_WINDOWS (windows a reload can reach), L_MIN (minimised), L_WHERE (see where_words) and L_WHY ("" = reachable).
+  local bid="$1" name="$2" n m on off full tries=0 r w
+  L_WINDOWS=0; L_MIN=0; L_WHERE=""; L_WHY=""
+  [ "$GUI" = none ] && return 0
+  while :; do
+    set -- $(count_windows "$bid"); n="$1"; m="$2"
+    set -- $(look_everywhere "$bid"); on="$1"; off="$2"; full="$3"
+    if [ $(( n - m )) -ge 1 ]; then L_WHERE=reachable; L_WINDOWS="$n"; L_MIN="$m"
+    elif [ "$m" -ge 1 ]; then L_WHERE=minimised; L_WINDOWS="$n"; L_MIN="$m"
+    elif [ "$on" -ge 1 ]; then L_WHERE=fullscreen-here; L_WINDOWS="$on"; L_MIN=0    # Accessibility lists nothing, the window server shows it in front
+    elif [ "$off" -ge 1 ]; then L_WHERE=elsewhere; [ "$full" -ge 1 ] && L_WHERE=fullscreen; L_WINDOWS=0; L_MIN=0
+    elif [ "$(gui windows "$bid")" = no-process ]; then L_WHERE=gone; L_WINDOWS=0; L_MIN=0
+    else L_WHERE=closed; L_WINDOWS=0; L_MIN=0; fi
+    case "$L_WHERE" in reachable|fullscreen-here) [ "$tries" -gt 0 ] && say "  $name's window is now $(where_words "$L_WHERE")"; return 0 ;; esac
+    [ "$tries" -ge 2 ] && break
+    tries=$(( tries + 1 ))
+    if [ "$MODE" != run ] && [ "$MODE" != test ]; then
+      say "  $name's window is $(where_words "$L_WHERE") - tonight the job would $(fix_words "$L_WHERE") first, then count again"
+      L_WINDOWS=1; L_MIN=0; L_WHY=""; return 0
+    fi
+    case "$L_WHERE" in
+      minimised) own unminimise "$bid"; r="$OWN_R"; say "  $name's window is minimised - bringing it back from the Dock ($r)"; nap 2 ;;
+      elsewhere|fullscreen) own activate "$bid"; r="$OWN_R"; say "  $name's window is $(where_words "$L_WHERE") - switching to that desktop ($r)"; nap 2 ;;
+      closed) "$NR_OPEN" -g -b "$bid" 2>>"$LOG"; say "  $name runs but has no window - opening it again (it comes back on its start page)"
+              w=0; while [ "$w" -lt "${OPEN_WAIT:-60}" ]; do set -- $(count_windows "$bid"); [ "$1" -ge 1 ] && break; nap 2; w=$(( w + 2 )); done ;;
+      *) break ;;
+    esac
+  done
+  L_WHY="its window is $(where_words "$L_WHERE") and could not be brought within reach"
+  return 0
+}
+count_all() {       # how many windows the Station and X have within reach, after locate() has done what it can
+  STATION_WHERE=""; STATION_WHY=""; X_WHERE=""; X_WHY=""
+  if [ -n "$STATION_BID" ]; then locate "$STATION_BID" "the Station"; STATION_WINDOWS="$L_WINDOWS"; STATION_MIN="$L_MIN"; STATION_WHERE="$L_WHERE"; STATION_WHY="$L_WHY"
+    say "  the Station has $STATION_WINDOWS window(s), $STATION_MIN minimised${STATION_WHERE:+ - $(where_words "$STATION_WHERE")}"; fi
+  if [ -n "$X_BID" ]; then locate "$X_BID" X; X_WINDOWS="$L_WINDOWS"; X_MIN="$L_MIN"; X_WHERE="$L_WHERE"; X_WHY="$L_WHY"
+    say "  X has $X_WINDOWS window(s), $X_MIN minimised${X_WHERE:+ - $(where_words "$X_WHERE")}"; fi
 }
 make_plan() {       # what the reload stage may do, from what was found. PLAN = full | x-only | station-only | none, WHY = the reason in words
   PLAN=""; WHY=""
@@ -309,10 +384,11 @@ make_plan() {       # what the reload stage may do, from what was found. PLAN = 
   elif [ -z "$STATION_BID" ] && [ -z "$X_BID" ]; then PLAN=none; WHY="neither the Station nor X is open as a web app"
   elif [ -z "$STATION_BID" ]; then PLAN=x-only; WHY="the Station is not open here, so X is reloaded and there is nothing to connect it to"
   elif [ -z "$X_BID" ] && [ "$BEFORE" = working ]; then PLAN=none; WHY="X is working but not from an X web-app window I can find; reloading the Station could leave it unconnected"
-  elif [ "$GUI" != none ] && [ $(( STATION_WINDOWS - ${STATION_MIN:-0} )) -lt 1 ]; then PLAN=none; WHY="the Station has no open window (it is minimised or closed)"
+  elif [ "$GUI" != none ] && [ $(( STATION_WINDOWS - ${STATION_MIN:-0} )) -lt 1 ]; then PLAN=none; WHY="the Station could not be reached: ${STATION_WHY:-it has no window within reach}"
   elif [ -z "$X_BID" ]; then PLAN=station-only; WHY="X is not open as a web app and is not working now, so only the Station is reloaded"
-  elif [ "$GUI" != none ] && [ "$X_WINDOWS" -ne 1 ]; then PLAN=none; WHY="X has $X_WINDOWS windows open and I cannot tell which one feeds the Station"
-  elif [ "$GUI" != none ] && [ "${X_MIN:-0}" -gt 0 ]; then PLAN=none; WHY="the X window is minimised, so the shortcut cannot reach it"
+  elif [ "$GUI" != none ] && [ "$X_WINDOWS" -lt 1 ]; then PLAN=none; WHY="X could not be reached: ${X_WHY:-it has no window within reach}"
+elif [ "$GUI" != none ] && [ "$X_WINDOWS" -ne 1 ]; then PLAN=none; WHY="X has $X_WINDOWS windows open and I cannot tell which one feeds the Station"
+  elif [ "$GUI" != none ] && [ "${X_MIN:-0}" -gt 0 ]; then PLAN=none; WHY="the X window is minimised and would not come back from the Dock, so the shortcut cannot reach it"
   else PLAN=full; WHY="the Station and X are both open as web apps"; fi
   [ "$GUI" = none ] && [ "$STATION_WINDOWS" -eq 0 ] && STATION_WINDOWS=1
   say "plan: $PLAN - $WHY"
@@ -430,9 +506,113 @@ measure() {         # $1 = B (before) or A (after): each app's memory, and the w
   local t h b
   look_at_apps; TOP_SNAP="$(foot_table)"
   t="$(printf '%s\n' "$TV_PIDS" | kb_of)"; h="$(printf '%s\n' "$HUB_PIDS" | kb_of)"; b="$(printf '%s\n' "$BR_PIDS" | kb_of)"
-  if [ "$1" = B ]; then TV_B="$t"; HUB_B="$h"; BR_B="$b"; SYS_B="$(sys_memory)"; else TV_A="$t"; HUB_A="$h"; BR_A="$b"; SYS_A="$(sys_memory)"; fi
+  if [ "$1" = B ]; then TV_B="$t"; HUB_B="$h"; BR_B="$b"; SYS_B="$(sys_memory)"; BR_PARTS="$(brave_parts)"; else TV_A="$t"; HUB_A="$h"; BR_A="$b"; SYS_A="$(sys_memory)"; fi
 }
 shim_names() { printf '%s\n' "$1" | cut -f3 | grep . | tr '\n' ',' | sed 's/,$//; s/,/, /g'; }
+
+# ---- Brave's own windows (15 Oct 2026) ----------------------------------------------------------------------------------------------
+# Alan: "if we can get the night reload to do it on YouTube too, that'd be pretty good ... Look how much Brave takes." Until now Brave was
+# not restarted on a night it had a window of its own (it would have come back without it). Now the job writes down what those windows
+# show before Brave is asked to quit, and opens them again afterwards - each window with its tabs in their order.
+# Two ways to read them, the better one used when it is available:
+#   (a) asked of Brave itself (Apple events; brave-tabs.js): exact, live, and the active tab can be put back. Needs ONE click of Alan's
+#       - macOS's "Scintilla Night Reload wants to control Brave Browser" dialog, asked for by "gui.applescript ask-consent" with Alan.
+#       The job never makes that dialog appear by itself: it only reads whether the answer exists (consent.js).
+#   (b) Brave's own session file (brave-session.pl): needs no permission; Brave writes it within a few seconds of every change. Tab order
+#       and the active tab are in it. The active tab cannot be put back without (a) - the first tab of the window is the active one.
+# What comes back: the same pages, in the same windows and order. What does not: scrolling, text typed into a page, a video's position
+# (Brave keeps no file with it; YouTube itself, signed in, brings a video back near where it was left). Tab groups and pinned tabs come
+# back as plain tabs. Pages that are not web pages (brave://..., about:blank) are left out.
+newest_session() { ls -t "$BRAVE_PROFILE/Sessions"/Session_* 2>/dev/null | head -1; }
+brave_record() {    # BR_REC = one line per window "window <n> <active tab, from 1>" then "tab <n> <url>" per tab, in order. 0 = read, 1 = not
+  local out f w t
+  BR_REC=""; BR_REC_HOW=""
+  set -- $(look_everywhere "$BR_BID"); BR_OWN=$(( $1 + $2 ))
+  BR_CONSENT="$(gui consent "$BR_BID")"
+  if [ "$BR_CONSENT" = allowed ]; then
+    out="$(gui tabs "$BR_BID")"
+    case "$out" in window*) BR_REC="$(printf '%s\n' "$out" | awk -F'\t' '$1 == "window" { print } $1 == "tab" && $3 ~ /^(https?|chrome-extension):/ { print }')"; BR_REC_HOW="asked of Brave itself" ;; esac
+  fi
+  if [ -z "$BR_REC" ]; then
+    f="$(newest_session)"
+    if [ -n "$f" ]; then
+      out="$(/usr/bin/perl "$KIT/brave-session.pl" "$f" 2>>"$LOG")"
+      BR_REC="$(printf '%s\n' "$out" | awk -F'\t' '
+        $1 == "window" && $3 == "normal" && $4 == "open" { w[$2] = ++n; print "window\t" n "\t" ($5 + 1) }
+        $1 == "tab" && ($2 in w) && $5 ~ /^(https?|chrome-extension):/ { print "tab\t" w[$2] "\t" $5 }')"
+      BR_REC_HOW="read from Brave's own session file (written $(date -r "$f" '+%H:%M'))"
+    fi
+  fi
+  w="$(printf '%s\n' "$BR_REC" | grep -c '^window')"; t="$(printf '%s\n' "$BR_REC" | grep -c '^tab')"
+  if [ "$t" -lt 1 ]; then
+    BR_REC=""
+    [ "$BR_OWN" -lt 1 ] && { say "  Brave's own windows: none on any desktop, nothing to write down"; return 0; }
+    say "  Brave's own windows: the window server shows $BR_OWN, but I could not read what they show (consent: $BR_CONSENT; session file: ${f:-none})"
+    return 1
+  fi
+  say "  Brave's own windows: $w window(s), $t tab(s), $BR_REC_HOW - opened again after the restart"
+  [ "$BR_OWN" -ne "$w" ] && say "  (the window server counts $BR_OWN window(s) of Brave's own; the record has $w)"
+  if may_change; then printf '%s\n' "$BR_REC" > "$STATE_DIR/LAST-BRAVE-WINDOWS.txt" 2>/dev/null; fi
+  return 0
+}
+reopen_brave_windows() { # each recorded window again: Brave, already running underneath the web apps, opens a new window with those tabs
+  local n urls a
+  [ -n "$BR_REC" ] || return 0
+  wait_running "$BRAVE_APP" || return 0
+  nap 3
+  while read -r n; do
+    [ -n "$n" ] || continue
+    urls="$(printf '%s\n' "$BR_REC" | awk -F'\t' -v n="$n" '$1 == "tab" && $2 == n { print $3 }')"
+    [ -n "$urls" ] || continue
+    set --; while IFS= read -r a; do [ -n "$a" ] && set -- "$@" "$a"; done <<EOF
+$urls
+EOF
+    "$NR_OPEN" -n -g -a "$BRAVE_APP" --args --new-window "$@" 2>>"$LOG"; say "  opened Brave window $n again with $# tab(s)"
+    a="$(printf '%s\n' "$BR_REC" | awk -F'\t' -v n="$n" '$1 == "window" && $2 == n { print $3 }')"
+    if [ "${a:-1}" -gt 1 ] && [ "$BR_CONSENT" = allowed ]; then nap 3; own active-tab "$BR_BID0" 1 "$a"; say "  its active tab put back to tab $a ($OWN_R)"; fi
+  done <<EOF
+$(printf '%s\n' "$BR_REC" | awk -F'\t' '$1 == "window" { print $2 }')
+EOF
+}
+brave_kb() { look_at_apps; TOP_SNAP="$(foot_table)"; printf '%s\n' "$BR_PIDS" | kb_of; }
+refresh_webapps() { # a night Brave itself cannot be restarted: close and open the Station and X windows (a web app's pages end with its
+                    # window), so their memory is freed anyway. The reload stage then reloads and reconnects X as always.
+  local before after pid bid name path b a
+  before="$(brave_kb)"
+  say "  Brave is not restarted tonight - closing and opening the Station and X windows instead, to free their pages"
+  while IFS="$TAB" read -r pid bid name path; do
+    [ -n "$path" ] || continue
+    quiet_enough || return 0
+    close_main "$pid" "$name" "$path/Contents/MacOS/" || { say "  $name could not be asked to close - left as it is"; continue; }
+    if ! wait_closed "$name" "$pid" "$path/Contents/MacOS/"; then continue; fi
+    wait_unlisted "$path"
+    "$NR_OPEN" -g -a "$path" 2>>"$LOG"; say "  opened $name again"
+    wait_running "$path" || { tell_alan "$name was closed to free its memory and did not open again. Please open it by hand."; continue; }
+    WEBAPPS_REFRESHED=1
+  done <<EOF
+$BR_SHIMS0
+EOF
+  [ "$WEBAPPS_REFRESHED" = 1 ] || return 0
+  nap "$SETTLE_WAIT"
+  after="$(brave_kb)"; set -- $before; b="$1"; set -- $after; a="$1"
+  REFRESH_LINE="Closing and opening the Station and X windows gave back $(gb $(( b - a ))) (Brave $(gb "$b") before, $(gb "$a") after)."
+  remark "$REFRESH_LINE"
+}
+brave_parts() {     # Brave's three biggest processes, as Activity Monitor counts them, by kind: "a page 2.74 GB, an extension 1.03 GB, ..."
+  [ -n "$BR_PIDS" ] || return 0
+  { printf '%s\n' "$BR_PIDS" | sed 's/^/P /'; printf '%s\n' "$PS_SNAP" | sed 's/^/S /'; printf '%s\n' "$TOP_SNAP" | sed 's/^/T /'; } | awk '
+    function kb(v,  n, u) { n = v; gsub(/[^0-9.]/, "", n); u = v; gsub(/[0-9.+-]/, "", u)
+      if (u == "K") return n; if (u == "M") return n * 1024; if (u == "G") return n * 1048576; if (u == "T") return n * 1073741824; return n / 1024 }
+    $1 == "P" && $2 ~ /^[0-9]+$/ { want[$2] = 1 }
+    $1 == "S" && ($2 in want) { k = "Brave itself"
+      if ($0 ~ /--type=renderer/) k = ($0 ~ /--extension-process/) ? "an extension" : "a page"
+      else if ($0 ~ /--type=gpu-process/) k = "graphics"; else if ($0 ~ /--type=utility/) k = "a helper"; else if ($0 ~ /app_mode_loader/) k = "a web-app icon"
+      kind[$2] = k }
+    $1 == "T" && NF == 3 && $3 ~ /^[0-9.]+[BKMGT][+-]?$/ { p = $2; gsub(/[^0-9]/, "", p); if (p in want) foot[p] = kb($3) }
+    END { out = ""; for (i = 1; i <= 3; i++) { best = ""; for (p in foot) if (!(p in used) && (best == "" || foot[p] > foot[best])) best = p
+            if (best == "") break; used[best] = 1; out = out (out == "" ? "" : ", ") kind[best] " " sprintf("%.2f GB", foot[best] / 1048576) }
+          print out }'
+}
 decide() {          # which apps may be restarted, and in words why not. Needs look_at_apps and (for Brave) the plan.
   TV_WHY=""; HUB_WHY=""; BR_WHY=""
   if [ "$RESTART_TRADINGVIEW" != yes ]; then TV_WHY="switched off in config.env"
@@ -444,8 +624,10 @@ decide() {          # which apps may be restarted, and in words why not. Needs l
   if [ "$RESTART_BRAVE" != yes ]; then BR_WHY="switched off in config.env"
   elif [ -z "$BR_PID" ]; then BR_WHY="it is not running"
   elif already_tried brave; then BR_WHY="already done tonight"
-  elif [ "$BR_KIND" != BackgroundOnly ]; then BR_WHY="Brave has a window of its own open, and Brave on this Mac is not set to bring its pages back"
   elif [ -z "$BR_SHIMS" ]; then BR_WHY="none of its web apps is open"
+  elif [ "$BR_KIND" != BackgroundOnly ] && [ "$REOPEN_BRAVE_WINDOWS" != yes ]; then BR_WHY="Brave has a window of its own open and REOPEN_BRAVE_WINDOWS=no in config.env"
+  elif [ "$BR_KIND" != BackgroundOnly ] && [ "$GUI" = none ]; then BR_WHY="Brave has a window of its own open and the window helper is switched off, so it could not be written down"
+  elif [ "$BR_KIND" != BackgroundOnly ] && ! brave_record; then BR_WHY="Brave has $BR_OWN window(s) of its own and I could not read what they show, so they would be lost (the one click that fixes this: see the log)"
   elif [ "$PLAN" != full ]; then BR_WHY="after a restart X must be reconnected, and tonight that cannot be done ($WHY)"; fi
 }
 RESTART_STAMP="$STATE_DIR/.restarted-$(date +%Y-%m-%d)"
@@ -540,6 +722,7 @@ open_brave() {      # Brave's web apps, in the order they were open; the first o
   done <<EOF
 $BR_SHIMS0
 EOF
+  reopen_brave_windows
 }
 tv_back() { wait_running "$TRADINGVIEW_APP"; }
 hub_back() { wait_running "$HUB_APP"; }
@@ -625,7 +808,9 @@ restart_preview() { # dry run: what the restart would do tonight. Reads only.
   set -- $BR_B
   if [ -z "$BR_PID" ]; then say "restart: Brave is not running - it would be left alone"
   elif [ -n "$BR_WHY" ]; then say "restart: Brave would NOT be restarted: $BR_WHY"
+  elif [ "$BR_KIND" != BackgroundOnly ]; then say "restart: Brave is running with a window of its own and these web apps: $(shim_names "$BR_SHIMS") ($3 processes, $(gb "$1")) - it would be closed, those web apps opened again in that order, then its own window(s) with their tabs"
   else say "restart: Brave is running in the background with these web apps: $(shim_names "$BR_SHIMS") ($3 processes, $(gb "$1")) - it would be closed and those web apps opened again, in that order"; fi
+  [ -n "$BR_PARTS" ] && say "restart: Brave's biggest parts now - $BR_PARTS"
   set -- $SYS_B; say "restart: the whole Mac now - $(gb "$1") of memory pushed out to disk, $2% of memory free"
 }
 restart_stage() {   # the real thing. Called once per run, after every check the reload stage makes and before it reloads anything.
@@ -649,6 +834,7 @@ restart_stage() {   # the real thing. Called once per run, after every check the
     if [ "$R1" != ok ] || [ "$R2" != ok ]; then BR_WHY="X and the Station could not be brought to the front (X: $R1, Station: $R2), so X could not be reconnected afterwards"; fi
   fi
   [ -n "$BR_WHY" ] && [ -n "$BR_PID0" ] && say "  Brave is not restarted tonight: $BR_WHY"
+  case "$BR_WHY" in *"could not read what they show"*) say "  the one click: run \"$KIT/supervised-test.sh --consent\" with Alan and click Allow when macOS asks whether Scintilla Night Reload may control Brave Browser" ;; esac
   if [ -n "$TV_WHY" ] && [ -n "$HUB_WHY" ] && [ -n "$BR_WHY" ]; then say "restart: nothing to restart tonight"; return 0; fi
   quiet_enough || return 0
   start_awake
@@ -666,6 +852,10 @@ restart_stage() {   # the real thing. Called once per run, after every check the
     case ", $RESTARTED," in *", Brave,"*) BRAVE_RESTARTED=1 ;; esac
     [ "$rc" = 2 ] && BRAVE_RESTARTED=1     # closed and not fully back: the reload stage must still look again
   fi
+  if [ "$rc" = 0 ] && [ -n "$BR_WHY" ] && [ -n "$BR_PID0" ] && [ "$REFRESH_WEBAPPS" = yes ] && [ "$PLAN" = full ] && [ -n "$BR_SHIMS0" ]; then
+    # not when X and the Station could not even be brought forward: the reload stage could not reconnect X afterwards either
+    case "$BR_WHY" in "already done tonight"|"switched off in config.env"|*"could not be brought to the front"*) ;; *) refresh_webapps ;; esac
+  fi
   if [ "$rc" != 0 ]; then                  # what was not reached, said in words for the morning lines
     local k w="somebody came back to the Mac, or the night window ended"
     [ "$rc" = 2 ] && w="an app before it did not open again, so nothing more was closed"
@@ -676,8 +866,8 @@ restart_stage() {   # the real thing. Called once per run, after every check the
   return 0
 }
 after_brave() {     # Brave is new: its web apps have the same names but new windows, and X is certainly not connected
-  [ "$BRAVE_RESTARTED" = 1 ] || return 0
-  say "looking again, now that Brave has been restarted"
+  [ "$BRAVE_RESTARTED" = 1 ] || [ "$WEBAPPS_REFRESHED" = 1 ] || return 0
+  if [ "$BRAVE_RESTARTED" = 1 ]; then say "looking again, now that Brave has been restarted"; else say "looking again, now that the Station and X windows have been opened again"; fi
   HUB_BIDS=""; STATION_BID=""; X_BID=""; STATION_WINDOWS=0; X_WINDOWS=0; STATION_MIN=0; X_MIN=0; FAMILY=""
   discover
   [ -n "$STATION_BID" ] && { wait_window "$STATION_BID" || say "  the Station shows no window yet"; }
@@ -720,6 +910,7 @@ restart_wrapup() {  # at the very end of the job: nothing left closed, the memor
   fi
   set -- $SYS_B $SYS_A
   lines="Memory before and after the restart, as Activity Monitor counts it:$NL$(mem_line TradingView "$TV_B" "$TV_A" "$TV_WHY")$NL$(mem_line "The Hub app" "$HUB_B" "$HUB_A" "$HUB_WHY")$NL$(mem_line "Brave with the Station and X" "$BR_B" "$BR_A" "$BR_WHY")${NL}The whole Mac: $(gb "$1") of memory pushed out to disk before, $(gb "$3") after; $2% of memory free before, $4% after"
+  [ -n "$BR_PARTS" ] && lines="$lines${NL}Brave's biggest parts before the night: $BR_PARTS (which page each one shows cannot be read without opening Brave's own task manager)"
   if [ "$WROTE_LAST" != 1 ]; then
     s="no app was restarted"; [ -n "$RESTARTED" ] && s="restarted: $RESTARTED"
     printf '%s - %s\n' "$(when)" "$s" > "$STATE_DIR/LAST-NIGHT.txt" 2>/dev/null
@@ -855,7 +1046,7 @@ fi
 case "$PLAN" in
   skip) ;;
   none) [ -z "$DID" ] && DID=" nothing reloaded:"; OUTCOME="$DID $WHY"
-        case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*|*"Privacy & Security"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
+        case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*|*"could not be reached"*|*"Privacy & Security"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
   x-only) if reload_app "$X_BID" 1 X; then result "$DID X reloaded; $WHY"; else result "$DID X could not be reloaded (see the log); $WHY"; fi ;;
   station-only) if reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station"; then result "$DID the Station reloaded; $WHY"; else result "$DID the Station could not be reloaded (see the log); $WHY"; fi ;;
   full)

@@ -19,6 +19,12 @@ on run
 		if k is not "" then set kit to k
 	end try
 	set outText to ""
+	-- 15 Oct 2026: SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=<bundle id> - the one click. Only supervised-test.sh --consent starts the app this
+	-- way; the nightly timetable never does. It makes macOS ask, once, whether this app may control that app (Brave), then looks as usual.
+	try
+		set askBid to system attribute "SCINTILLA_NIGHT_RELOAD_ASK_CONSENT"
+		if askBid is not "" and mode is "dry-run" then do shell script "/usr/bin/osascript " & quoted form of (kit & "/gui.applescript") & " ask-consent " & quoted form of askBid
+	end try
 	try
 		set outText to do shell script "/bin/bash " & quoted form of (kit & "/night-reload.sh") & " " & quoted form of mode & " 2>&1"
 	on error errText

@@ -8,30 +8,44 @@
 #   supervised-test.sh --explain  only say what Alan should see; do nothing
 #   supervised-test.sh --look     look only: the job says what it sees and what it would do. Closes nothing, presses nothing.
 #   supervised-test.sh --yes      do not wait for Return
+#   supervised-test.sh --where    15 Oct 2026: look only - where are the Station's, X's and Brave's own windows right now, as the job
+#                                 sees them (this desktop, another desktop, full screen, minimised, closed), and may the launcher
+#                                 read Brave's tabs? Nothing is moved.
+#   supervised-test.sh --consent  the ONE click: makes macOS ask whether "Scintilla Night Reload" may control Brave Browser. Alan
+#                                 clicks Allow. After that the job reads Brave's tabs from Brave itself and can put the active tab back.
 set -u
 DEST="$HOME/Scintilla/night-reload"; APP="$DEST/Scintilla Night Reload.app"; LAST="$DEST/LAST-NIGHT.txt"
 LOG="$HOME/Library/Logs/scintilla-night-reload.log"
 
 explain() { cat <<'TEXT'
-THE NIGHT RESTART - the supervised test
+THE NIGHT RESTART - the supervised test (15 Oct 2026: the windows wherever they are, and Brave's own windows too)
 
 This does now, once, what the 4 am job will do every night: it closes TradingView, the Hub and Brave one after the other,
 opens each again the way it was, then reloads the Station and X and reconnects X. It takes about three to five minutes.
 When it starts, take your hands off the keyboard and mouse and keep them off until the box at the end.
 
+SET UP FIRST, so the test proves the 15 Oct change: put the Station in native full screen (the green button, or
+Control+Command+F), and put X on ANOTHER desktop (Mission Control, drag it to a second desktop), and leave a Brave window of your
+own open with a YouTube tab in it. Then swipe to a desktop where neither the Station nor X is showing, and start.
+
 WHAT YOU SHOULD SEE IF IT WORKS
   1. For about 20 seconds nothing happens. It is making sure nobody is typing.
-  2. X, then the Station, come to the front for a moment. It is checking that it can reach them before it closes anything.
+  2. The desktop switches by itself: to the one with X, then to the Station's full-screen desktop, as the job finds each window
+     wherever it is. The log line for each says where it was ("on another desktop", "in native full screen"). It then checks it
+     can reach both before it closes anything.
   3. TradingView closes. A few seconds later it opens again, with the same charts.
   4. The Hub (the app called SCINTILLA) closes and opens again. It comes back on its first screen, not where you left it.
      Your lists, your stars, the company tab and the compare tab are kept.
-  5. The Station and X close together - that is Brave closing. The Station opens again, then X.
+  5. The Station and X close together, and so does your own Brave window - that is Brave closing. The Station opens again,
+     then X, then your own window with the same tabs in the same order (the YouTube tab comes back as the same video; YouTube
+     itself brings it back near where it was if you are signed in). The Station and X come back as ordinary windows, not full
+     screen and not on another desktop.
   6. The Station reloads once more, X reloads once more, and about half a minute to two minutes later the X box in the Station
      fills again by itself. Nobody presses Option+Shift+S: the job does.
   7. The app that was in front at the start is put back in front.
   8. A box titled "Scintilla night reload - test" appears with the end of the record: it says "X confirmed working"
-     and gives three lines, one for each app, with its memory before and after. Click OK.
-Chrome, YouTube and every other app stay exactly as they are.
+     and gives three lines, one for each app, with its memory before and after, then Brave's biggest parts. Click OK.
+Chrome, the YouTube app and every other app stay exactly as they are.
 
 IF IT DOES NOT WORK - what you would see, and what to do
   - Nothing happens for three minutes, then "hands were never off": somebody kept touching the Mac. Nothing was closed.
@@ -43,6 +57,12 @@ IF IT DOES NOT WORK - what you would see, and what to do
     Nothing was forced, and the app is as it was.
   - The Station and X are back but the X box stays dark: click the X window and press Option+Shift+S, as you do today.
     The box says so as well.
+  - The box says the Station or X "could not be reached" and names where it was (another desktop, full screen, minimised,
+    closed): the job found the window but could not bring it within reach. Say which word it used.
+  - Brave was not restarted and the box says its windows "could not be read": run this script with --consent, click Allow,
+    and run the test again. Nothing was lost: Brave was left as it was.
+  - Your own Brave window came back without a tab, or with the wrong tab in front: say which. The tabs the job wrote down are
+    in ~/Scintilla/night-reload/LAST-BRAVE-WINDOWS.txt.
   - TradingView comes back without its charts, the sound comes out of the wrong speaker, or X is on another page than
     before: say so. Each app's restart can be switched off by itself, and the rest keeps working.
 Nothing needs undoing after a test: every app that was closed is open again.
@@ -52,11 +72,25 @@ TEXT
 
 case "${1:-}" in
   --explain) explain; exit 0 ;;
-  ""|--yes|--look) ;;
-  *) echo "usage: supervised-test.sh [--explain | --look | --yes]"; exit 2 ;;
+  ""|--yes|--look|--where|--consent) ;;
+  *) echo "usage: supervised-test.sh [--explain | --look | --where | --consent | --yes]"; exit 2 ;;
 esac
 if [ ! -d "$APP" ] || [ ! -f "$DEST/night-reload.sh" ]; then
   echo "The kit is not installed on this Mac ($DEST is missing its files). Run install.sh first."; exit 1
+fi
+# --where and --consent go through the launcher app, because the permissions (Accessibility, Automation) belong to that app, not to
+# a Terminal. The launcher runs the job in dry-run, which looks only; --consent first asks the question that makes macOS show its dialog.
+if [ "${1:-}" = "--where" ] || [ "${1:-}" = "--consent" ]; then
+  if [ "${1:-}" = "--consent" ]; then
+    echo "THE ONE CLICK: macOS will ask whether \"Scintilla Night Reload\" may control \"Brave Browser\". Alan clicks Allow."
+    echo "Brave must be running. Nothing in Brave changes; the question only counts its windows."
+    SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser /usr/bin/open -W -a "$APP" --env SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser || { echo "The small app could not be started."; exit 1; }
+  fi
+  echo "WHERE THE WINDOWS ARE, as the job sees them (look only; nothing is moved):"
+  LOOK_FROM=0; [ -f "$LOG" ] && LOOK_FROM="$(wc -l < "$LOG" | tr -d ' ')"
+  /usr/bin/open -W -a "$APP" || { echo "The small app could not be started."; exit 1; }
+  [ -f "$LOG" ] && tail -n +"$(( LOOK_FROM + 1 ))" "$LOG" | sed 's/^[0-9-]* [0-9:]*  \[dry-run\] //' | grep -E "window|Brave's own|consent|desktop|full screen|minimised|closed|permission" 
+  exit 0
 fi
 
 if [ "${1:-}" = "--look" ]; then
