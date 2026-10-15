@@ -5661,9 +5661,9 @@ const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Ameri
    flight several times at once from different callers — cohorts?select=ticker ×4, company_profile ×3, cohorts?select=
    ticker,cohort ×3, the same earnings_events stretch ×2. An identical path asked while the first answer is still coming
    now shares that answer; every caller after the first gets its own copy, so one caller's sort cannot reorder another's. */
-const PG_INFLIGHT = new Map();
 async function pg(path, _tries) {
-  const k = String(path), have = PG_INFLIGHT.get(k);
+  const inflight = pg._inflight || (pg._inflight = new Map());   // kept on the function itself: pg is extracted and run alone by tests
+  const k = String(path), have = inflight.get(k);
   if (have) { const v = await have; return v && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v; }
   /* RESILIENCE — the DB intermittently 503/504s under pipeline load; without a retry a
      single transient failure leaves a data tab stuck on "loading" forever. Retry up to
@@ -5688,8 +5688,8 @@ async function pg(path, _tries) {
     }
     throw lastErr;
   })();
-  PG_INFLIGHT.set(k, run);
-  run.then(() => PG_INFLIGHT.delete(k), () => PG_INFLIGHT.delete(k));
+  inflight.set(k, run);
+  run.then(() => inflight.delete(k), () => inflight.delete(k));
   return run;
 }
 
@@ -21518,11 +21518,11 @@ function earningsBlockHTML(d) {
   /* E1 (15 Oct) — ONE label a person can read: his clock first, the company's own second for a name that reports from
      abroad ("before the US open · Taipei, 12 h ahead"); "time not announced" only when nothing is stored, with whether
      the DATE is confirmed. d.when is built by ernWhenFull; a caller without it still gets the stored session. */
-  const whenTxt = d.when || d.session || "";
+  const whenTxt = String(d.when || d.session || "").replace(" · date not confirmed", "");   // the unconfirmed pill beside it says that
   const pill = (whenTxt && !/^time not announced/.test(whenTxt)
     ? '<span class="sc-ern__pill" title="' + esc(whenTxt) + '">' + esc(whenTxt) + "</span>"
     : '<span class="sc-ern__pill sc-ern__pill--wait" title="report time not in the stored calendar">' + esc(whenTxt || "time not announced") + '</span>') +
-    (d.confirmed === false && !/date not confirmed/.test(whenTxt) ? '<span class="sc-ern__pill sc-ern__pill--wait" title="date not yet confirmed by the issuer">unconfirmed</span>' : "");
+    (d.confirmed === false ? '<span class="sc-ern__pill sc-ern__pill--wait" title="date not yet confirmed by the issuer">unconfirmed</span>' : "");
   const dstr = d.date ? esc(fmtEvDate(d.date)) : "—";
   let rel = "", pastNoResult = false;
   if (d.date) {
