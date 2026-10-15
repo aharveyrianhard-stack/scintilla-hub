@@ -16902,12 +16902,15 @@ async function fillEvents(quiet) {
        good index in place (on the very first load there is none, and the cards honestly show no control until a read works). */
     if (Array.isArray(tridx)) {
       TRANSCRIPT_IDX = new Map(); EV_TRKEYS = tridx.map((r) => r.ticker + "|" + r.call_date).join(",");
+      TRANSCRIPT_AT = new Map(); EV_TR_CHECKED = Date.now();   // E1 — each call's arrival stamp, and when this index was read
       tridx.forEach((r) => {
         if (!r.ticker || !r.call_date) return;
         const k = String(r.ticker).toUpperCase();
         if (!TRANSCRIPT_IDX.has(k)) TRANSCRIPT_IDX.set(k, []);
         TRANSCRIPT_IDX.get(k).push(r.call_date);
+        if (r.updated_ts) TRANSCRIPT_AT.set(k + "|" + r.call_date, r.updated_ts);
       });
+      if (typeof ernTrNewFrom === "function") { TR_NEW = ernTrNewFrom(tridx); TR_NEW_AT = Date.now(); }   // E1 — the "transcript is in" list, from the same read
     }
     if (Array.isArray(csidx)) { EV_CSKEYS = csidx; }
     CALLSUM_IDX = matchCallSummaries([...up, ...past], EV_CSKEYS);
@@ -21531,8 +21534,14 @@ function earningsBlockHTML(d) {
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">' + esc(ernReleaseLabel(d.releaseUrl)) + '</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
-        (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">◹ Transcript</button>' : '') +
-        (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
+        /* E1 (15 Oct) — HONEST BUTTONS. Alan: "these buttons to the earnings call, what's the source? … I don't think it is
+           exactly what it is advertised to do." MEASURED: all 12 October call_url values are newswire notices ANNOUNCING the
+           call; none is a webcast. So a notice is called a notice, the company's own investor page is offered when it is
+           stored, and the transcript says when it arrived — or that it is still pending and when we last looked. */
+        (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '" title="' + esc("the stored call transcript" + (d.transcriptAt ? " · stored " + d.transcriptAt : "")) + '">◹ Transcript' + (d.transcriptAt ? " · in " + esc(d.transcriptAt) : "") + '</button>'
+          : (d.trChecked ? '<span class="sc-ern__lnk pending" title="no call transcript is stored for this report yet · the transcript index was last read at this time">◹ transcript pending · checked ' + esc(d.trChecked) + '</span>' : '')) +
+        (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener" title="' + esc(typeof ernCallTitle === "function" ? ernCallTitle(d.callUrl) : "the stored call link") + '">' + esc(typeof ernCallLabel === "function" ? ernCallLabel(d.callUrl) : "◹ Call") + '</a>' : '') +
+        (d.irUrl ? '<a class="sc-ern__lnk" href="' + esc(d.irUrl) + '" target="_blank" rel="noopener" title="the company\'s own investor page, where the webcast and its replay are posted">◹ IR page · ' + esc(typeof ernHost === "function" ? ernHost(d.irUrl) : "") + '</a>' : '') +
         /* the event's own stored summary comes first; only without one does the card offer the summary of THAT event's call,
            and it says so - a call summary is never presented as a release summary */
         (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">' + esc((d.summaryKind && d.summaryKind.btn) || "▤ Summary") + '</button>'
