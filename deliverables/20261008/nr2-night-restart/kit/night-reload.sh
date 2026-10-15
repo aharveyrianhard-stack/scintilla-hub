@@ -199,11 +199,14 @@ gui() {
       if [ "$MODE" != run ] && [ "$MODE" != test ]; then say "  (dry run - not done: $*)"; echo dry; return 0; fi ;;
     *) echo "error:unknown verb"; return 2 ;;
   esac
-  case "$GUI" in
-    none) echo no-gui ;;
-    osascript) /usr/bin/osascript "$KIT/gui.applescript" "$@" 2>>"$LOG" || echo "error:the window helper failed" ;;
-    *) "$GUI" "$@" ;;
-  esac
+  # 15 Oct 2026 (NR4): what gui.applescript passes on from its helpers (windows.js, brave-tabs.js) has been through AppleScript's
+  # "do shell script", which ends every line with a carriage return instead of a line feed. Brave's answer at 12:15 - every tab of
+  # his window - therefore reached this script as ONE line and was counted as 0 tabs. Every answer is read with both as line ends.
+  { case "$GUI" in
+      none) echo no-gui ;;
+      osascript) /usr/bin/osascript "$KIT/gui.applescript" "$@" 2>>"$LOG" || echo "error:the window helper failed" ;;
+      *) "$GUI" "$@" ;;
+    esac; } | tr '\r' '\n'
 }
 own() {             # a window action of ours. The answer is left in OWN_R (NOT printed: this must run in this shell, not in a
                     # $(...) copy of it, or the times below are lost). The times are how our own key press is told from Alan's.
@@ -520,36 +523,89 @@ shim_names() { printf '%s\n' "$1" | cut -f3 | grep . | tr '\n' ',' | sed 's/,$//
 #   (a) asked of Brave itself (Apple events; brave-tabs.js): exact, live, and the active tab can be put back. Needs ONE click of Alan's
 #       - macOS's "Scintilla Night Reload wants to control Brave Browser" dialog, asked for by "gui.applescript ask-consent" with Alan.
 #       The job never makes that dialog appear by itself: it only reads whether the answer exists (consent.js).
-#   (b) Brave's own session file (brave-session.pl): needs no permission; Brave writes it within a few seconds of every change. Tab order
+#   (b) Brave's own session file (brave-session.pl): no dialog, but on macOS 27 it needs Full Disk Access (NR4, below); Brave writes it within a few seconds of every change. Tab order
 #       and the active tab are in it. The active tab cannot be put back without (a) - the first tab of the window is the active one.
 # What comes back: the same pages, in the same windows and order. What does not: scrolling, text typed into a page, a video's position
 # (Brave keeps no file with it; YouTube itself, signed in, brings a video back near where it was left). Tab groups and pinned tabs come
 # back as plain tabs. Pages that are not web pages (brave://..., about:blank) are left out.
-newest_session() { ls -t "$BRAVE_PROFILE/Sessions"/Session_* 2>/dev/null | head -1; }
+# 15 Oct 2026 (NR4), read on the iMac: each way failed for its own reason, and the log said neither.
+#   - at 11:59 (no consent yet) the session file was tried, and macOS refused it: on macOS 27 Brave's profile folder is kept as another
+#     app's data ("System Policy: bash deny file-read-data .../Sessions"; Full Disk Access and "app data" both refused to the launcher,
+#     without a dialog). The launcher can read it only with Full Disk Access - Alan's say, and not needed while Brave answers itself.
+#   - at 12:15 (consent given) Brave DID answer - seven questions, seven answers - but its lines arrived joined by carriage returns
+#     (see gui()), were counted as 0 tabs, and the session file was then not even tried, so the log said "session file: none".
+# Now each way says in the log exactly what it got (an address only as its kind and length), and a way that gives nothing hands over.
+masked() {          # an answer, for the log: every address becomes its kind and length ("https:<56>"); anything else is kept as it came
+  printf '%s\n' "$1" | awk -F'\t' '
+    NF == 0 { next }
+    { s = ""; for (i = 1; i <= NF; i++) { f = $i
+        if (f ~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// || f ~ /^(about|data|javascript|blob|file|mailto):/) { k = f; sub(/:.*/, "", k); f = k ":<" length($i) ">" }
+        s = s (i > 1 ? " " : "") f }
+      if (++n <= 40) out = out (n > 1 ? " | " : "") s }
+    END { if (n > 40) out = out " | ... (" n - 40 " more lines)"; print (n ? n " line(s): " out : "nothing (an empty answer)") }'
+}
+session_file() {    # Brave's newest session file: "file<tab>path" | "none<tab>folder<tab>why" | "unreadable<tab>folder<tab>what macOS said". Looks only.
+  /usr/bin/perl -e '
+    my $d = shift; $SIG{ALRM} = sub { print "unreadable\t$d\tno answer within 15 s\n"; exit 0 }; alarm 15;
+    opendir(my $h, $d) or do { print(($!{ENOENT} ? "none" : "unreadable"), "\t$d\t$!\n"); exit 0 };
+    my @f = map { "$d/$_" } grep { /^Session_/ } readdir($h);
+    unless (@f) { print "none\t$d\tno Session_ file in it\n"; exit 0 }
+    my ($n) = sort { (stat $b)[9] <=> (stat $a)[9] } @f; print "file\t$n\n";' "$BRAVE_PROFILE/Sessions"
+}
+session_words() {   # brave-session.pl's answer, for the log: ordinary windows with the kinds of their tabs, what was left out, any message
+  printf '%s\n' "$1" | awk -F'\t' '
+    $1 == "window" { if ($3 == "normal" && $4 == "open") { o[++n] = $2; act[$2] = ($5 == "-" ? "?" : $5 + 1) } else if ($4 == "closed") cl++; else if ($3 ~ /^app:/) ap++; else ot++; next }
+    $1 == "tab" { k = $5; sub(/:.*/, "", k); kinds[$2] = kinds[$2] (kinds[$2] == "" ? "" : ", ") k; c[$2]++; next }
+    NF { msg = msg (msg == "" ? "" : " ") $0 }
+    END { for (i = 1; i <= n; i++) s = s (i > 1 ? "; " : "") "ordinary window " i ": " (c[o[i]] + 0) " tab(s) (" kinds[o[i]] "), active tab " act[o[i]]
+          if (!n) s = "no ordinary window open"
+          if (ap + cl + ot) s = s " - left out: " (ap ? ap " web-app window(s) " : "") (cl ? cl " closed window(s) " : "") (ot ? ot " other window(s)" : "")
+          if (msg != "") s = s " - the reader said: " msg
+          print s }'
+}
 brave_record() {    # BR_REC = one line per window "window <n> <active tab, from 1>" then "tab <n> <url>" per tab, in order. 0 = read, 1 = not
-  local out f w t
+  local out f="" sf w t a_rec="" b_rec="" a_w=0 a_t=0 b_t=0 b_how="" b_short="not tried (Brave answered)"
   BR_REC=""; BR_REC_HOW=""
   set -- $(look_everywhere "$BR_BID"); BR_OWN=$(( $1 + $2 ))
   BR_CONSENT="$(gui consent "$BR_BID")"
+  # (a) asked of Brave itself - only with the one click given
   if [ "$BR_CONSENT" = allowed ]; then
     out="$(gui tabs "$BR_BID")"
-    case "$out" in window*) BR_REC="$(printf '%s\n' "$out" | awk -F'\t' '$1 == "window" { print } $1 == "tab" && $3 ~ /^(https?|chrome-extension):/ { print }')"; BR_REC_HOW="asked of Brave itself" ;; esac
+    a_rec="$(printf '%s\n' "$out" | awk -F'\t' '$1 == "window" { print } $1 == "tab" && $3 ~ /^(https?|chrome-extension):/ { print }')"
+    a_w="$(printf '%s\n' "$a_rec" | awk -F'\t' '$1 == "tab" && !($2 in s) { s[$2] = 1; n++ } END { print n + 0 }')"; a_t="$(printf '%s\n' "$a_rec" | grep -c '^tab')"
+    say "  Brave's own windows, asked of Brave itself: $(masked "$out")"
+  else
+    say "  Brave's own windows, asked of Brave itself: not asked - macOS's answer for this app is \"$BR_CONSENT\" (the one click: supervised-test.sh --consent)"
   fi
-  if [ -z "$BR_REC" ]; then
-    f="$(newest_session)"
-    if [ -n "$f" ]; then
-      out="$(/usr/bin/perl "$KIT/brave-session.pl" "$f" 2>>"$LOG")"
-      BR_REC="$(printf '%s\n' "$out" | awk -F'\t' '
-        $1 == "window" && $3 == "normal" && $4 == "open" { w[$2] = ++n; print "window\t" n "\t" ($5 + 1) }
-        $1 == "tab" && ($2 in w) && $5 ~ /^(https?|chrome-extension):/ { print "tab\t" w[$2] "\t" $5 }')"
-      BR_REC_HOW="read from Brave's own session file (written $(date -r "$f" '+%H:%M'))"
-    fi
+  # (b) Brave's own session file - when Brave gave no tab, when it listed more windows than the window server shows of its own (its
+  # web-app windows may be among them), and in every dry run, so that a look shows what both ways get
+  if [ "$a_t" -lt 1 ] || { [ "$BR_OWN" -ge 1 ] && [ "$a_w" -gt "$BR_OWN" ]; } || [ "$MODE" = dry-run ]; then
+    sf="$(session_file)"
+    case "$sf" in
+      file"$TAB"*)
+        f="${sf#file"$TAB"}"
+        out="$(/usr/bin/perl "$KIT/brave-session.pl" "$f" 2>&1)"
+        b_rec="$(printf '%s\n' "$out" | awk -F'\t' '
+          $1 == "window" && $3 == "normal" && $4 == "open" { w[$2] = ++n; print "window\t" n "\t" ($5 + 1) }
+          $1 == "tab" && ($2 in w) && $5 ~ /^(https?|chrome-extension):/ { print "tab\t" w[$2] "\t" $5 }')"
+        b_t="$(printf '%s\n' "$b_rec" | grep -c '^tab')"
+        b_how="read from Brave's own session file (written $(date -r "$f" '+%H:%M'))"; b_short="${f##*/}"
+        say "  Brave's own windows, from Brave's own session file ${f##*/} (written $(date -r "$f" '+%-d %b %H:%M')): $(session_words "$out")" ;;
+      *)
+        b_short="$(printf '%s\n' "$sf" | awk -F'\t' '{ print ($1 == "none" ? "none in " $2 " (" $3 ")" : "macOS did not let this app read " $2 " (" $3 ")") }')"
+        case "$sf" in *"Operation not permitted"*) b_short="$b_short - on macOS 27 Brave's folder is kept as another app's data: only Full Disk Access for Scintilla Night Reload opens it (Alan's say; not needed while Brave answers itself)" ;; esac
+        say "  Brave's own windows, from Brave's own session file: $b_short" ;;
+    esac
   fi
+  if [ "$a_t" -ge 1 ] && { [ "$BR_OWN" -lt 1 ] || [ "$a_w" -le "$BR_OWN" ]; }; then BR_REC="$a_rec"; BR_REC_HOW="asked of Brave itself"
+  elif [ "$b_t" -ge 1 ]; then BR_REC="$b_rec"; BR_REC_HOW="$b_how"
+  fi
+  [ "$a_t" -ge 1 ] && [ "$BR_OWN" -ge 1 ] && [ "$a_w" -gt "$BR_OWN" ] && say "  (Brave listed $a_w window(s) with tabs, the window server shows $BR_OWN of its own - its web-app windows may be among them - so Brave's answer is not used)"
   w="$(printf '%s\n' "$BR_REC" | grep -c '^window')"; t="$(printf '%s\n' "$BR_REC" | grep -c '^tab')"
   if [ "$t" -lt 1 ]; then
     BR_REC=""
     [ "$BR_OWN" -lt 1 ] && { say "  Brave's own windows: none on any desktop, nothing to write down"; return 0; }
-    say "  Brave's own windows: the window server shows $BR_OWN, but I could not read what they show (consent: $BR_CONSENT; session file: ${f:-none})"
+    say "  Brave's own windows: the window server shows $BR_OWN, but I could not read what they show (consent: $BR_CONSENT; session file: $b_short)"
     return 1
   fi
   say "  Brave's own windows: $w window(s), $t tab(s), $BR_REC_HOW - opened again after the restart"
