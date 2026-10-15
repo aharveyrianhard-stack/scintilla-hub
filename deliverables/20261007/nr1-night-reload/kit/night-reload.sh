@@ -61,6 +61,8 @@ HEALTH_POLL="${HEALTH_POLL:-20}"
 HEALTH_PAGE="${HEALTH_PAGE:-https://station.scintillahub.ai/x-health/}"
 LOG="${NIGHT_RELOAD_LOG:-$HOME/Library/Logs/scintilla-night-reload.log}"
 GUI="${SCINTILLA_NIGHT_RELOAD_GUI:-osascript}" # osascript | none | /path/to/a/stand-in (tests)
+NR_OPEN="${NR_OPEN:-/usr/bin/open}"           # replaced by a stand-in in the tests, never on a real Mac (used only to reopen a closed web app)
+OPEN_WAIT="${OPEN_WAIT:-60}"                  # seconds to wait for a reopened web app to show its window
 
 NOTE_TEXT=""; OWN_SPANS=""; OWN_R=""; MOVED=0; KEEP_NIGHT_OPEN=0; T_BEGIN=0; HKEY=""; HURL=""; HKNOWN=""
 HUB_BIDS=""; STATION_BID=""; X_BID=""; STATION_WINDOWS=0; X_WINDOWS=0; FAMILY=""
@@ -103,8 +105,8 @@ machine_word() {    # iMac | MacBook | Mac  (only used to guess this browser's l
 # ---- the windows: every call goes through here, and nothing that changes a window can run in dry-run ---------------------------------
 gui() {
   case "$1" in
-    trusted|front|windows|find-reload) ;;
-    activate|raise|reload|shortcut)
+    trusted|front|windows|find-reload|everywhere|consent|tabs) ;;
+    activate|raise|reload|shortcut|unminimise|active-tab)
       if [ "$MODE" != run ] && [ "$MODE" != test ]; then say "  (dry run - not done: $*)"; echo dry; return 0; fi ;;
     *) echo "error:unknown verb"; return 2 ;;
   esac
@@ -214,6 +216,80 @@ count_windows() {   # prints "<open windows> <minimised ones>" for one app
   case "$out" in no-gui|no-process|error:*|"") echo "0 0"; return ;; esac
   echo "$(printf '%s\n' "$out" | grep -c .) $(printf '%s\n' "$out" | grep -c "$(printf '\t')min$")"
 }
+# ---- the windows wherever they are (15 Oct 2026) ------------------------------------------------------------------------------------
+# Alan, 15 Oct: "It says night reload. The station and X were not reloaded. The station has no open window ... I mean, it was open."
+# Accessibility ("windows") lists only the windows on the desktop in front. A window on another desktop, minimised, or in macOS native
+# full screen (which lives on a desktop of its own) read as "0 windows". The window server ("everywhere", windows.js) knows every window
+# on every desktop, so the job can tell the four cases apart and act on each before it gives up:
+#   minimised -> bring it back from the Dock;  another desktop or native full screen -> switch to that desktop (open -b, as "activate"
+#   already does);  closed (the app runs without a window) -> open the web app again (it comes back on its start page). Then count again.
+# "none" is the plan only when the window truly cannot be reached, and the morning line then says which of the four it was.
+where_words() {     # $1 = where -> plain words
+  case "$1" in
+    reachable) echo "open on this desktop" ;;
+    fullscreen-here) echo "in native full screen on this desktop" ;;
+    minimised) echo "minimised (in the Dock)" ;;
+    elsewhere) echo "on another desktop" ;;
+    fullscreen) echo "in native full screen, on a desktop of its own" ;;
+    closed) echo "closed (the app runs but has no window)" ;;
+    gone) echo "not running" ;;
+    *) echo "$1" ;;
+  esac
+}
+fix_words() {       # $1 = where -> what the job does about it
+  case "$1" in
+    minimised) echo "bring it back from the Dock" ;;
+    elsewhere) echo "switch to that desktop" ;;
+    fullscreen) echo "switch to its full-screen desktop" ;;
+    closed) echo "open it again (it comes back on its start page)" ;;
+    *) echo "nothing" ;;
+  esac
+}
+look_everywhere() { # $1 = bundle id -> "<on this desktop> <elsewhere> <of those, full screen>", from the window server
+  local out; out="$(gui everywhere "$1")"
+  case "$out" in no-gui|no-process|none|error:*|"") echo "0 0 0"; return ;; esac
+  echo "$(printf '%s\n' "$out" | grep -c '^on') $(printf '%s\n' "$out" | grep -c '^off') $(printf '%s\n' "$out" | grep -c "^off$(printf '\t')full")"
+}
+L_WINDOWS=0; L_MIN=0; L_WHERE=""; L_WHY=""
+locate() {          # $1 = bundle id, $2 = what to call it. Finds its window wherever it is and, in run and test, brings it within reach.
+                    # Leaves L_WINDOWS (windows a reload can reach), L_MIN (minimised), L_WHERE (see where_words) and L_WHY ("" = reachable).
+  local bid="$1" name="$2" n m on off full tries=0 r w
+  L_WINDOWS=0; L_MIN=0; L_WHERE=""; L_WHY=""
+  [ "$GUI" = none ] && return 0
+  while :; do
+    set -- $(count_windows "$bid"); n="$1"; m="$2"
+    set -- $(look_everywhere "$bid"); on="$1"; off="$2"; full="$3"
+    if [ $(( n - m )) -ge 1 ]; then L_WHERE=reachable; L_WINDOWS="$n"; L_MIN="$m"
+    elif [ "$m" -ge 1 ]; then L_WHERE=minimised; L_WINDOWS="$n"; L_MIN="$m"
+    elif [ "$on" -ge 1 ]; then L_WHERE=fullscreen-here; L_WINDOWS="$on"; L_MIN=0    # Accessibility lists nothing, the window server shows it in front
+    elif [ "$off" -ge 1 ]; then L_WHERE=elsewhere; [ "$full" -ge 1 ] && L_WHERE=fullscreen; L_WINDOWS=0; L_MIN=0
+    elif [ "$(gui windows "$bid")" = no-process ]; then L_WHERE=gone; L_WINDOWS=0; L_MIN=0
+    else L_WHERE=closed; L_WINDOWS=0; L_MIN=0; fi
+    case "$L_WHERE" in reachable|fullscreen-here) [ "$tries" -gt 0 ] && say "  $name's window is now $(where_words "$L_WHERE")"; return 0 ;; esac
+    [ "$tries" -ge 2 ] && break
+    tries=$(( tries + 1 ))
+    if [ "$MODE" != run ] && [ "$MODE" != test ]; then
+      say "  $name's window is $(where_words "$L_WHERE") - tonight the job would $(fix_words "$L_WHERE") first, then count again"
+      L_WINDOWS=1; L_MIN=0; L_WHY=""; return 0
+    fi
+    case "$L_WHERE" in
+      minimised) own unminimise "$bid"; r="$OWN_R"; say "  $name's window is minimised - bringing it back from the Dock ($r)"; nap 2 ;;
+      elsewhere|fullscreen) own activate "$bid"; r="$OWN_R"; say "  $name's window is $(where_words "$L_WHERE") - switching to that desktop ($r)"; nap 2 ;;
+      closed) "$NR_OPEN" -g -b "$bid" 2>>"$LOG"; say "  $name runs but has no window - opening it again (it comes back on its start page)"
+              w=0; while [ "$w" -lt "${OPEN_WAIT:-60}" ]; do set -- $(count_windows "$bid"); [ "$1" -ge 1 ] && break; nap 2; w=$(( w + 2 )); done ;;
+      *) break ;;
+    esac
+  done
+  L_WHY="its window is $(where_words "$L_WHERE") and could not be brought within reach"
+  return 0
+}
+count_all() {       # how many windows the Station and X have within reach, after locate() has done what it can
+  STATION_WHERE=""; STATION_WHY=""; X_WHERE=""; X_WHY=""
+  if [ -n "$STATION_BID" ]; then locate "$STATION_BID" "the Station"; STATION_WINDOWS="$L_WINDOWS"; STATION_MIN="$L_MIN"; STATION_WHERE="$L_WHERE"; STATION_WHY="$L_WHY"
+    say "  the Station has $STATION_WINDOWS window(s), $STATION_MIN minimised${STATION_WHERE:+ - $(where_words "$STATION_WHERE")}"; fi
+  if [ -n "$X_BID" ]; then locate "$X_BID" X; X_WINDOWS="$L_WINDOWS"; X_MIN="$L_MIN"; X_WHERE="$L_WHERE"; X_WHY="$L_WHY"
+    say "  X has $X_WINDOWS window(s), $X_MIN minimised${X_WHERE:+ - $(where_words "$X_WHERE")}"; fi
+}
 
 # ---- results ------------------------------------------------------------------------------------------------------------------------
 result() { printf '%s - %s\n' "$(when)" "$1" > "$STATE_DIR/LAST-NIGHT.txt" 2>/dev/null; say "RESULT: $1"; }
@@ -306,8 +382,7 @@ case "$TRUSTED" in
      fi ;;
 esac
 
-if [ -n "$STATION_BID" ]; then set -- $(count_windows "$STATION_BID"); STATION_WINDOWS="$1"; STATION_MIN="$2"; say "  the Station has $STATION_WINDOWS window(s), $STATION_MIN minimised"; fi
-if [ -n "$X_BID" ]; then set -- $(count_windows "$X_BID"); X_WINDOWS="$1"; X_MIN="$2"; say "  X has $X_WINDOWS window(s), $X_MIN minimised"; fi
+count_all
 if [ "$MODE" = dry-run ] && [ "$TRUSTED" = true ]; then
   for B in $STATION_BID $X_BID $HUB_BIDS; do say "  reload menu item in $B: $(gui find-reload "$B")"; done
 fi
@@ -322,10 +397,11 @@ if [ "$RELOAD_STATION" != yes ]; then PLAN=none; WHY="the Station reload is swit
 elif [ -z "$STATION_BID" ] && [ -z "$X_BID" ]; then PLAN=none; WHY="neither the Station nor X is open as a web app"
 elif [ -z "$STATION_BID" ]; then PLAN=x-only; WHY="the Station is not open here, so X is reloaded and there is nothing to connect it to"
 elif [ -z "$X_BID" ] && [ "$BEFORE" = working ]; then PLAN=none; WHY="X is working but not from an X web-app window I can find; reloading the Station could leave it unconnected"
-elif [ "$GUI" != none ] && [ $(( STATION_WINDOWS - ${STATION_MIN:-0} )) -lt 1 ]; then PLAN=none; WHY="the Station has no open window (it is minimised or closed)"
+elif [ "$GUI" != none ] && [ $(( STATION_WINDOWS - ${STATION_MIN:-0} )) -lt 1 ]; then PLAN=none; WHY="the Station could not be reached: ${STATION_WHY:-it has no window within reach}"
 elif [ -z "$X_BID" ]; then PLAN=station-only; WHY="X is not open as a web app and is not working now, so only the Station is reloaded"
+elif [ "$GUI" != none ] && [ "$X_WINDOWS" -lt 1 ]; then PLAN=none; WHY="X could not be reached: ${X_WHY:-it has no window within reach}"
 elif [ "$GUI" != none ] && [ "$X_WINDOWS" -ne 1 ]; then PLAN=none; WHY="X has $X_WINDOWS windows open and I cannot tell which one feeds the Station"
-elif [ "$GUI" != none ] && [ "${X_MIN:-0}" -gt 0 ]; then PLAN=none; WHY="the X window is minimised, so the shortcut cannot reach it"
+elif [ "$GUI" != none ] && [ "${X_MIN:-0}" -gt 0 ]; then PLAN=none; WHY="the X window is minimised and would not come back from the Dock, so the shortcut cannot reach it"
 else PLAN=full; WHY="the Station and X are both open as web apps"; fi
 [ "$GUI" = none ] && [ "$STATION_WINDOWS" -eq 0 ] && STATION_WINDOWS=1
 
@@ -359,7 +435,7 @@ fi
 
 case "$PLAN" in
   none) [ -z "$DID" ] && DID=" nothing reloaded:"; OUTCOME="$DID $WHY"
-        case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
+        case "$WHY" in *"cannot tell which"*|*minimised*|*"I can find"*|*"could not be reached"*) note "the Station and X were not reloaded: $WHY." ;; *) result "$OUTCOME" ;; esac ;;
   x-only) if reload_app "$X_BID" 1 X; then result "$DID X reloaded; $WHY"; else result "$DID X could not be reloaded (see the log); $WHY"; fi ;;
   station-only) if reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station"; then result "$DID the Station reloaded; $WHY"; else result "$DID the Station could not be reloaded (see the log); $WHY"; fi ;;
   full)

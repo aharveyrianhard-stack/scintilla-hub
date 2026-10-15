@@ -8,7 +8,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 DEST="$HOME/Scintilla/night-reload"
 APP="$DEST/Scintilla Night Reload.app"
 mkdir -p "$DEST" "$HOME/Library/Logs"
-for f in night-reload.sh gui.applescript launcher.applescript switch-on.sh rollback.sh config.example.env; do cp "$SRC/$f" "$DEST/$f"; done
+for f in night-reload.sh gui.applescript windows.js consent.js brave-tabs.js launcher.applescript switch-on.sh rollback.sh config.example.env; do cp "$SRC/$f" "$DEST/$f"; done
 chmod +x "$DEST/night-reload.sh" "$DEST/switch-on.sh" "$DEST/rollback.sh"
 [ -f "$DEST/config.env" ] || cp "$SRC/config.example.env" "$DEST/config.env"
 if [ ! -d "$APP" ] || [ "${1:-}" = "--rebuild-app" ]; then

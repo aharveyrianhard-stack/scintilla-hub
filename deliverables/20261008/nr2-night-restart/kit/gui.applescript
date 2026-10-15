@@ -9,12 +9,25 @@
 --   osascript gui.applescript reload <bundle id>      ok:menu | ok:key | refused:<why>
 --   osascript gui.applescript shortcut <bundle id>    sent | refused:<why>   Option+Shift+S, the X extension's shortcut
 --
+-- 15 Oct 2026 - the windows wherever they are (Alan: "The station has no open window ... I mean, it was open"):
+--   osascript gui.applescript everywhere <bundle id>  one line per window the WINDOW SERVER knows, on every desktop (windows.js):
+--                                                     on|off <tab> full|normal <tab> <w>x<h>   | none | no-process     (looks only)
+--   osascript gui.applescript unminimise <bundle id>  ok:<n> | none      brings that app's minimised windows back from the Dock
+--   osascript gui.applescript consent <bundle id>     allowed | denied | not-asked | not-running   may this launcher send Apple events
+--                                                     to that app? Read without asking (consent.js); the dialog never comes from this.
+--   osascript gui.applescript ask-consent <bundle id> the ONE click: makes macOS show its Automation dialog for that app, once.
+--                                                     Only the coordinator runs this, with Alan. Answers allowed | denied | not-asked.
+--   osascript gui.applescript tabs <bundle id>        Brave's own windows and tabs (brave-tabs.js) - ONLY when consent says allowed;
+--                                                     otherwise "refused:no consent" and nothing is asked of Brave
+--   osascript gui.applescript active-tab <bundle id> <window n> <tab n>   ok | refused:no consent | error:...
 -- TWO RULES THAT LIVE HERE AND NOWHERE ELSE:
 --   - "reload" presses that app's own menu item (the one whose shortcut is Command-R), found by its shortcut so the menu's wording and
 --     language do not matter. A menu item belongs to one app, so it cannot land in another window. Only if the app has no such item does
 --     it type Command-R, and then only after the check below.
 --   - a key is typed ONLY when the app in front, read at that very moment, is the app asked for and it has an ordinary window that is
---     not minimised. Otherwise nothing is typed and the answer is "refused". Option+Shift+S typed into the wrong app would put a
+--     not minimised - or, when Accessibility lists no ordinary window at all, the window server shows one of its windows on the
+--     desktop in front (that is a window in native full screen: Accessibility does not list it, keys still reach it).
+--     Otherwise nothing is typed and the answer is "refused". Option+Shift+S typed into the wrong app would put a
 --     character into whatever Alan left open; typed into the wrong browser window it would make the extension open a new X tab.
 --
 -- Every answer is one line. Anything that is not the expected word means "do not go on" to night-reload.sh.
@@ -32,6 +45,23 @@ on run argv
 				tell application "System Events" to return (bundle identifier of (first application process whose frontmost is true)) as text
 			end if
 			if bid is "" then return "error:no app named"
+			if verb is "consent" then
+				return my helper("consent.js", quoted form of bid)
+			else if verb is "ask-consent" then
+				-- the one click. Any Apple event to an app macOS has not decided about makes it show its dialog; "count windows"
+				-- changes nothing in that app.
+				try
+					tell application id bid to count windows
+				end try
+				return my helper("consent.js", quoted form of bid)
+			else if verb is "tabs" then
+				if my helper("consent.js", quoted form of bid) is not "allowed" then return "refused:no consent"
+				return my helper("brave-tabs.js", quoted form of bid & " list")
+			else if verb is "active-tab" then
+				if (count of argv) < 4 then return "error:window and tab numbers needed"
+				if my helper("consent.js", quoted form of bid) is not "allowed" then return "refused:no consent"
+				return my helper("brave-tabs.js", quoted form of bid & " active " & quoted form of (item 3 of argv) & " " & quoted form of (item 4 of argv))
+			end if
 			tell application "System Events"
 				set procs to (application processes whose bundle identifier is bid)
 				if (count of procs) is 0 then return "no-process"
@@ -39,6 +69,26 @@ on run argv
 			end tell
 			if verb is "windows" then
 				return my listWindows(p)
+			else if verb is "everywhere" then
+				set pidText to ""
+				tell application "System Events" to set pidText to (unix id of p) as text
+				set rows to my helper("windows.js", pidText)
+				if rows is "" then return "none"
+				return rows
+			else if verb is "unminimise" then
+				set n to 0
+				tell application "System Events"
+					repeat with w in (windows of p whose subrole is "AXStandardWindow")
+						try
+							if (value of attribute "AXMinimized" of w) is true then
+								set value of attribute "AXMinimized" of w to false
+								set n to n + 1
+							end if
+						end try
+					end repeat
+				end tell
+				if n is 0 then return "none"
+				return "ok:" & n
 			else if verb is "find-reload" then
 				set mi to my findReload(p)
 				if mi is missing value then return "none"
@@ -98,13 +148,37 @@ on notReady(p, bid)
 		set frontBid to (bundle identifier of (first application process whose frontmost is true)) as text
 		if frontBid is not bid then return "another app is in front (" & frontBid & ")"
 		set ws to (windows of p whose subrole is "AXStandardWindow")
-		if (count of ws) is 0 then return "it has no window"
+		if (count of ws) is 0 then
+			-- Accessibility lists nothing: a window in native full screen is like that. The window server says whether one of this
+			-- app's windows is on the desktop in front; if so the app in front has a window on screen and a key reaches it.
+			set pidText to (unix id of p) as text
+			if my onScreenCount(pidText) is greater than 0 then return ""
+			return "it has no window"
+		end if
 		try
 			if (value of attribute "AXMinimized" of (item 1 of ws)) is true then return "its window is minimised"
 		end try
 	end tell
 	return ""
 end notReady
+
+-- the small JavaScript helpers beside this file (windows.js, consent.js, brave-tabs.js); "" when one fails
+on helper(fileName, args)
+	set kitDir to do shell script "dirname " & quoted form of (POSIX path of (path to me))
+	try
+		return do shell script "/usr/bin/osascript -l JavaScript " & quoted form of (kitDir & "/" & fileName) & " " & args
+	on error
+		return ""
+	end try
+end helper
+
+on onScreenCount(pidText)
+	set n to 0
+	repeat with ln in paragraphs of my helper("windows.js", pidText)
+		if (ln as text) starts with "on" then set n to n + 1
+	end repeat
+	return n
+end onScreenCount
 
 on bringToFront(p, bid)
 	-- 12 Oct 2026, measured on the iMac: for a Brave web app, System Events "set frontmost" answers true while the OTHER web app stays in

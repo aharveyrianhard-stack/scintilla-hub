@@ -16,7 +16,7 @@ const JOB = join(KIT, "night-reload.sh");
 const STATION = "com.brave.Browser.app.gdmjjlilbdmfgjomdbklfoihogfkcpbh";
 const X = "com.brave.Browser.app.lodlkdfmihgonocnmddehnfgiljnadcf";
 const HUB = "com.google.Chrome.app.hjliongcjdnfgpnodjphdimchcjddegd";
-const CHANGES = /^(activate|raise|reload|shortcut) /;
+const CHANGES = /^(activate|raise|reload|shortcut|unminimise|active-tab) /;
 
 function night(opts = {}) {
   const dir = opts.dir || mkdtempSync(join(tmpdir(), "nr1-"));
@@ -32,6 +32,9 @@ case "$1" in
   trusted) echo "\${FAKE_TRUSTED:-true}" ;;
   front) echo com.apple.finder ;;
   windows) case "$2" in ${X}) printf '%b' "\${FAKE_X_WINDOWS:-Home / X\\topen\\n}" ;; *) printf 'SCINTILLA\\topen\\n' ;; esac ;;
+  everywhere) case "$2" in ${X}) printf '%b' "\${FAKE_X_EVERYWHERE:-on\\tnormal\\t1062x678\\n}" ;; *) printf 'on\\tnormal\\t1169x685\\n' ;; esac ;;
+  unminimise) echo "\${FAKE_UNMINIMISE:-ok:1}" ;;
+  consent) echo not-asked ;;
   find-reload) echo "found:Reload This Page:enabled" ;;
   activate) case "$2" in ${X}) echo "\${FAKE_ACTIVATE_X:-ok}" ;; *) echo ok ;; esac ;;
   raise) echo ok ;;
@@ -135,10 +138,12 @@ test("two X windows: it cannot tell which one feeds the Station, so it reloads n
   assert.match(n.note, /2 windows open/);
 });
 
-test("a minimised X window cannot take the shortcut, so nothing is reloaded", () => {
-  const n = night({ env: { FAKE_X_WINDOWS: "Home / X\\tmin\\n" } });
-  assert.deepEqual(n.changed, []);
-  assert.match(n.note, /minimised/);
+test("a minimised X window: 15 Oct 2026 - it is brought back from the Dock first; only one that will not come back stops the night, and the note says so", () => {
+  /* this stand-in cannot un-minimise: the window stays minimised after the attempt */
+  const stuck = night({ env: { FAKE_X_WINDOWS: "Home / X\\tmin\\n", FAKE_X_EVERYWHERE: "off\\tnormal\\t1062x678\\n" } });
+  assert.deepEqual(stuck.changed, [`unminimise ${X}`, `unminimise ${X}`, "activate com.apple.finder"], "two attempts, then the front app put back; no reload, no key");
+  assert.match(stuck.note, /the X window is minimised and would not come back from the Dock, so the shortcut cannot reach it/);
+  assert.doesNotMatch(stuck.note, /minimised or closed/, "the old guess is gone");
 });
 
 test("X is working but not from an X web-app window: the Station is NOT reloaded", () => {
@@ -221,7 +226,7 @@ test("the dry run looks and never changes anything, at any hour, with everything
   for (const hhmm of ["0400", "1545"]) {
     const n = night({ mode: "dry-run", hhmm });
     assert.deepEqual(n.changed, []);
-    assert.ok(n.asked.every((c) => /^(trusted|windows|find-reload) ?/.test(c)), n.asked.join(" | "));
+    assert.ok(n.asked.every((c) => /^(trusted|windows|everywhere|find-reload) ?/.test(c)), n.asked.join(" | "));
     assert.match(n.run.stdout, /DRY RUN: this only looks/);
     assert.match(n.run.stdout, /press Option\+Shift\+S in the X window/);
     assert.match(n.run.stdout, /leave the Hub alone/);
@@ -243,7 +248,7 @@ test("the kit carries no key, and the window helper types only after checking wh
   }
   const lines = readFileSync(join(KIT, "gui.applescript"), "utf8").split("\n");
   const typed = lines.map((l, i) => (/^\s*tell application "System Events" to keystroke/.test(l) ? i : -1)).filter((i) => i >= 0);
-  assert.equal(typed.length, 2, "Command-R (fallback) and Option+Shift+S, nothing else");
+  assert.equal(typed.length, 2, "Command-R (fallback) and Option+Shift+S, nothing else - 15 Oct added verbs, not keys");
   for (const i of typed) assert.ok(lines.slice(i - 3, i).some((l) => /notReady\(p, bid\)/.test(l)), `line ${i + 1} types without the check`);
   const plist = readFileSync(join(KIT, "com.scintilla.night-reload.plist"), "utf8");
   assert.match(plist, /__HOME__/, "the timetable in the repo is a template and cannot run as it is");

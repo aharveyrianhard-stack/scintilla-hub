@@ -11,6 +11,11 @@
 # How an app behaves is set in $FAKEMAC_DIR/behave, one line each:  tv=refuses | tv=slow:40 | open.tv=fail | open.tv=fail-once
 #   reuse.tv=2 : at the second look at the process list TradingView has gone and its process number belongs to another program
 # It is called through links named kill, open, caffeinate and gui, or as "fakemac.sh <verb> ...".
+# 15 Oct 2026 - where a window is: FAKE_STATION_WHERE / FAKE_X_WHERE = reachable (default) | minimised | elsewhere | fullscreen | closed.
+#   The window helper answers "windows" (Accessibility: only reachable and minimised ones) and "everywhere" (the window server: every
+#   one) from that, and "activate", "unminimise" and "open -b" move it to reachable - unless FAKE_STUCK=1, when nothing moves it.
+#   FAKE_CONSENT = not-asked (default) | allowed | denied; FAKE_TABS = what Brave answers when asked for its tabs (consent allowed only);
+#   FAKE_BRAVE_OWN = how many windows of its own the window server shows for a Foreground Brave (default 1).
 D="${FAKEMAC_DIR:?FAKEMAC_DIR is not set}"; T="$D/procs.tsv"; C="$D/calls.txt"; H="${FAKEMAC_HOME:-$D}"
 verb="$(basename "$0")"; case "$verb" in fakemac.sh) verb="${1:-}"; shift ;; esac
 TV="/Applications/TradingView.app"; BR="/Applications/Brave Browser.app"; CH="/Applications/Google Chrome.app"
@@ -58,6 +63,15 @@ add_shim() {        # $1 = the web app's name (SCINTILLA Station | X)
   has com.brave.Browser || add_brave BackgroundOnly 90000 300000
   row "$(newpid)" 1 18000 51000 brave "$1" "$id" Foreground "$SHIMS/$1.app" "$SHIMS/$1.app/Contents/MacOS/app_mode_loader" shim
 }
+where_of() {        # $1 = bundle id -> where its window is now
+  case "$1" in
+    "$STATION_ID") [ -f "$D/where.$1" ] && cat "$D/where.$1" || echo "${FAKE_STATION_WHERE:-reachable}" ;;
+    "$X_ID") [ -f "$D/where.$1" ] && cat "$D/where.$1" || echo "${FAKE_X_WHERE:-reachable}" ;;
+    *) echo reachable ;;
+  esac
+}
+move_to() { [ "${FAKE_STUCK:-0}" = 1 ] || echo "$2" > "$D/where.$1"; }
+brave_kind() { awk -F'\t' '$7 == "com.brave.Browser" { print $8 }' "$T" | head -1; }
 
 case "$verb" in
   init)             # the iMac as it was read on 8 Oct 2026, small numbers changed for round sums. FAKEMAC_WITHOUT leaves things out.
@@ -116,8 +130,14 @@ case "$verb" in
     case "$b" in refuses) ;; slow:*) echo "${b#slow:}" > "$D/dying.$g" ;; *) drop_group "$g" ;; esac ;;
   open)
     echo "OPEN $*" >> "$C"
-    path=""; args=""
-    while [ $# -gt 0 ]; do case "$1" in -a) path="${2:-}"; shift 2 ;; --args) shift; args="$*"; break ;; *) shift ;; esac; done
+    path=""; args=""; bid=""
+    while [ $# -gt 0 ]; do case "$1" in -a) path="${2:-}"; shift 2 ;; -b) bid="${2:-}"; shift 2 ;; --args) shift; args="$*"; break ;; *) shift ;; esac; done
+    if [ -n "$bid" ]; then      # open -b <bundle id>: a closed web app comes back with a window on this desktop
+      case "$bid" in "$STATION_ID") has "$bid" || add_shim "SCINTILLA Station"; move_to "$bid" reachable ;; "$X_ID") has "$bid" || add_shim X; move_to "$bid" reachable ;; esac
+      exit 0
+    fi
+    case "$args" in --new-window*) echo "REOPEN ${args#--new-window }" >> "$C"
+      awk -F'\t' -v OFS='\t' '$7 == "com.brave.Browser" { $8 = "Foreground" } { print }' "$T" > "$T.new"; mv "$T.new" "$T"; exit 0 ;; esac
     case "$path" in "$TV") g=tv ;; "$HUB") g=hub ;; "$SHIMS/"*) g="shim" ;; "$BR") g=braveitself ;; *) g=unknown ;; esac
     k="$g"; [ "$g" = shim ] && k="$(basename "$path" .app | tr ' ' '_')"
     b="$(behave "open.$k")"
@@ -125,7 +145,7 @@ case "$verb" in
     case "$g" in
       tv) has com.tradingview.tradingviewapp.desktop || add_tv new "$args" 60000 100000 ;;
       hub) has com.apple.Safari.WebApp.9257ED5B-FBF6-44EC-911A-8A8DD1CB2C9C || add_hub new 150000 300000 ;;
-      shim) n="$(basename "$path" .app)"; id="$STATION_ID"; [ "$n" = X ] && id="$X_ID"; has "$id" || add_shim "$n" ;;
+      shim) n="$(basename "$path" .app)"; id="$STATION_ID"; [ "$n" = X ] && id="$X_ID"; has "$id" || add_shim "$n"; echo reachable > "$D/where.$id" ;;   # a window just opened is on this desktop
       braveitself) echo "OPENED-BRAVE-ITSELF" >> "$C"; has com.brave.Browser || add_brave Foreground 90000 300000 ;;
     esac ;;
   caffeinate) echo "AWAKE $*" >> "$C" ;;
@@ -136,6 +156,10 @@ case "$verb" in
       front) echo com.apple.finder ;;
       windows)
         has "${2:-}" || { echo no-process; exit 0; }
+        case "$(where_of "${2:-}")" in
+          minimised) echo "Home / X	min"; exit 0 ;;      # a minimised window is listed, as minimised
+          elsewhere|fullscreen|fullscreen-here|closed) exit 0 ;;   # Accessibility lists nothing
+        esac
         case "$2" in
           "$X_ID") if [ -n "${FAKE_X_WINDOWS_AFTER:-}" ] && [ "$(awk -F'\t' -v b="$X_ID" '$7 == b { print $1 }' "$T")" -ge 20000 ]; then printf '%b' "$FAKE_X_WINDOWS_AFTER"; else printf '%b' "${FAKE_X_WINDOWS:-Home / X\topen\n}"; fi ;;
           com.tradingview.tradingviewapp.desktop)      # FAKE_TV_WINDOWS_AFTER (it may be empty) = what a reopened TradingView shows
@@ -143,7 +167,24 @@ case "$verb" in
           *) printf 'SCINTILLA\topen\n' ;;
         esac ;;
       find-reload) echo "found:Reload This Page:enabled" ;;
-      activate) case "${2:-}" in "$X_ID") echo "${FAKE_ACTIVATE_X:-ok}" ;; *) echo ok ;; esac ;;
+      everywhere)
+        has "${2:-}" || { echo no-process; exit 0; }
+        case "${2:-}" in
+          "$STATION_ID"|"$X_ID") case "$(where_of "$2")" in
+            reachable) printf 'on\tnormal\t1169x685\n' ;; fullscreen-here) printf 'on\tfull\t1280x720\n' ;;
+            minimised|elsewhere) printf 'off\tnormal\t1169x685\n' ;; fullscreen) printf 'off\tfull\t1280x720\n' ;;
+            closed) echo none ;; esac ;;
+          com.brave.Browser) if [ "$(brave_kind)" = Foreground ]; then n="${FAKE_BRAVE_OWN:-1}"; [ "$n" -ge 1 ] || { echo none; exit 0; }; i=0; while [ "$i" -lt "$n" ]; do printf 'off\tnormal\t1062x678\n'; i=$(( i + 1 )); done; else echo none; fi ;;
+          *) printf 'on\tnormal\t1000x700\n' ;;
+        esac ;;
+      consent) echo "${FAKE_CONSENT:-not-asked}" ;;
+      tabs) if [ "${FAKE_CONSENT:-not-asked}" = allowed ]; then printf '%b' "${FAKE_TABS:-}"; else echo "refused:no consent"; fi ;;
+      active-tab) echo ok ;;
+      unminimise) case "$(where_of "${2:-}")" in minimised) move_to "$2" reachable; echo "ok:1" ;; *) echo none ;; esac ;;
+      activate)
+        r=ok; case "${2:-}" in "$X_ID") r="${FAKE_ACTIVATE_X:-ok}" ;; esac
+        if [ "$r" = ok ]; then case "$(where_of "${2:-}")" in elsewhere) move_to "$2" reachable ;; fullscreen) move_to "$2" fullscreen-here ;; esac; fi
+        echo "$r" ;;
       raise) echo ok ;;
       reload) case "${2:-}" in "$X_ID") echo "${FAKE_RELOAD_X:-ok:menu}" ;; *) echo ok:menu ;; esac ;;
       shortcut) echo "${FAKE_SHORTCUT:-sent}" ;;
