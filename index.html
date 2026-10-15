@@ -15261,6 +15261,7 @@ function eventsRoomHTML() {
            strip; this room now opens on the earnings tape — the band from the foot of the screen, same rows, same
            states, same diamond on a result beyond its own usual surprise — so the two rooms read alike. */
         '<div class="ern-roomtape" id="ernRoomTape"></div>' +
+        '<div id="ernTrNew"></div>' +   /* E1 — "NEW · transcript in" chips, newest first */
         /* M40 — the room is a dashboard with tabs. PAST REPORTED is a tab of its own
            again (Alan: "we lost the tracking of the past reported… we need it back"),
            and the section he had before this revamp is still one tap away, kept
@@ -15319,6 +15320,7 @@ function renderEvents(cohort) {
   const sbar = el("ernSpanBar");
   if (sbar) { sbar.innerHTML = ernTab() === "DASH" ? ercSpanBarHTML() : ""; sbar.style.display = ernTab() === "DASH" ? "" : "none"; }
   ercPaintTape();                                   // the timeline is the header of every tab
+  if (typeof ernTrNewPaint === "function") ernTrNewPaint();   // E1 — "NEW · transcript in", newest first, under the tape
   if (ernTab() === "PAST") { erpRender(list, cohort); return; }
   if (ernTab() === "OLD") { list.innerHTML = ercOldListHTML(cohort); evFillExtras(ercOldUpcoming(cohort), null); return; }
   ercRenderGrid(list, cohort);
@@ -23003,10 +23005,14 @@ function ernItemHTML(r, todayIso, nowMs) {
   const mark = (tier === "today" || tier === "tomorrow" || tier === "week") && ernTimeJustAnnounced(r, nowMs)
     ? '<span class="ern-new" title="the report time for this date was stored in the last day">time announced</span>' : "";
   const late = tier === "past" ? '<span class="ern-est">no result stored yet</span>' : "";
+  /* E1 (15 Oct) — the call transcript arrived in the last day: the item says so and scintillates once (the same
+     .is-scint[data-up] the surprise diamond uses, painted by ernScintPaint). Guarded: the band block runs alone in tests. */
+  const trin = typeof ernTranscriptJustIn === "function" ? ernTranscriptJustIn(r, nowMs) : null;
+  const trMark = trin ? '<span class="ern-new ern-trin is-scint" data-up="1" title="' + esc("the call transcript arrived " + trin.at + " · it is in the EARNINGS room") + '">◆ transcript in</span>' : "";
   return '<span class="sc-tape__item ern-it is-' + st + " ern-t-" + tier + (tier === "today" ? " is-live" : "") +
     '" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +
     '<span class="ern-when' + (st === "today" ? " is-today" : "") + '">' + esc(ernWhenLabel(r, tier, todayIso)) + "</span>" +
-    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + est + late + mark + "</span>" +
+    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + est + late + mark + trMark + "</span>" +
     '<span class="sc-tape__dot">·</span>';
 }
 function ernBandItems(todayIso) {
@@ -23086,6 +23092,7 @@ async function ernRead() {
     const kept = (rows || []).filter((r) => r && r.ticker && UNIVERSE.has(r.ticker));
     ERN_ROWS = ernSupersede(kept, kept);            // a date the provider moved never rides the band
     ERN_AT = Date.now(); ERN_FAIL_AT = 0;
+    if (typeof ernTrNewRead === "function") ernTrNewRead(false);   /* E1 — "transcript in": a small read on the same ten minutes, so the tape flashes on any room */
     if (typeof H3_TAPES_ON !== "undefined" && H3_TAPES_ON && typeof ernDayHistRead === "function") ernDayHistRead();   /* H3 — once a day: how heavy is a day */
   } catch (err) {
     ERN_FAIL_AT = Date.now();            // the last good rows stay on screen; the tick retries
@@ -23324,11 +23331,14 @@ function ernEcItemHTML(it, st, todayIso) {
         (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") + ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "")
     : st === "due" ? '<span class="ecb-res">now</span>' : "";
   const day = it.day === todayIso ? "TODAY" : ernWeekday(it.day);
+  /* E1 (15 Oct) — "◆ transcript in" on the concise tape too, the same way (see ernItemHTML) */
+  const trin = typeof ernTranscriptJustIn === "function" ? ernTranscriptJustIn(it.r) : null;
+  const trMark = trin ? '<span class="ern-new ern-trin is-scint" data-up="1" title="' + esc("the call transcript arrived " + trin.at + " · it is in the EARNINGS room") + '">◆ transcript in</span>' : "";
   return '<span class="sc-tape__item ecb-it ern-ec is-' + st + ' is-high" data-act="row" data-t="' + esc(it.ticker) +
     '" title="' + esc(ernTitle(it.r, res)) + '">' +
     '<span class="ecb-dot" style="color:' + ERN_EC_HUE + '">●</span>' +
     '<span class="ecb-when' + (it.day === todayIso ? " is-today" : "") + '">' + esc(day + (it.slot ? " " + it.slot : "")) + "</span>" +
-    '<span class="ecb-nm">' + esc(it.ticker) + "</span>" + resHTML +
+    '<span class="ecb-nm">' + esc(it.ticker) + "</span>" + resHTML + trMark +
     "</span>" + '<span class="sc-tape__dot">·</span>';
 }
 /* THE CONCISE EARNINGS TAPE — the EVENTS tape's window and NOW marker, earnings only */
