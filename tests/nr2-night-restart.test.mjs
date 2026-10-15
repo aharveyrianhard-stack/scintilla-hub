@@ -20,8 +20,8 @@ const X = "com.brave.Browser.app.lodlkdfmihgonocnmddehnfgiljnadcf";
 const HUB_WEBAPP = "com.google.Chrome.app.hjliongcjdnfgpnodjphdimchcjddegd";
 const TV = "com.tradingview.tradingviewapp.desktop";
 const HUB_APP = "com.apple.Safari.WebApp.9257ED5B-FBF6-44EC-911A-8A8DD1CB2C9C";
-const CHANGES = /^(activate|raise|reload|shortcut) /;
-const ACTS = /^(CLOSE|OPEN|AWAKE|FORBIDDEN-SIGNAL|OPENED-BRAVE-ITSELF)/;
+const CHANGES = /^(activate|raise|reload|shortcut|unminimise|active-tab) /;
+const ACTS = /^(CLOSE|OPEN|AWAKE|FORBIDDEN-SIGNAL|OPENED-BRAVE-ITSELF|REOPEN)/;
 const PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 /* what the reload stage asks the windows on a full night, exactly as on 7 Oct */
 const RELOAD_STAGE = [`activate ${X}`, `activate ${STATION}`, `activate ${STATION}`, `reload ${STATION}`, `activate ${X}`, `reload ${X}`,
@@ -176,9 +176,11 @@ test("before and after: one line per app in LAST-NIGHT.txt and in the log, each 
 });
 
 test("only the main process of each app is asked to quit, only with the ordinary quit signal, and never Chrome or another web app", () => {
+  /* 15 Oct 2026: on a night Brave itself is not restarted, its two web-app icons (the Station, X) may be asked to close and are opened
+     again - that is the refresh of their windows (see part 4). Still only the ordinary quit signal, still never Chrome or YouTube. */
   for (const opts of [{}, { behave: { tv: "refuses" } }, { behave: { "open.tv": "fail" } }, { mac: { FAKEMAC_BRAVE_KIND: "Foreground" } }]) {
     const n = night(opts);
-    assert.ok(n.closed.every((c) => /^(tv|hub|brave):main$/.test(c)), n.closed.join(" "));
+    assert.ok(n.closed.every((c) => /^(tv|hub|brave):(main|shim)$/.test(c)), n.closed.join(" "));
     assert.ok(n.asked.filter((c) => c.startsWith("CLOSE")).every((c) => c.endsWith(" -TERM")));
     assert.equal(n.asked.filter((c) => /^FORBIDDEN-SIGNAL|OPENED-BRAVE-ITSELF/.test(c)).length, 0);
     assert.ok(running(n, "chrome") && running(n, "youtube"));
@@ -275,19 +277,21 @@ test("a web app of Brave that does not come back: one more try, a line for Alan,
   assert.ok(running(n, "brave"));
 });
 
-test("Brave with a window of its own is not restarted (it would come back empty); the other two are, and the reload runs as on 7 Oct", () => {
+test("Brave with a window of its own that cannot be written down (no consent, no session file): not restarted - but its web-app windows are closed and opened again (part 4)", () => {
   const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" } });
-  assert.deepEqual(n.closed, ["tv:main", "hub:main"]);
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:shim", "brave:shim"], "Brave itself is not closed; its two web-app icons are, and come back");
   assert.deepEqual(n.changed, RELOAD_STAGE);
   assert.match(n.last, /restarted: TradingView, the Hub app; the Station reloaded/);
-  assert.match(n.last, /Brave with the Station and X: .* - not restarted: Brave has a window of its own open, and Brave on this Mac is not set to bring its pages back/);
+  assert.match(n.last, /Brave with the Station and X: .* - not restarted: Brave has 1 window\(s\) of its own and I could not read what they show, so they would be lost/);
+  assert.doesNotMatch(n.last, /not set to bring its pages back/, "the old reason is gone");
+  assert.match(n.log, /the one click: run .*supervised-test\.sh --consent/);
   assert.equal(n.note, "");
 });
 
 test("Brave is not closed on a night X could not be reconnected afterwards: two X windows, X minimised, X not reachable, reload switched off", () => {
   for (const [opts, why] of [
     [{ env: { FAKE_X_WINDOWS: "Home / X\\topen\\nLists / X\\topen\\n" } }, /X has 2 windows open/],
-    [{ env: { FAKE_X_WINDOWS: "Home / X\\tmin\\n" } }, /the X window is minimised/],
+    [{ env: { FAKE_X_WINDOWS: "Home / X\\tmin\\n", FAKE_X_WHERE: "minimised", FAKE_STUCK: "1" } }, /the X window is minimised and would not come back from the Dock/],
     [{ env: { FAKE_ACTIVATE_X: "not-front" } }, /X and the Station could not be brought to the front/],
     [{ env: { RELOAD_STATION: "no" } }, /the Station reload is switched off/],
     [{ mac: { FAKEMAC_WITHOUT: "x" }, health: ["not-reporting"] }, /X is not open as a web app/],
@@ -415,12 +419,16 @@ test("the kit: no key; the window helper, the timetable and switch-on are the 7 
     const text = readFileSync(join(KIT, f), "utf8");
     assert.doesNotMatch(text, /sb_publishable_[A-Za-z0-9]|eyJ[A-Za-z0-9_-]{20,}|service_role|sk-[A-Za-z0-9_-]{20,}/, `${f} carries a key`);
   }
-  for (const f of ["gui.applescript", "com.scintilla.night-reload.plist", "switch-on.sh"])
+  for (const f of ["gui.applescript", "windows.js", "consent.js", "brave-tabs.js", "com.scintilla.night-reload.plist", "switch-on.sh"])
     assert.equal(readFileSync(join(KIT, f), "utf8"), readFileSync(join(NR1_KIT, f), "utf8"), `${f} differs from the 7 Oct kit`);
   const launcher = readFileSync(join(KIT, "launcher.applescript"), "utf8");
   const cut = launcher.indexOf("\n-- 8 Oct 2026: with the restart the record of a test");
   assert.ok(cut > 0 && /^on lastLines\(t, n\)$/m.test(launcher.slice(cut)), "the one addition is the handler that keeps the end of the record");
-  assert.equal(launcher.slice(0, cut).replace("my lastLines(outText, 9)", "outText"), readFileSync(join(NR1_KIT, "launcher.applescript"), "utf8"), "everything else in the launcher is the 7 Oct file");
+  /* 15 Oct 2026: the second addition is the one-click hook (SCINTILLA_NIGHT_RELOAD_ASK_CONSENT), six lines before the job is started */
+  const hook = /\n\t-- 15 Oct 2026: SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=<bundle id>[^]*?\n\tend try\n(?=\ttry\n\t\tset outText to do shell script)/;
+  assert.match(launcher, hook, "the consent hook is there, and runs only in dry-run from supervised-test.sh --consent");
+  assert.match(launcher.match(hook)[0], /if askBid is not "" and mode is "dry-run" then do shell script/);
+  assert.equal(launcher.slice(0, cut).replace(hook, "\n").replace("my lastLines(outText, 9)", "outText"), readFileSync(join(NR1_KIT, "launcher.applescript"), "utf8"), "everything else in the launcher is the 7 Oct file");
   const plist = readFileSync(join(KIT, "com.scintilla.night-reload.plist"), "utf8");
   const slots = [...plist.matchAll(/<key>Hour<\/key><integer>(\d+)<\/integer><key>Minute<\/key><integer>(\d+)<\/integer>/g)].map((m) => Number(m[1]) * 60 + Number(m[2]));
   assert.equal(slots.length, 9);
@@ -465,4 +473,157 @@ test("the supervised test says what Alan should see - on success and on failure 
   const noKit = spawnSync("/bin/bash", [join(KIT, "supervised-test.sh"), "--yes"], { env: { PATH, HOME: home }, encoding: "utf8" });
   assert.notEqual(noKit.status, 0, "without an installed kit it stops");
   assert.match(noKit.stdout + noKit.stderr, /install\.sh/);
+});
+
+/* ---------------------------------------------------------------------------------------------------------------------------------
+   PART 4 - 15 Oct 2026: the windows wherever they are, and Brave's own windows (Alan: "the restart runs are running clean, but they
+   never actually run ... The station has no open window ... I mean, it was open ... if we can get the night reload to do it on YouTube
+   too, that'd be pretty good"). */
+const KIT_FILES = ["windows.js", "consent.js", "brave-tabs.js", "brave-session.pl"];
+/* a session file the way Brave writes one (the format Chromium calls SNSS, version 3): a list of small commands. Fake pages only. */
+const i32 = (n) => { const b = Buffer.alloc(4); b.writeInt32LE(n); return b; };
+const pstr = (t) => { const d = Buffer.from(t, "utf8"); return Buffer.concat([i32(d.length), d, Buffer.alloc((4 - (d.length % 4)) % 4)]); };
+const pstr16 = (t) => { const d = Buffer.from(t, "utf16le"); return Buffer.concat([i32(t.length), d, Buffer.alloc((4 - (d.length % 4)) % 4)]); };
+const pickle = (...parts) => { const body = Buffer.concat(parts); return Buffer.concat([i32(body.length), body]); };
+const CMD = { setTabWindow: 0, setTabIndex: 2, nav: 6, selectedNav: 7, selectedTab: 8, windowType: 9, appName: 15, tabClosed: 16, windowClosed: 17 };
+const snss = (cmds) => Buffer.concat([Buffer.from("SNSS"), i32(3), ...cmds.map(([id, pay]) => { const b = Buffer.alloc(3); b.writeUInt16LE(pay.length + 1); b[2] = id; return Buffer.concat([b, pay]); })]);
+const nav = (tab, idx, url, title) => [CMD.nav, pickle(i32(tab), i32(idx), pstr(url), pstr16(title), pstr(""), i32(0))];
+/* window 100: three tabs, the second one active, the first tab went on to a second page; window 200: a web-app window (the Station);
+   window 300: closed; in window 100 a fourth tab was closed */
+const FIXTURE = snss([
+  [CMD.windowType, Buffer.concat([i32(100), i32(0)])], [CMD.appName, pickle(i32(100), pstr(""))],
+  [CMD.windowType, Buffer.concat([i32(200), i32(2)])], [CMD.appName, pickle(i32(200), pstr("_crx_fakeappid"))],
+  [CMD.windowType, Buffer.concat([i32(300), i32(0)])], [CMD.appName, pickle(i32(300), pstr(""))],
+  [CMD.setTabWindow, Buffer.concat([i32(100), i32(1)])], [CMD.setTabIndex, Buffer.concat([i32(1), i32(0)])], nav(1, 0, "https://video.example/watch?v=first", "First video"),
+  [CMD.setTabWindow, Buffer.concat([i32(100), i32(2)])], [CMD.setTabIndex, Buffer.concat([i32(2), i32(1)])], nav(2, 0, "https://news.example/", "News"),
+  [CMD.setTabWindow, Buffer.concat([i32(100), i32(3)])], [CMD.setTabIndex, Buffer.concat([i32(3), i32(2)])], nav(3, 0, "brave://newtab/", "New tab"),
+  [CMD.setTabWindow, Buffer.concat([i32(100), i32(4)])], [CMD.setTabIndex, Buffer.concat([i32(4), i32(3)])], nav(4, 0, "https://gone.example/", "Gone"),
+  [CMD.setTabWindow, Buffer.concat([i32(200), i32(5)])], [CMD.setTabIndex, Buffer.concat([i32(5), i32(0)])], nav(5, 0, "https://station.example/", "Station"),
+  [CMD.setTabWindow, Buffer.concat([i32(300), i32(6)])], [CMD.setTabIndex, Buffer.concat([i32(6), i32(0)])], nav(6, 0, "https://old.example/", "Old"),
+  nav(1, 1, "https://video.example/watch?v=second", "Second video"), [CMD.selectedNav, Buffer.concat([i32(1), i32(1)])],
+  [CMD.selectedTab, Buffer.concat([i32(100), i32(1)])],
+  [CMD.tabClosed, Buffer.concat([i32(4), Buffer.alloc(8)])], [CMD.windowClosed, Buffer.concat([i32(300), Buffer.alloc(8)])],
+]);
+function withProfile() { const p = join(mkdtempSync(join(tmpdir(), "nr3-profile-")), "Sessions"); mkdirSync(p, { recursive: true }); writeFileSync(join(p, "Session_13436502421477784"), FIXTURE); return dirname(p); }
+const RECORD = "window\t1\t2\ntab\t1\thttps://video.example/watch?v=second\ntab\t1\thttps://news.example/\n";
+
+test("15 Oct: the session reader - windows, tab order, the active tab, the page a tab is on now; app windows, closed windows and closed tabs left out", () => {
+  const dir = mkdtempSync(join(tmpdir(), "nr3-")); writeFileSync(join(dir, "s"), FIXTURE);
+  const r = spawnSync("/usr/bin/perl", [join(KIT, "brave-session.pl"), join(dir, "s")], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const rows = r.stdout.trim().split("\n").map((l) => l.split("\t"));
+  assert.deepEqual(rows.filter((x) => x[0] === "window").map((x) => x.slice(1, 5)), [["100", "normal", "open", "1"], ["200", "app:_crx_fakeappid", "open", "-"], ["300", "normal", "closed", "-"]]);
+  assert.deepEqual(rows.filter((x) => x[0] === "tab" && x[1] === "100").map((x) => [x[2], x[3], x[4], x[5]]),
+    [["0", "-", "https://video.example/watch?v=second", "Second video"], ["1", "active", "https://news.example/", "News"], ["2", "-", "brave://newtab/", "New tab"]],
+    "the closed fourth tab is gone; the first tab is on its second page");
+  assert.equal(rows.filter((x) => x[0] === "tab" && x[1] === "300").length, 0, "a closed window keeps no tabs");
+});
+
+test("15 Oct: the Station in native full screen, X on another desktop - found, reached, everything restarted and reloaded; the log says where each was", () => {
+  const n = night({ env: { FAKE_STATION_WHERE: "fullscreen", FAKE_X_WHERE: "elsewhere" } });
+  assert.equal(n.run.status, 0, n.run.stderr);
+  assert.match(n.log, /the Station's window is in native full screen, on a desktop of its own - switching to that desktop \(ok\)/);
+  assert.match(n.log, /the Station's window is now in native full screen on this desktop/);
+  assert.match(n.log, /X's window is on another desktop - switching to that desktop \(ok\)/);
+  assert.match(n.log, /the Station has 1 window\(s\), 0 minimised - in native full screen on this desktop/);
+  assert.match(n.log, /plan: full/);
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:main"]);
+  assert.deepEqual(n.changed.slice(0, 2), [`activate ${STATION}`, `activate ${X}`], "brought within reach first, before anything else");
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working \(first try\)/);
+  assert.doesNotMatch(n.last + n.note, /no open window|minimised or closed/);
+});
+
+test("15 Oct: a minimised Station comes back from the Dock; a closed X web app is opened again; then the full night", () => {
+  const n = night({ env: { FAKE_STATION_WHERE: "minimised", FAKE_X_WHERE: "closed" } });
+  assert.ok(n.changed.includes(`unminimise ${STATION}`), "brought back from the Dock");
+  assert.ok(n.opened.includes(`OPEN -g -b ${X}`), "opened again by its bundle id");
+  assert.match(n.log, /the Station's window is minimised - bringing it back from the Dock \(ok:1\)/);
+  assert.match(n.log, /X runs but has no window - opening it again \(it comes back on its start page\)/);
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working/);
+});
+
+test("15 Oct: a window that truly cannot be reached: the plan is none, the note names which of the four it was, and Brave is left alone", () => {
+  for (const [where, words] of [["elsewhere", "on another desktop"], ["fullscreen", "in native full screen, on a desktop of its own"], ["closed", "closed \\(the app runs but has no window\\)"]]) {
+    const n = night({ env: { FAKE_STATION_WHERE: where, FAKE_STUCK: "1" } });
+    assert.match(n.note, new RegExp(`the Station could not be reached: its window is ${words} and could not be brought within reach`), where);
+    assert.doesNotMatch(n.note, /minimised or closed/);
+    assert.equal(n.changed.filter((c) => /^(reload|shortcut)/.test(c)).length, 0, "nothing reloaded, no key");
+    assert.deepEqual(n.closed, ["tv:main", "hub:main"], "TradingView and the Hub app still restarted; Brave not, because X could not be reconnected");
+  }
+});
+
+test("15 Oct: the dry run says where the windows are and what the job would do, and moves nothing", () => {
+  const n = night({ mode: "dry-run", env: { FAKE_STATION_WHERE: "fullscreen", FAKE_X_WHERE: "minimised" } });
+  assert.deepEqual(n.changed.concat(n.acts, n.awake), []);
+  assert.match(n.run.stdout, /the Station's window is in native full screen, on a desktop of its own - tonight the job would switch to its full-screen desktop first, then count again/);
+  assert.match(n.run.stdout, /X's window is minimised \(in the Dock\) - tonight the job would bring it back from the Dock first, then count again/);
+  assert.match(n.run.stdout, /plan: full/);
+});
+
+test("15 Oct: Brave with a window of its own, no consent: its tabs are read from the session file, Brave is restarted, and the window comes back with the same tabs in order", () => {
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: withProfile() } });
+  assert.equal(n.run.status, 0, n.run.stderr);
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:main"]);
+  assert.match(n.log, /Brave's own windows: 1 window\(s\), 2 tab\(s\), read from Brave's own session file \(written \d\d:\d\d\) - opened again after the restart/);
+  assert.deepEqual(n.asked.filter((c) => c.startsWith("REOPEN")), ["REOPEN https://video.example/watch?v=second https://news.example/"], "the same tabs, in order; brave://newtab left out");
+  const at = (line) => n.asked.findIndex((c) => c.startsWith(line));
+  assert.ok(at("REOPEN") > at(shim(n, "X").slice(0, 20)) && at("REOPEN") < at(`reload ${STATION}`), "after the web apps are back, before the reload");
+  assert.equal(readFileSync(join(n.dir, "LAST-BRAVE-WINDOWS.txt"), "utf8"), RECORD, "written down beside LAST-NIGHT.txt, in case a hand is needed in the morning");
+  assert.equal(n.changed.filter((c) => c.startsWith("active-tab")).length, 0, "without consent the active tab cannot be put back");
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working/);
+  assert.equal(n.end.find((p) => p.group === "brave" && p.role === "main").kind, "Foreground", "Brave has its own window again");
+  assert.equal(n.note, "");
+});
+
+test("15 Oct: with the one click given (consent allowed) the tabs are asked of Brave itself and the active tab is put back", () => {
+  const tabs = "window\\t1\\t3\\ntab\\t1\\thttps://a.example/\\ntab\\t1\\thttps://b.example/\\ntab\\t1\\thttps://video.example/watch?v=live\\nwindow\\t2\\t1\\ntab\\t2\\thttps://c.example/\\n";
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: withProfile(), FAKE_CONSENT: "allowed", FAKE_TABS: tabs, FAKE_BRAVE_OWN: "2" } });
+  assert.match(n.log, /Brave's own windows: 2 window\(s\), 4 tab\(s\), asked of Brave itself/);
+  assert.deepEqual(n.asked.filter((c) => c.startsWith("REOPEN")), ["REOPEN https://a.example/ https://b.example/ https://video.example/watch?v=live", "REOPEN https://c.example/"]);
+  assert.deepEqual(n.changed.filter((c) => c.startsWith("active-tab")), ["active-tab com.brave.Browser 1 3"], "the third tab, in the window just opened");
+  assert.ok(n.asked.includes("tabs com.brave.Browser") && n.asked.includes("consent com.brave.Browser"));
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave/);
+});
+
+test("15 Oct: Brave's windows cannot be written down (no consent, no session file): Brave stays, the Station and X windows are closed and opened again, the memory given back is written down, X is reconnected", () => {
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" } });
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:shim", "brave:shim"]);
+  assert.equal(n.opened.filter((o) => /Brave Browser Apps.localized\/(SCINTILLA Station|X)\.app$/.test(o)).length, 2, "both web apps opened again");
+  assert.match(n.log, /Brave is not restarted tonight - closing and opening the Station and X windows instead, to free their pages/);
+  assert.match(n.log, /looking again, now that the Station and X windows have been opened again/);
+  assert.match(n.last, /Closing and opening the Station and X windows gave back \d+\.\d\d GB \(Brave \d+\.\d\d GB before, \d+\.\d\d GB after\)\./);
+  assert.match(n.last, /X confirmed working/);
+  assert.ok(n.end.some((p) => p.pid === 9001), "the same Brave as before");
+  assert.equal(n.asked.filter((c) => c.startsWith("REOPEN")).length, 0);
+  const off = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { REFRESH_WEBAPPS: "no" } });
+  assert.deepEqual(off.closed, ["tv:main", "hub:main"], "the refresh can be switched off");
+});
+
+test("15 Oct: REOPEN_BRAVE_WINDOWS=no leaves Brave with a window of its own alone, as before", () => {
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: withProfile(), REOPEN_BRAVE_WINDOWS: "no", REFRESH_WEBAPPS: "no" } });
+  assert.deepEqual(n.closed, ["tv:main", "hub:main"]);
+  assert.match(n.last, /not restarted: Brave has a window of its own open and REOPEN_BRAVE_WINDOWS=no/);
+});
+
+test("15 Oct: the morning lines name Brave's biggest parts, after the whole-Mac line, and say the pages cannot be named", () => {
+  const n = night();
+  const lines = n.last.split("\n");
+  assert.match(lines[5], /^The whole Mac:/);
+  assert.match(lines[6], /^Brave's biggest parts before the night: an extension \d+\.\d\d GB, graphics \d+\.\d\d GB, Brave itself \d+\.\d\d GB \(which page each one shows cannot be read without opening Brave's own task manager\)$/);
+  assert.match(night({ mode: "dry-run" }).run.stdout, /restart: Brave's biggest parts now - an extension/);
+});
+
+test("15 Oct: the kit - the helpers are the same bytes in both kits, Brave is asked nothing without consent, and the window helper still types only after its check", () => {
+  for (const f of KIT_FILES.filter((f) => f !== "brave-session.pl")) assert.equal(readFileSync(join(KIT, f), "utf8"), readFileSync(join(NR1_KIT, f), "utf8"), `${f} differs between the kits`);
+  const gui = readFileSync(join(KIT, "gui.applescript"), "utf8").split("\n");
+  for (const [i, l] of gui.entries()) if (/brave-tabs\.js/.test(l) && !/^--/.test(l)) assert.ok(gui.slice(i - 2, i).some((x) => /consent\.js.*is not "allowed" then return "refused:no consent"/.test(x)), `line ${i + 1} asks Brave without the consent check`);
+  assert.equal(gui.filter((l) => /tell application id bid/.test(l)).length, 1, "one Apple event to the app itself: the one click, in ask-consent only");
+  assert.ok(gui.slice(0, gui.findIndex((l) => /tell application id bid/.test(l))).slice(-4).some((l) => /verb is "ask-consent"/.test(l)));
+  const consent = readFileSync(join(KIT, "consent.js"), "utf8");
+  assert.match(consent, /AEDeterminePermissionToAutomateTarget\(d\.aeDesc, 0x2A2A2A2A, 0x2A2A2A2A, false\)/, "asked without the dialog");
+  const windows = readFileSync(join(KIT, "windows.js"), "utf8");
+  assert.doesNotMatch(windows, /kCGWindowName|screen-recording-permission-request/, "no window names: no screen-recording permission is ever wanted");
+  for (const f of ["windows.js", "consent.js", "brave-tabs.js", "brave-session.pl", "night-reload.sh", "supervised-test.sh"]) assert.doesNotMatch(readFileSync(join(KIT, f), "utf8"), /youtube\.com\/watch|x\.com\/[a-z]/i, `${f} carries one of his pages`);
+  const sup = spawnSync("/bin/bash", [join(KIT, "supervised-test.sh"), "--explain"], { env: { PATH, HOME: mkdtempSync(join(tmpdir(), "nr2-home-")) }, encoding: "utf8" });
+  for (const want of [/native full screen/, /ANOTHER desktop/, /your own window with the same tabs/, /--consent/]) assert.match(sup.stdout, want);
 });
