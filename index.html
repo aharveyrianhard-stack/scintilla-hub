@@ -5657,28 +5657,40 @@ let UNIVERSE = null; // Set of cohort tickers (events-room scope)
    FedEx's Sep 17 row read "1d ago", every "Nd ago" was one too many, and date-bounded reads started a day late. */
 const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
+/* E1 (15 Oct) — ONE READ FOR ONE PATH. MEASURED on a cold load of the EARNINGS room (live 7b66061): the same GET was in
+   flight several times at once from different callers — cohorts?select=ticker ×4, company_profile ×3, cohorts?select=
+   ticker,cohort ×3, the same earnings_events stretch ×2. An identical path asked while the first answer is still coming
+   now shares that answer; every caller after the first gets its own copy, so one caller's sort cannot reorder another's. */
+const PG_INFLIGHT = new Map();
 async function pg(path, _tries) {
+  const k = String(path), have = PG_INFLIGHT.get(k);
+  if (have) { const v = await have; return v && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v; }
   /* RESILIENCE — the DB intermittently 503/504s under pipeline load; without a retry a
      single transient failure leaves a data tab stuck on "loading" forever. Retry up to
      3× on 503/504/429/network errors with backoff + jitter (jitter avoids a thundering
      herd from the many parallel board/company reads). Real 4xx errors throw immediately. */
-  const tries = _tries == null ? 3 : _tries;
-  let lastErr;
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await fetch(SB + "/rest/v1/" + path, {
-        headers: { apikey: ANON, Authorization: "Bearer " + ANON },
-      });
-      if (r.ok) return r.json();
-      if (r.status === 503 || r.status === 504 || r.status === 429) {
-        lastErr = new Error("pg " + path + " → " + r.status);   // DB busy → retry
-      } else {
-        throw new Error("pg " + path + " → " + r.status);       // real error → fail fast
-      }
-    } catch (e) { lastErr = e; }                                 // network error → retry
-    if (i < tries - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1) + Math.random() * 300));
-  }
-  throw lastErr;
+  const run = (async () => {
+    const tries = _tries == null ? 3 : _tries;
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try {
+        const r = await fetch(SB + "/rest/v1/" + path, {
+          headers: { apikey: ANON, Authorization: "Bearer " + ANON },
+        });
+        if (r.ok) return r.json();
+        if (r.status === 503 || r.status === 504 || r.status === 429) {
+          lastErr = new Error("pg " + path + " → " + r.status);   // DB busy → retry
+        } else {
+          throw new Error("pg " + path + " → " + r.status);       // real error → fail fast
+        }
+      } catch (e) { lastErr = e; }                                 // network error → retry
+      if (i < tries - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1) + Math.random() * 300));
+    }
+    throw lastErr;
+  })();
+  PG_INFLIGHT.set(k, run);
+  run.then(() => PG_INFLIGHT.delete(k), () => PG_INFLIGHT.delete(k));
+  return run;
 }
 
 /* R22 FIX 5 — pgPatch: PostgREST PATCH (anon UPDATE grant on cohorts.cohort is
