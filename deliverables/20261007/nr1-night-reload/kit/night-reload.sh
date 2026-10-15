@@ -106,6 +106,7 @@ machine_word() {    # iMac | MacBook | Mac  (only used to guess this browser's l
 gui() {
   case "$1" in
     trusted|front|windows|find-reload|everywhere|consent|tabs) ;;
+    ask-consent) echo "refused:only from supervised-test.sh --consent"; return 0 ;;
     activate|raise|reload|shortcut|unminimise|active-tab)
       if [ "$MODE" != run ] && [ "$MODE" != test ]; then say "  (dry run - not done: $*)"; echo dry; return 0; fi ;;
     *) echo "error:unknown verb"; return 2 ;;

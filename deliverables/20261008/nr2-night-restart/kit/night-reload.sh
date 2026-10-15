@@ -193,6 +193,8 @@ sys_memory() {      # the whole Mac: "<kilobytes pushed out to disk> <percent of
 gui() {
   case "$1" in
     trusted|front|windows|find-reload|everywhere|consent|tabs) ;;
+    ask-consent)   # the ONE click (15 Oct 2026): only a dry run started by supervised-test.sh --consent may make macOS ask
+      if [ "$MODE" != dry-run ] || [ -z "${SCINTILLA_NIGHT_RELOAD_ASK_CONSENT:-}" ]; then echo "refused:only from supervised-test.sh --consent"; return 0; fi ;;
     activate|raise|reload|shortcut|unminimise|active-tab)
       if [ "$MODE" != run ] && [ "$MODE" != test ]; then say "  (dry run - not done: $*)"; echo dry; return 0; fi ;;
     *) echo "error:unknown verb"; return 2 ;;
@@ -947,6 +949,11 @@ fi
 
 say "---- $(when) - $MODE ----"
 [ "$MODE" = dry-run ] && say "DRY RUN: this only looks. Nothing is reloaded, no key is sent, no window is brought to the front."
+if [ "$MODE" = dry-run ] && [ -n "${SCINTILLA_NIGHT_RELOAD_ASK_CONSENT:-}" ]; then
+  # the one click: supervised-test.sh --consent starts the launcher this way, with Alan watching. The launcher app is what macOS asks
+  # about, and the permission belongs to it - the same app that already holds Accessibility, never rebuilt for this.
+  say "consent: asking macOS, once, whether 'Scintilla Night Reload' may control $SCINTILLA_NIGHT_RELOAD_ASK_CONSENT - $(gui ask-consent "$SCINTILLA_NIGHT_RELOAD_ASK_CONSENT")"
+fi
 if [ "$MODE" != run ]; then
   say "clock: it is $(clock "$HHMM"); the nightly job acts only between $(clock "$WINDOW_START") and $(clock "$WINDOW_END") $([ "$IN_WINDOW" = yes ] && echo '(inside now)' || echo '(outside now)')"
   say "keyboard and mouse: last touched $(idle_seconds)s ago; the nightly job needs ${IDLE_SECONDS}s"

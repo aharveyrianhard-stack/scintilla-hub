@@ -424,11 +424,7 @@ test("the kit: no key; the window helper, the timetable and switch-on are the 7 
   const launcher = readFileSync(join(KIT, "launcher.applescript"), "utf8");
   const cut = launcher.indexOf("\n-- 8 Oct 2026: with the restart the record of a test");
   assert.ok(cut > 0 && /^on lastLines\(t, n\)$/m.test(launcher.slice(cut)), "the one addition is the handler that keeps the end of the record");
-  /* 15 Oct 2026: the second addition is the one-click hook (SCINTILLA_NIGHT_RELOAD_ASK_CONSENT), six lines before the job is started */
-  const hook = /\n\t-- 15 Oct 2026: SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=<bundle id>[^]*?\n\tend try\n(?=\ttry\n\t\tset outText to do shell script)/;
-  assert.match(launcher, hook, "the consent hook is there, and runs only in dry-run from supervised-test.sh --consent");
-  assert.match(launcher.match(hook)[0], /if askBid is not "" and mode is "dry-run" then do shell script/);
-  assert.equal(launcher.slice(0, cut).replace(hook, "\n").replace("my lastLines(outText, 9)", "outText"), readFileSync(join(NR1_KIT, "launcher.applescript"), "utf8"), "everything else in the launcher is the 7 Oct file");
+  assert.equal(launcher.slice(0, cut).replace("my lastLines(outText, 9)", "outText"), readFileSync(join(NR1_KIT, "launcher.applescript"), "utf8"), "everything else in the launcher is the 7 Oct file - 15 Oct rebuilt nothing, so the Accessibility permission stays");
   const plist = readFileSync(join(KIT, "com.scintilla.night-reload.plist"), "utf8");
   const slots = [...plist.matchAll(/<key>Hour<\/key><integer>(\d+)<\/integer><key>Minute<\/key><integer>(\d+)<\/integer>/g)].map((m) => Number(m[1]) * 60 + Number(m[2]));
   assert.equal(slots.length, 9);
@@ -611,6 +607,14 @@ test("15 Oct: the morning lines name Brave's biggest parts, after the whole-Mac 
   assert.match(lines[5], /^The whole Mac:/);
   assert.match(lines[6], /^Brave's biggest parts before the night: an extension \d+\.\d\d GB, graphics \d+\.\d\d GB, Brave itself \d+\.\d\d GB \(which page each one shows cannot be read without opening Brave's own task manager\)$/);
   assert.match(night({ mode: "dry-run" }).run.stdout, /restart: Brave's biggest parts now - an extension/);
+});
+
+test("15 Oct: the one click is asked only by a dry run started with SCINTILLA_NIGHT_RELOAD_ASK_CONSENT (supervised-test.sh --consent), never by the night job", () => {
+  const asked = night({ mode: "dry-run", env: { SCINTILLA_NIGHT_RELOAD_ASK_CONSENT: "com.brave.Browser" } });
+  assert.ok(asked.asked.includes("ask-consent com.brave.Browser"));
+  assert.match(asked.run.stdout, /consent: asking macOS, once, whether 'Scintilla Night Reload' may control com\.brave\.Browser/);
+  for (const opts of [{ env: { SCINTILLA_NIGHT_RELOAD_ASK_CONSENT: "com.brave.Browser" } }, { mode: "test", env: { SCINTILLA_NIGHT_RELOAD_ASK_CONSENT: "com.brave.Browser", TEST_IDLE_SECONDS: "0" } }, { mode: "dry-run" }, {}])
+    assert.equal(night(opts).asked.filter((c) => c.startsWith("ask-consent")).length, 0, JSON.stringify(opts));
 });
 
 test("15 Oct: the kit - the helpers are the same bytes in both kits, Brave is asked nothing without consent, and the window helper still types only after its check", () => {

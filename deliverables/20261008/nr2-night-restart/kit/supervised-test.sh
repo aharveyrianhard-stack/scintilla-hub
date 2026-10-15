@@ -84,7 +84,7 @@ if [ "${1:-}" = "--where" ] || [ "${1:-}" = "--consent" ]; then
   if [ "${1:-}" = "--consent" ]; then
     echo "THE ONE CLICK: macOS will ask whether \"Scintilla Night Reload\" may control \"Brave Browser\". Alan clicks Allow."
     echo "Brave must be running. Nothing in Brave changes; the question only counts its windows."
-    SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser /usr/bin/open -W -a "$APP" --env SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser || { echo "The small app could not be started."; exit 1; }
+    /usr/bin/open -W -a "$APP" --env SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser || { echo "The small app could not be started."; exit 1; }
   fi
   echo "WHERE THE WINDOWS ARE, as the job sees them (look only; nothing is moved):"
   LOOK_FROM=0; [ -f "$LOG" ] && LOOK_FROM="$(wc -l < "$LOG" | tr -d ' ')"
