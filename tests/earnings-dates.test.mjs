@@ -28,7 +28,8 @@ test("the master EVENTS panel has one scroll region per column, not a second one
 
 test("report time: the stored value when present, an explicit unknown otherwise, never a placeholder that reads like a value", () => {
   assert.doesNotMatch(page, /sc-ern__pill--wait">bmo\/amc</, "the BMO/AMC-looking placeholder is gone");
-  assert.match(page, /sc-ern__pill--wait" title="report time not in the stored calendar">time unknown</);
+  /* E1 (15 Oct): the explicit unknown now reads "time not announced", with whether the DATE is confirmed (ernWhenFull) */
+  assert.match(page, /sc-ern__pill--wait" title="report time not in the stored calendar">' \+ esc\(whenTxt \|\| "time not announced"\) \+ '</);
   assert.match(page, /d\.confirmed === false \? '<span class="sc-ern__pill sc-ern__pill--wait"[^>]*>unconfirmed</);
   assert.match(page, /const sess = \(ev\.report_time && ev\.report_time !== "TBD"\) \? " · " \+ esc\(ev\.report_time\) : "";/, "master list rows show a stored report time");
   assert.match(page, /const sess = \(ev\.report_time && ev\.report_time !== "TBD"\) \? " " \+ esc\(ev\.report_time\) : "";/, "the upcoming rail shows a stored report time");

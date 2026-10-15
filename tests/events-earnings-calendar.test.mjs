@@ -66,8 +66,9 @@ test("a chip opens the same card the DAY view draws — nothing is lost", () => 
 });
 
 test("a blank report time is a real group, not an edge case", () => {
-  assert.match(core, /\[3, "time not set"\]/);
-  assert.match(core, /\[0, "before the open"\], \[1, "at a set time"\], \[2, "after the close"\]/);
+  /* E1 (15 Oct): the WEEK groups wear the DAY square's four words; "at a set time" is "during the session", "time not set" is "time not announced" */
+  assert.match(core, /\[3, "time not announced"\]/);
+  assert.match(core, /\[0, "before the open"\], \[1, "during the session"\], \[2, "after the close"\]/);
 });
 
 test("the calendar reads earnings_events and writes nothing", () => {
