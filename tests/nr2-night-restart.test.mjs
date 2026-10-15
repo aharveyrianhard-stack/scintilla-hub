@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, symlinkSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, symlinkSync, mkdirSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -630,4 +630,73 @@ test("15 Oct: the kit - the helpers are the same bytes in both kits, Brave is as
   for (const f of ["windows.js", "consent.js", "brave-tabs.js", "brave-session.pl", "night-reload.sh", "supervised-test.sh"]) assert.doesNotMatch(readFileSync(join(KIT, f), "utf8"), /youtube\.com\/watch|x\.com\/[a-z]/i, `${f} carries one of his pages`);
   const sup = spawnSync("/bin/bash", [join(KIT, "supervised-test.sh"), "--explain"], { env: { PATH, HOME: mkdtempSync(join(tmpdir(), "nr2-home-")) }, encoding: "utf8" });
   for (const want of [/native full screen/, /ANOTHER desktop/, /your own window with the same tabs/, /--consent/]) assert.match(sup.stdout, want);
+});
+
+/* ---------------------------------------------------------------------------------------------------------------------------------
+   PART 5 - NR4 (15 Oct 2026, read on the iMac): Brave answered at 12:15, seven questions and seven answers, but its lines came through
+   AppleScript's "do shell script" joined by carriage returns and were counted as 0 tabs; the session file was then not even tried. At
+   11:59 the session file had been tried and macOS refused it (on macOS 27 Brave's folder is kept as another app's data). FAKE_CR=1
+   makes the stand-in answer exactly the way the real window helper does. Fake pages only. */
+const brLines = (n) => n.log.split("\n").filter((l) => /Brave's own windows/.test(l));
+const TABS3 = "window\\t1\\t2\\ntab\\t1\\thttps://a.example/\\ntab\\t1\\thttps://video.example/watch?v=live\\ntab\\t1\\tchrome-extension://abcdefghijklmnop/page.html\\n";
+
+test("NR4: Brave's answer arrives the way the real window helper hands it on - lines joined by carriage returns - and is read: 1 window, 3 tabs, asked of Brave itself", () => {
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { FAKE_CR: "1", FAKE_CONSENT: "allowed", FAKE_TABS: TABS3 } });
+  assert.equal(n.run.status, 0, n.run.stderr);
+  assert.match(n.log, /Brave's own windows, asked of Brave itself: 4 line\(s\): window 1 2 \| tab 1 https:<\d+> \| tab 1 https:<\d+> \| tab 1 chrome-extension:<\d+>/);
+  assert.match(n.log, /Brave's own windows: 1 window\(s\), 3 tab\(s\), asked of Brave itself - opened again after the restart/);
+  assert.doesNotMatch(n.log, /could not read what they show/);
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:main"], "Brave itself is restarted");
+  assert.deepEqual(n.asked.filter((c) => c.startsWith("REOPEN")), ["REOPEN https://a.example/ https://video.example/watch?v=live chrome-extension://abcdefghijklmnop/page.html"]);
+  assert.deepEqual(n.changed.filter((c) => c.startsWith("active-tab")), ["active-tab com.brave.Browser 1 2"], "the active tab put back");
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave/);
+  for (const l of brLines(n)) assert.doesNotMatch(l, /:\/\/|example/, "no address of his in the log");
+});
+
+test("NR4: the window server's answer for two windows, joined by carriage returns, is counted as two", () => {
+  const tabs = "window\\t1\\t1\\ntab\\t1\\thttps://a.example/\\nwindow\\t2\\t1\\ntab\\t2\\thttps://c.example/\\n";
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { FAKE_CR: "1", FAKE_CONSENT: "allowed", FAKE_TABS: tabs, FAKE_BRAVE_OWN: "2" } });
+  assert.match(n.log, /Brave's own windows: 2 window\(s\), 2 tab\(s\), asked of Brave itself/);
+  assert.doesNotMatch(n.log, /the window server counts/, "2 = 2: the count of the window server is right");
+});
+
+test("NR4: consent given but no usable answer from Brave: the session file is now tried, and the log says what each way got", () => {
+  for (const tabs of ["error:-1728 Can't get window 1.", ""]) {
+    const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: withProfile(), FAKE_CR: "1", FAKE_CONSENT: "allowed", FAKE_TABS: tabs } });
+    assert.match(n.log, tabs ? /asked of Brave itself: 1 line\(s\): error:-1728 Can't get window 1\./ : /asked of Brave itself: nothing \(an empty answer\)/);
+    assert.match(n.log, /from Brave's own session file Session_13436502421477784 \(written \d{1,2} [A-Z][a-z]{2} \d\d:\d\d\): ordinary window 1: 3 tab\(s\) \(https, https, brave\), active tab 2 - left out: 1 web-app window\(s\) 1 closed window\(s\)/);
+    assert.match(n.log, /Brave's own windows: 1 window\(s\), 2 tab\(s\), read from Brave's own session file/);
+    assert.deepEqual(n.asked.filter((c) => c.startsWith("REOPEN")), ["REOPEN https://video.example/watch?v=second https://news.example/"]);
+    for (const l of brLines(n)) assert.doesNotMatch(l, /:\/\/|example/);
+  }
+});
+
+test("NR4: the dry run reads both ways and says what each got - and moves nothing", () => {
+  const n = night({ mode: "dry-run", mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: withProfile(), FAKE_CR: "1", FAKE_CONSENT: "allowed", FAKE_TABS: TABS3 } });
+  assert.match(n.run.stdout, /Brave's own windows, asked of Brave itself: 4 line\(s\)/);
+  assert.match(n.run.stdout, /Brave's own windows, from Brave's own session file Session_13436502421477784/);
+  assert.match(n.run.stdout, /Brave's own windows: 1 window\(s\), 3 tab\(s\), asked of Brave itself/);
+  assert.deepEqual(n.changed.concat(n.acts, n.awake), []);
+  assert.equal(existsSync(join(n.dir, "LAST-BRAVE-WINDOWS.txt")), false, "a dry run writes nothing down");
+});
+
+test("NR4: Brave's folder refused (as macOS 27 refuses it to the launcher): the log gives macOS's own words, and Brave is left as it is", () => {
+  const prof = withProfile(); chmodSync(join(prof, "Sessions"), 0o000);
+  try {
+    const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: prof } });
+    assert.match(n.log, /asked of Brave itself: not asked - macOS's answer for this app is "not-asked"/);
+    assert.match(n.log, /from Brave's own session file: macOS did not let this app read .*\/Sessions \(Permission denied\)/);
+    assert.match(n.log, /could not read what they show \(consent: not-asked; session file: macOS did not let this app read/);
+    assert.ok(!n.closed.includes("brave:main"), "never closed without his windows written down");
+  } finally { chmodSync(join(prof, "Sessions"), 0o755); }
+  const none = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" } });
+  assert.match(none.log, /session file: none in .*\/Brave-Browser\/Default\/Sessions \(No such file or directory\)/, "no folder: said so, with where it looked");
+});
+
+test("NR4: Brave lists more windows with tabs than the window server shows of its own (web-app windows among them): the session file decides", () => {
+  const tabs = "window\\t1\\t1\\ntab\\t1\\thttps://station.example/\\nwindow\\t2\\t1\\ntab\\t2\\thttps://social.example/\\nwindow\\t3\\t1\\ntab\\t3\\thttps://a.example/\\n";
+  const n = night({ mac: { FAKEMAC_BRAVE_KIND: "Foreground" }, env: { BRAVE_PROFILE: withProfile(), FAKE_CR: "1", FAKE_CONSENT: "allowed", FAKE_TABS: tabs, FAKE_BRAVE_OWN: "1" } });
+  assert.match(n.log, /Brave listed 3 window\(s\) with tabs, the window server shows 1 of its own/);
+  assert.match(n.log, /Brave's own windows: 1 window\(s\), 2 tab\(s\), read from Brave's own session file/);
+  assert.deepEqual(n.asked.filter((c) => c.startsWith("REOPEN")), ["REOPEN https://video.example/watch?v=second https://news.example/"], "the web-app pages are not opened as tabs");
 });

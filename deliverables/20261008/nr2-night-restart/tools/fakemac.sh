@@ -16,6 +16,7 @@
 #   one) from that, and "activate", "unminimise" and "open -b" move it to reachable - unless FAKE_STUCK=1, when nothing moves it.
 #   FAKE_CONSENT = not-asked (default) | allowed | denied; FAKE_TABS = what Brave answers when asked for its tabs (consent allowed only);
 #   FAKE_BRAVE_OWN = how many windows of its own the window server shows for a Foreground Brave (default 1).
+#   FAKE_CR=1 = the window helper answers "everywhere" and "tabs" with carriage returns between lines, as the real one does (NR4).
 D="${FAKEMAC_DIR:?FAKEMAC_DIR is not set}"; T="$D/procs.tsv"; C="$D/calls.txt"; H="${FAKEMAC_HOME:-$D}"
 verb="$(basename "$0")"; case "$verb" in fakemac.sh) verb="${1:-}"; shift ;; esac
 TV="/Applications/TradingView.app"; BR="/Applications/Brave Browser.app"; CH="/Applications/Google Chrome.app"
@@ -150,6 +151,11 @@ case "$verb" in
     esac ;;
   caffeinate) echo "AWAKE $*" >> "$C" ;;
   gui)
+    # 15 Oct 2026 (NR4): FAKE_CR=1 answers the way the real window helper does - its helpers' lines (windows.js, brave-tabs.js) come
+    # through AppleScript's "do shell script", which ends each line with a carriage return and drops the last line end
+    if [ "${FAKE_CR:-0}" = 1 ] && [ -z "${FAKE_CR_INNER:-}" ]; then
+      case "${1:-}" in everywhere|tabs) FAKE_CR_INNER=1 "$0" "$@" | /usr/bin/perl -0pe 's/\n\z//; s/\n/\r/g'; exit 0 ;; esac
+    fi
     echo "$*" >> "$C"
     case "${1:-}" in
       trusted) echo "${FAKE_TRUSTED:-true}" ;;
