@@ -13,9 +13,23 @@
 #                                 read Brave's tabs? Nothing is moved.
 #   supervised-test.sh --consent  the ONE click: makes macOS ask whether "Scintilla Night Reload" may control Brave Browser. Alan
 #                                 clicks Allow. After that the job reads Brave's tabs from Brave itself and can put the active tab back.
+# 16 Oct 2026: no box, ever. A box of the small app waits for a click, and while it waits macOS refuses every later start of that app
+# ("was already running") - the box of the 04:26 test blocked the 04:30 night try. So every start from here goes through the small app
+# in its "run" dress (no box; the job itself posts a notification when it has a note) with a one-line wrapper kit that runs the mode
+# wanted, and everything the job said is printed HERE. A second start while one is running is refused here and by the job itself.
 set -u
 DEST="$HOME/Scintilla/night-reload"; APP="$DEST/Scintilla Night Reload.app"; LAST="$DEST/LAST-NIGHT.txt"
 LOG="$HOME/Library/Logs/scintilla-night-reload.log"
+start_job() {       # $1 = dry-run | test  (+ further --env words): the small app, box-free, running that mode of the installed job
+  local mode="$1"; shift
+  if /usr/bin/pgrep -f "Scintilla Night Reload.app/Contents/MacOS/applet" >/dev/null 2>&1; then
+    echo "REFUSED: the small app 'Scintilla Night Reload' is still running from an earlier start (a night try, or a box still waiting for a click)."
+    echo "Click OK on its box, or wait for it to end, then run this again:  ps -axo pid,lstart,command | grep 'Night Reload'"; return 1
+  fi
+  local w="$DEST/.launch-$mode"; mkdir -p "$w"
+  printf '#!/bin/bash\nexec /bin/bash "%s/night-reload.sh" %s\n' "$DEST" "$mode" > "$w/night-reload.sh"
+  /usr/bin/open -W -g -a "$APP" --env SCINTILLA_NIGHT_RELOAD_MODE=run --env SCINTILLA_NIGHT_RELOAD_KIT="$w" "$@"
+}
 
 explain() { cat <<'TEXT'
 THE NIGHT RESTART - the supervised test (15 Oct 2026: the windows wherever they are, and Brave's own windows too)
@@ -24,15 +38,16 @@ This does now, once, what the 4 am job will do every night: it closes TradingVie
 opens each again the way it was, then reloads the Station and X and reconnects X. It takes about three to five minutes.
 When it starts, take your hands off the keyboard and mouse and keep them off until the box at the end.
 
-SET UP FIRST, so the test proves the 15 Oct change: put the Station in native full screen (the green button, or
-Control+Command+F), and put X on ANOTHER desktop (Mission Control, drag it to a second desktop), and leave a Brave window of your
-own open with a YouTube tab in it. Then swipe to a desktop where neither the Station nor X is showing, and start.
+SET UP FIRST, so the test proves the 16 Oct change: put the Station on ANOTHER desktop and in native full screen there (Mission
+Control, drag it to a second desktop, then the green button or Control+Command+F), put X on a third desktop, and leave a Brave
+window of your own open with a YouTube tab in it. Then swipe to a desktop where neither the Station nor X is showing, and start.
 
 WHAT YOU SHOULD SEE IF IT WORKS
   1. For about 20 seconds nothing happens. It is making sure nobody is typing.
-  2. The desktop switches by itself: to the one with X, then to the Station's full-screen desktop, as the job finds each window
-     wherever it is. The log line for each says where it was ("on another desktop", "in native full screen"). It then checks it
-     can reach both before it closes anything.
+  2. The desktops slide past by themselves, one step at a time (the job presses Control+Right, then Control+Left, your own
+     Mission Control keys), and stop on the Station's full-screen desktop; then they slide again and stop on X's. The log line
+     for each says where it was ("on another desktop", "in native full screen") and after how many steps it was found. A window
+     set aside in the Stage Manager strip is pulled onto the stage instead. It then checks it can reach both before it closes anything.
   3. TradingView closes. A few seconds later it opens again, with the same charts.
   4. The Hub (the app called SCINTILLA) closes and opens again. It comes back on its first screen, not where you left it.
      Your lists, your stars, the company tab and the compare tab are kept.
@@ -42,9 +57,12 @@ WHAT YOU SHOULD SEE IF IT WORKS
      screen and not on another desktop.
   6. The Station reloads once more, X reloads once more, and about half a minute to two minutes later the X box in the Station
      fills again by itself. Nobody presses Option+Shift+S: the job does.
-  7. The app that was in front at the start is put back in front.
-  8. A box titled "Scintilla night reload - test" appears with the end of the record: it says "X confirmed working"
-     and gives three lines, one for each app, with its memory before and after, then Brave's biggest parts. Click OK.
+  7. The app that was in front at the start is put back in front. The desktop stays where the Station is (its X box must stay
+     in view to report, and nothing says for sure which desktop was in front before), so you may be on another desktop than
+     where you started.
+  8. No box. This Terminal prints the end of the record: it says "X confirmed working" and gives three lines, one for each
+     app, with its memory before and after, then Brave's biggest parts. (The night job posts a notification at the top right
+     when it has a note for you; the note itself is in ~/Scintilla/night-reload/LAST-NIGHT.txt.)
 Chrome, the YouTube app and every other app stay exactly as they are.
 
 IF IT DOES NOT WORK - what you would see, and what to do
@@ -57,8 +75,12 @@ IF IT DOES NOT WORK - what you would see, and what to do
     Nothing was forced, and the app is as it was.
   - The Station and X are back but the X box stays dark: click the X window and press Option+Shift+S, as you do today.
     The box says so as well.
-  - The box says the Station or X "could not be reached" and names where it was (another desktop, full screen, minimised,
-    closed): the job found the window but could not bring it within reach. Say which word it used.
+  - The record says the Station or X "could not be reached" and names where it was (another desktop, full screen, minimised,
+    closed, the Stage Manager strip): the job found the window but could not bring it within reach. Say which word it used,
+    and whether the desktops slid at all ("walked the desktops ... and never saw it on screen" = the keys did nothing, or the
+    window is on no desktop the keys reach).
+  - "REFUSED: the small app ... is still running": an earlier start is still up (a box waiting for a click, or a night try).
+    Click its box, or wait, then start again. Nothing was closed.
   - Brave was not restarted and the box says its windows "could not be read": run this script with --consent, click Allow,
     and run the test again. Nothing was lost: Brave was left as it was.
   - Your own Brave window came back without a tab, or with the wrong tab in front: say which. The tabs the job wrote down are
@@ -84,20 +106,19 @@ if [ "${1:-}" = "--where" ] || [ "${1:-}" = "--consent" ]; then
   if [ "${1:-}" = "--consent" ]; then
     echo "THE ONE CLICK: macOS will ask whether \"Scintilla Night Reload\" may control \"Brave Browser\". Alan clicks Allow."
     echo "Brave must be running. Nothing in Brave changes; the question only counts its windows."
-    /usr/bin/open -W -a "$APP" --env SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser || { echo "The small app could not be started."; exit 1; }
+    start_job dry-run --env SCINTILLA_NIGHT_RELOAD_ASK_CONSENT=com.brave.Browser || { echo "The small app could not be started."; exit 1; }
   fi
   echo "WHERE THE WINDOWS ARE, as the job sees them (look only; nothing is moved):"
   LOOK_FROM=0; [ -f "$LOG" ] && LOOK_FROM="$(wc -l < "$LOG" | tr -d ' ')"
-  /usr/bin/open -W -a "$APP" || { echo "The small app could not be started."; exit 1; }
-  [ -f "$LOG" ] && tail -n +"$(( LOOK_FROM + 1 ))" "$LOG" | sed 's/^[0-9-]* [0-9:]*  \[dry-run\] //' | grep -E "window|Brave's own|consent|desktop|full screen|minimised|closed|permission" 
+  start_job dry-run || { echo "The small app could not be started."; exit 1; }
+  [ -f "$LOG" ] && tail -n +"$(( LOOK_FROM + 1 ))" "$LOG" | sed 's/^[0-9-]* [0-9:]*  \[dry-run\] //' | grep -E "window|Brave's own|consent|desktop|full screen|minimised|closed|permission|strip|keys"
   exit 0
 fi
 
 if [ "${1:-}" = "--look" ]; then
-  echo "LOOK ONLY: the job says what it sees and what it would do tonight. It closes nothing and presses nothing."
-  echo "A box shows the end of that; click OK on it, and all of it is printed here."
+  echo "LOOK ONLY: the job says what it sees and what it would do tonight. It closes nothing and presses nothing. No box: it is all printed here."
   LOOK_FROM=0; [ -f "$LOG" ] && LOOK_FROM="$(wc -l < "$LOG" | tr -d ' ')"
-  /usr/bin/open -W -a "$APP" || { echo "The small app could not be started."; exit 1; }
+  start_job dry-run || { echo "The small app could not be started."; exit 1; }
   echo
   [ -f "$LOG" ] && tail -n +"$(( LOOK_FROM + 1 ))" "$LOG" | sed 's/^[0-9-]* [0-9:]*  \[dry-run\] //'
   exit 0
@@ -111,8 +132,8 @@ if [ "${1:-}" != "--yes" ]; then
 fi
 BEFORE_LINES=0; [ -f "$LOG" ] && BEFORE_LINES="$(wc -l < "$LOG" | tr -d ' ')"
 [ -f "$LAST" ] && mv "$LAST" "$LAST.before-test"      # the last night's lines are kept beside it, not thrown away
-echo "Started $(date '+%H:%M:%S'). Hands off the keyboard and mouse now. This command waits until you click OK on the box at the end."
-/usr/bin/open -W -a "$APP" --env SCINTILLA_NIGHT_RELOAD_MODE=test || { echo "The small app could not be started. Nothing was closed."; exit 1; }
+echo "Started $(date '+%H:%M:%S'). Hands off the keyboard and mouse now. This command waits until the job has ended; there is no box."
+start_job test || { echo "The small app could not be started. Nothing was closed."; exit 1; }
 echo "Ended $(date '+%H:%M:%S')."
 echo
 if [ ! -s "$LAST" ]; then
@@ -120,6 +141,9 @@ if [ ! -s "$LAST" ]; then
   [ -f "$LOG" ] && tail -n +"$(( BEFORE_LINES + 1 ))" "$LOG" | sed 's/^[0-9-]* [0-9:]*  \[test\] /  /' | tail -15
   exit 1
 fi
+echo "THE RECORD (the window lines; all of it is in $LOG):"
+[ -f "$LOG" ] && tail -n +"$(( BEFORE_LINES + 1 ))" "$LOG" | sed 's/^[0-9-]* [0-9:]*  \[test\] /  /' | grep -E "window|desktop|walked|strip|plan:|RESULT|NOTE|REFUSED"
+echo
 echo "WHAT THE JOB WROTE DOWN ($LAST):"
 sed 's/^/  /' "$LAST"
 echo
