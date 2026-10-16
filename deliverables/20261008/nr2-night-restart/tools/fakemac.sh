@@ -17,6 +17,13 @@
 #   FAKE_CONSENT = not-asked (default) | allowed | denied; FAKE_TABS = what Brave answers when asked for its tabs (consent allowed only);
 #   FAKE_BRAVE_OWN = how many windows of its own the window server shows for a Foreground Brave (default 1).
 #   FAKE_CR=1 = the window helper answers "everywhere" and "tabs" with carriage returns between lines, as the real one does (NR4).
+# 16 Oct 2026 - the desktops (NR5). The "Mac" has FAKE_SPACES desktops (default 3) in a row, the one in front is $FAKEMAC_DIR/space.now
+#   (default 1). A window that is "elsewhere" or "fullscreen" lives on desktop FAKE_STATION_SPACE / FAKE_X_SPACE (default 2): while that
+#   desktop is in front it answers as reachable / fullscreen-here, and "walk" moves space.now one step per key press (press right|left in
+#   calls.txt; a press past either end changes nothing, like the real row of desktops) until it gets there. "activate" switches the desktop
+#   only with FAKE_AUTO_SWOOSH=1 (the macOS setting that is OFF on the iMac); by default it only makes the app frontmost, as on the iMac.
+#   A sixth place, "strip": the window is on this desktop in the Stage Manager strip (the window server: on, strip size; Accessibility:
+#   nothing); "activate" brings it onto the stage. FAKE_SPACES_SAID = what the Mac's settings claim (default = FAKE_SPACES; a stale count).
 D="${FAKEMAC_DIR:?FAKEMAC_DIR is not set}"; T="$D/procs.tsv"; C="$D/calls.txt"; H="${FAKEMAC_HOME:-$D}"
 verb="$(basename "$0")"; case "$verb" in fakemac.sh) verb="${1:-}"; shift ;; esac
 TV="/Applications/TradingView.app"; BR="/Applications/Brave Browser.app"; CH="/Applications/Google Chrome.app"
@@ -64,14 +71,26 @@ add_shim() {        # $1 = the web app's name (SCINTILLA Station | X)
   has com.brave.Browser || add_brave BackgroundOnly 90000 300000
   row "$(newpid)" 1 18000 51000 brave "$1" "$id" Foreground "$SHIMS/$1.app" "$SHIMS/$1.app/Contents/MacOS/app_mode_loader" shim
 }
-where_of() {        # $1 = bundle id -> where its window is now
+raw_where() {       # $1 = bundle id -> the place it was given (reachable | minimised | elsewhere | fullscreen | closed | strip)
   case "$1" in
     "$STATION_ID") [ -f "$D/where.$1" ] && cat "$D/where.$1" || echo "${FAKE_STATION_WHERE:-reachable}" ;;
     "$X_ID") [ -f "$D/where.$1" ] && cat "$D/where.$1" || echo "${FAKE_X_WHERE:-reachable}" ;;
     *) echo reachable ;;
   esac
 }
+space_of() {        # $1 = bundle id -> the desktop an "elsewhere" / "fullscreen" window is on
+  case "$1" in "$STATION_ID") echo "${FAKE_STATION_SPACE:-2}" ;; "$X_ID") echo "${FAKE_X_SPACE:-2}" ;; *) echo 1 ;; esac
+}
+space_now() { [ -f "$D/space.now" ] && cat "$D/space.now" || echo 1; }
+where_of() {        # $1 = bundle id -> where its window is now, seen from the desktop in front
+  local w; w="$(raw_where "$1")"
+  if [ "${FAKE_STUCK:-0}" != 1 ] && [ "$(space_now)" = "$(space_of "$1")" ]; then
+    case "$w" in elsewhere) w=reachable ;; fullscreen) w=fullscreen-here ;; esac
+  fi
+  echo "$w"
+}
 move_to() { [ "${FAKE_STUCK:-0}" = 1 ] || echo "$2" > "$D/where.$1"; }
+go_to_space() { [ "${FAKE_STUCK:-0}" = 1 ] || echo "$1" > "$D/space.now"; }
 brave_kind() { awk -F'\t' '$7 == "com.brave.Browser" { print $8 }' "$T" | head -1; }
 
 case "$verb" in
@@ -164,7 +183,7 @@ case "$verb" in
         has "${2:-}" || { echo no-process; exit 0; }
         case "$(where_of "${2:-}")" in
           minimised) echo "Home / X	min"; exit 0 ;;      # a minimised window is listed, as minimised
-          elsewhere|fullscreen|fullscreen-here|closed) exit 0 ;;   # Accessibility lists nothing
+          elsewhere|fullscreen|fullscreen-here|closed|strip) exit 0 ;;   # Accessibility lists nothing
         esac
         case "$2" in
           "$X_ID") if [ -n "${FAKE_X_WINDOWS_AFTER:-}" ] && [ "$(awk -F'\t' -v b="$X_ID" '$7 == b { print $1 }' "$T")" -ge 20000 ]; then printf '%b' "$FAKE_X_WINDOWS_AFTER"; else printf '%b' "${FAKE_X_WINDOWS:-Home / X\topen\n}"; fi ;;
@@ -179,6 +198,7 @@ case "$verb" in
           "$STATION_ID"|"$X_ID") case "$(where_of "$2")" in
             reachable) printf 'on\tnormal\t1169x685\n' ;; fullscreen-here) printf 'on\tfull\t1280x720\n' ;;
             minimised|elsewhere) printf 'off\tnormal\t1169x685\n' ;; fullscreen) printf 'off\tfull\t1280x720\n' ;;
+            strip) printf 'on\tstrip\t123x155\n' ;;
             closed) echo none ;; esac ;;
           com.brave.Browser) if [ "$(brave_kind)" = Foreground ]; then n="${FAKE_BRAVE_OWN:-1}"; [ "$n" -ge 1 ] || { echo none; exit 0; }; i=0; while [ "$i" -lt "$n" ]; do printf 'off\tnormal\t1062x678\n'; i=$(( i + 1 )); done; else echo none; fi ;;
           *) printf 'on\tnormal\t1000x700\n' ;;
@@ -189,8 +209,26 @@ case "$verb" in
       unminimise) case "$(where_of "${2:-}")" in minimised) move_to "$2" reachable; echo "ok:1" ;; *) echo none ;; esac ;;
       activate)
         r=ok; case "${2:-}" in "$X_ID") r="${FAKE_ACTIVATE_X:-ok}" ;; esac
-        if [ "$r" = ok ]; then case "$(where_of "${2:-}")" in elsewhere) move_to "$2" reachable ;; fullscreen) move_to "$2" fullscreen-here ;; esac; fi
+        if [ "$r" = ok ]; then case "$(where_of "${2:-}")" in
+          strip) move_to "$2" reachable ;;                                   # onto the stage
+          elsewhere|fullscreen) [ "${FAKE_AUTO_SWOOSH:-0}" = 1 ] && go_to_space "$(space_of "$2")" ;;   # macOS switches the desktop only with that setting on
+        esac; fi
         echo "$r" ;;
+      spaces) printf 'spaces %s\nstage %s\nswoosh %s\nleft 123 control\nright 124 control\n' "${FAKE_SPACES_SAID:-${FAKE_SPACES:-3}}" "${FAKE_STAGE:-on}" "$([ "${FAKE_AUTO_SWOOSH:-0}" = 1 ] && echo on || echo off)" ;;
+      walk)             # walk <bundle id> <max>: right up to max, then left up to 2 x max; one look after each press; the desktop stays where it stops
+        bid="${2:-}"; max="${3:-1}"; n="${FAKE_SPACES:-3}"; presses=0
+        here() { case "$(where_of "$bid")" in reachable) echo normal ;; fullscreen-here) echo full ;; strip) echo strip ;; *) echo "" ;; esac; }
+        k="$(here)"; [ -n "$k" ] && { echo "found:here:0:$k:ax=$([ "$k" = full ] && echo 0 || echo 1)"; exit 0; }
+        for pass in right left; do
+          lim="$max"; [ "$pass" = left ] && lim=$(( 2 * max ))
+          i=0; while [ "$i" -lt "$lim" ]; do
+            i=$(( i + 1 )); presses=$(( presses + 1 )); echo "press $pass" >> "$C"
+            now="$(space_now)"; if [ "$pass" = right ]; then [ "$now" -lt "$n" ] && go_to_space $(( now + 1 )); else [ "$now" -gt 1 ] && go_to_space $(( now - 1 )); fi
+            k="$(here)"; [ -n "$k" ] && { echo "found:$pass:$i:$k:ax=$([ "$k" = full ] && echo 0 || echo 1)"; exit 0; }
+          done
+        done
+        echo "not-found:$presses" ;;
+      notify) echo posted ;;
       raise) echo ok ;;
       reload) case "${2:-}" in "$X_ID") echo "${FAKE_RELOAD_X:-ok:menu}" ;; *) echo ok:menu ;; esac ;;
       shortcut) echo "${FAKE_SHORTCUT:-sent}" ;;

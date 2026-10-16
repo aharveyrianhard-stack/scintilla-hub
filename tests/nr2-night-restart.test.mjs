@@ -20,7 +20,7 @@ const X = "com.brave.Browser.app.lodlkdfmihgonocnmddehnfgiljnadcf";
 const HUB_WEBAPP = "com.google.Chrome.app.hjliongcjdnfgpnodjphdimchcjddegd";
 const TV = "com.tradingview.tradingviewapp.desktop";
 const HUB_APP = "com.apple.Safari.WebApp.9257ED5B-FBF6-44EC-911A-8A8DD1CB2C9C";
-const CHANGES = /^(activate|raise|reload|shortcut|unminimise|active-tab) /;
+const CHANGES = /^(activate|raise|reload|shortcut|unminimise|active-tab|walk) /;
 const ACTS = /^(CLOSE|OPEN|AWAKE|FORBIDDEN-SIGNAL|OPENED-BRAVE-ITSELF|REOPEN)/;
 const PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 /* what the reload stage asks the windows on a full night, exactly as on 7 Oct */
@@ -69,7 +69,8 @@ function night(opts = {}) {
     gui: asked.filter((c) => !ACTS.test(c)), changed: asked.filter((c) => CHANGES.test(c)),
     acts: asked.filter((c) => ACTS.test(c) && !c.startsWith("AWAKE")), awake: asked.filter((c) => c.startsWith("AWAKE")),
     closed: asked.filter((c) => c.startsWith("CLOSE")).map((c) => c.split(" ")[1]), opened: asked.filter((c) => c.startsWith("OPEN ")),
-    note: (/^NOTE\t(.*)$/m.exec(run.stdout) || [])[1] || "", last: read("LAST-NIGHT.txt"), log: read("log.txt"),
+    /* 16 Oct 2026: the nightly job prints no NOTE line (a box at night blocked the next start); its note is a log line and a notification */
+    note: (/^NOTE\t(.*)$/m.exec(run.stdout) || /NOTE \(not a box; in LAST-NIGHT\.txt\): (.*)$/m.exec(read("log.txt")) || [])[1] || "", last: read("LAST-NIGHT.txt"), log: read("log.txt"),
     stamped: files.some((f) => f.startsWith(".done-")), tried: stamp ? read(stamp).split("\n").filter(Boolean) : [] };
 }
 const shim = (n, name) => `OPEN -g -a ${n.dir}/Applications/Brave Browser Apps.localized/${name}.app`;
@@ -419,12 +420,15 @@ test("the kit: no key; the window helper, the timetable and switch-on are the 7 
     const text = readFileSync(join(KIT, f), "utf8");
     assert.doesNotMatch(text, /sb_publishable_[A-Za-z0-9]|eyJ[A-Za-z0-9_-]{20,}|service_role|sk-[A-Za-z0-9_-]{20,}/, `${f} carries a key`);
   }
-  for (const f of ["gui.applescript", "windows.js", "consent.js", "brave-tabs.js", "com.scintilla.night-reload.plist", "switch-on.sh"])
+  for (const f of ["gui.applescript", "windows.js", "spaces.js", "consent.js", "brave-tabs.js", "com.scintilla.night-reload.plist", "switch-on.sh"])
     assert.equal(readFileSync(join(KIT, f), "utf8"), readFileSync(join(NR1_KIT, f), "utf8"), `${f} differs from the 7 Oct kit`);
   const launcher = readFileSync(join(KIT, "launcher.applescript"), "utf8");
   const cut = launcher.indexOf("\n-- 8 Oct 2026: with the restart the record of a test");
   assert.ok(cut > 0 && /^on lastLines\(t, n\)$/m.test(launcher.slice(cut)), "the one addition is the handler that keeps the end of the record");
-  assert.equal(launcher.slice(0, cut).replace("my lastLines(outText, 9)", "outText"), readFileSync(join(NR1_KIT, "launcher.applescript"), "utf8"), "everything else in the launcher is the 7 Oct file - 15 Oct rebuilt nothing, so the Accessibility permission stays");
+  /* 16 Oct 2026: the box rules changed (see the NR5 test); everything before them is the 7 Oct file. The iMac's app is not rebuilt. */
+  const seven = readFileSync(join(NR1_KIT, "launcher.applescript"), "utf8");
+  const head = (t) => t.slice(0, t.indexOf("\n\t-- a line that begins NOTE<tab>"));
+  assert.equal(head(launcher).replace(/\n-- \(16 Oct 2026: the iMac's copy[^\n]*\n-- at night[^\n]*rebuild\.\)/, ""), head(seven), "up to the box rules the launcher is the 7 Oct file");
   const plist = readFileSync(join(KIT, "com.scintilla.night-reload.plist"), "utf8");
   const slots = [...plist.matchAll(/<key>Hour<\/key><integer>(\d+)<\/integer><key>Minute<\/key><integer>(\d+)<\/integer>/g)].map((m) => Number(m[1]) * 60 + Number(m[2]));
   assert.equal(slots.length, 9);
@@ -475,7 +479,7 @@ test("the supervised test says what Alan should see - on success and on failure 
    PART 4 - 15 Oct 2026: the windows wherever they are, and Brave's own windows (Alan: "the restart runs are running clean, but they
    never actually run ... The station has no open window ... I mean, it was open ... if we can get the night reload to do it on YouTube
    too, that'd be pretty good"). */
-const KIT_FILES = ["windows.js", "consent.js", "brave-tabs.js", "brave-session.pl"];
+const KIT_FILES = ["windows.js", "spaces.js", "consent.js", "brave-tabs.js", "brave-session.pl"];
 /* a session file the way Brave writes one (the format Chromium calls SNSS, version 3): a list of small commands. Fake pages only. */
 const i32 = (n) => { const b = Buffer.alloc(4); b.writeInt32LE(n); return b; };
 const pstr = (t) => { const d = Buffer.from(t, "utf8"); return Buffer.concat([i32(d.length), d, Buffer.alloc((4 - (d.length % 4)) % 4)]); };
@@ -516,15 +520,16 @@ test("15 Oct: the session reader - windows, tab order, the active tab, the page 
 });
 
 test("15 Oct: the Station in native full screen, X on another desktop - found, reached, everything restarted and reloaded; the log says where each was", () => {
+  /* 16 Oct 2026: both on the second of three desktops; the job walks there (one step right) instead of activating and hoping */
   const n = night({ env: { FAKE_STATION_WHERE: "fullscreen", FAKE_X_WHERE: "elsewhere" } });
   assert.equal(n.run.status, 0, n.run.stderr);
-  assert.match(n.log, /the Station's window is in native full screen, on a desktop of its own - switching to that desktop \(ok\)/);
+  assert.match(n.log, /the Station's window is in native full screen, on a desktop of its own - walked the desktops with Control\+Right \/ Control\+Left: found after 1 step\(s\) right \(the window server shows it full size, Accessibility lists 0 window\(s\) there\); the desktop stays here/);
   assert.match(n.log, /the Station's window is now in native full screen on this desktop/);
-  assert.match(n.log, /X's window is on another desktop - switching to that desktop \(ok\)/);
+  assert.match(n.log, /X has 1 window\(s\), 0 minimised - open on this desktop/, "X was on the same desktop: found at the first look, no second walk");
   assert.match(n.log, /the Station has 1 window\(s\), 0 minimised - in native full screen on this desktop/);
   assert.match(n.log, /plan: full/);
   assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:main"]);
-  assert.deepEqual(n.changed.slice(0, 2), [`activate ${STATION}`, `activate ${X}`], "brought within reach first, before anything else");
+  assert.deepEqual(n.changed.slice(0, 1), [`walk ${STATION} 5`], "brought within reach first, before anything else");
   assert.match(n.last, /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working \(first try\)/);
   assert.doesNotMatch(n.last + n.note, /no open window|minimised or closed/);
 });
@@ -551,7 +556,8 @@ test("15 Oct: a window that truly cannot be reached: the plan is none, the note 
 test("15 Oct: the dry run says where the windows are and what the job would do, and moves nothing", () => {
   const n = night({ mode: "dry-run", env: { FAKE_STATION_WHERE: "fullscreen", FAKE_X_WHERE: "minimised" } });
   assert.deepEqual(n.changed.concat(n.acts, n.awake), []);
-  assert.match(n.run.stdout, /the Station's window is in native full screen, on a desktop of its own - tonight the job would switch to its full-screen desktop first, then count again/);
+  assert.match(n.run.stdout, /the Station's window is in native full screen, on a desktop of its own - tonight the job would walk through the desktops to its full-screen one first, then count again/);
+  assert.match(n.run.stdout, /desktops: 3 on the display \(Stage Manager on; 'switch to a Space with open windows' when activating an app: off\); the keys: Control\+Right \/ Control\+Left; a walk tries up to 5 steps right, then 10 left/);
   assert.match(n.run.stdout, /X's window is minimised \(in the Dock\) - tonight the job would bring it back from the Dock first, then count again/);
   assert.match(n.run.stdout, /plan: full/);
 });
@@ -699,4 +705,157 @@ test("NR4: Brave lists more windows with tabs than the window server shows of it
   assert.match(n.log, /Brave listed 3 window\(s\) with tabs, the window server shows 1 of its own/);
   assert.match(n.log, /Brave's own windows: 1 window\(s\), 2 tab\(s\), read from Brave's own session file/);
   assert.deepEqual(n.asked.filter((c) => c.startsWith("REOPEN")), ["REOPEN https://video.example/watch?v=second https://news.example/"], "the web-app pages are not opened as tabs");
+});
+
+/* ---------------------------------------------------------------------------------------------------------------------------------
+   PART 6 - NR5 (16 Oct 2026, read on the iMac at 04:00 and 04:26): "switching to that desktop (ok)" twice, then "0 window(s)", two nights
+   running. On the iMac activating an app makes it frontmost and changes NO desktop ("When switching to an application, switch to a Space
+   with open windows for the application" is off; Stage Manager is on). So the job walks the desktops itself with Mission Control's own
+   keys. The stand-in Mac has a row of FAKE_SPACES desktops, each window its own (FAKE_STATION_SPACE, FAKE_X_SPACE), and "activate"
+   switches desktops only with FAKE_AUTO_SWOOSH=1. And the end-of-run box: the 04:26 launcher was still up at 04:50 waiting for a click,
+   and the 04:30 night try was refused by macOS ("was already running"). */
+const presses = (n) => n.gui.filter((c) => /^press /.test(c));
+
+test("NR5: X on desktop 2, the Station full screen on desktop 4 of 5, activating switches nothing: the job walks there with Control+Right/Left, one look per step, and the full night runs", () => {
+  const n = night({ env: { FAKE_STATION_WHERE: "fullscreen", FAKE_X_WHERE: "elsewhere", FAKE_SPACES: "5", FAKE_STATION_SPACE: "4", FAKE_X_SPACE: "2" } });
+  assert.equal(n.run.status, 0, n.run.stderr);
+  assert.match(n.log, /desktops: 5 on the display \(Stage Manager on; 'switch to a Space with open windows' when activating an app: off\); the keys: Control\+Right \/ Control\+Left; a walk tries up to 6 steps right, then 12 left/);
+  assert.match(n.log, /the Station's window is in native full screen, on a desktop of its own - walked the desktops with Control\+Right \/ Control\+Left: found after 3 step\(s\) right \(the window server shows it full size, Accessibility lists 0 window\(s\) there\); the desktop stays here/);
+  assert.match(n.log, /the Station's window is now in native full screen on this desktop/);
+  assert.match(n.log, /X's window is on another desktop - walked the desktops with Control\+Right \/ Control\+Left: found after 3 step\(s\) left \(the window server shows it normal size, Accessibility lists 1 window\(s\) there\)/, "from desktop 4: six steps right into the end of the row, then left to 2");
+  assert.match(n.log, /X's window is now open on this desktop/);
+  assert.match(n.log, /plan: full/);
+  assert.deepEqual(n.changed.slice(0, 2), [`walk ${STATION} 6`, `walk ${X} 6`], "the walks come first, before anything is closed");
+  assert.doesNotMatch(n.log, /switching to that desktop/, "the old line, which said (ok) and switched nothing, is gone");
+  assert.deepEqual(presses(n), ["press right", "press right", "press right", ...Array(6).fill("press right"), "press left", "press left", "press left", "press right", "press right"],
+    "to the Station (3), to X (into the end of the row, then back), and to the Station again before Brave is closed - its reopened windows come up on that desktop");
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:main"]);
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working \(first try\)/);
+});
+
+test("NR5: the walk is bounded - the desktops counted plus one, never fewer than WALK_MIN_STEPS - and a window it never sees is walked for once: the plan is none and the note names the place", () => {
+  const lost = night({ env: { FAKE_STATION_WHERE: "elsewhere", FAKE_STUCK: "1", FAKE_SPACES: "11" } });
+  assert.match(lost.log, /a walk tries up to 12 steps right, then 24 left/);
+  assert.match(lost.log, /the Station's window is on another desktop - walked the desktops with Control\+Right \/ Control\+Left, up to 12 steps right and 24 left, and never saw it on screen \(not-found:36\)/);
+  assert.equal(presses(lost).length, 36, "one walk, not three");
+  assert.equal(lost.changed.filter((c) => /^walk /.test(c)).length, 1);
+  assert.match(lost.note, /the Station could not be reached: its window is on another desktop and could not be brought within reach/);
+  assert.deepEqual(lost.closed, ["tv:main", "hub:main"], "Brave is left alone, as on 15 Oct");
+  /* the Mac's settings say 1 desktop (a stale count) while there are 6, and the window is on the fifth: the floor of 5 steps still reaches it */
+  const stale = night({ env: { FAKE_STATION_WHERE: "elsewhere", FAKE_SPACES: "6", FAKE_SPACES_SAID: "1", FAKE_STATION_SPACE: "5" } });
+  assert.match(stale.log, /desktops: 1 on the display .* a walk tries up to 5 steps right, then 10 left/);
+  assert.match(stale.log, /found after 4 step\(s\) right/);
+  assert.match(stale.last, /the Station reloaded/);
+  const low = night({ env: { FAKE_STATION_WHERE: "elsewhere", FAKE_SPACES: "6", FAKE_SPACES_SAID: "1", FAKE_STATION_SPACE: "5", WALK_MIN_STEPS: "2" } });
+  assert.match(low.log, /never saw it on screen \(not-found:6\)/, "with the floor lowered the walk is too short, and says so");
+});
+
+test("NR5: Stage Manager - a window on this desktop at thumbnail size is in the strip, not reachable by its size: the app is activated (same desktop, no walk), counted again, and the night goes on", () => {
+  const n = night({ env: { FAKE_STATION_WHERE: "strip" } });
+  assert.match(n.log, /the Station's window is on this desktop but set aside in the Stage Manager strip - bringing it onto the stage \(ok\)/);
+  assert.match(n.log, /the Station's window is now open on this desktop/);
+  assert.equal(n.changed.filter((c) => /^walk /.test(c)).length, 0, "no walk: it is on this desktop");
+  assert.deepEqual(n.changed.slice(0, 1), [`activate ${STATION}`]);
+  assert.match(n.last, /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working/);
+  const stuck = night({ env: { FAKE_STATION_WHERE: "strip", FAKE_STUCK: "1" } });
+  assert.match(stuck.note, /the Station could not be reached: its window is on this desktop but set aside in the Stage Manager strip and could not be brought within reach/);
+  assert.equal(stuck.changed.filter((c) => /^(reload|shortcut)/.test(c)).length, 0, "a thumbnail is never reloaded or typed into");
+  const dry = night({ mode: "dry-run", env: { FAKE_STATION_WHERE: "strip" } });
+  assert.match(dry.run.stdout, /the Station's window is on this desktop but set aside in the Stage Manager strip - tonight the job would bring it onto the stage first, then count again/);
+  assert.deepEqual(dry.changed, []);
+  /* the window server's word for such a window, and the rule that it never counts as a window a key could reach */
+  assert.match(readFileSync(join(KIT, "windows.js"), "utf8"), /w <= 240 && h <= 240 \? "strip" : "normal"/);
+  assert.match(readFileSync(join(KIT, "gui.applescript"), "utf8"), /if t starts with "on" and t does not contain "strip" then set n to n \+ 1/, "a strip thumbnail is never a reason to type a key");
+});
+
+test("NR5: the reload stage walks too - X and the Station on different desktops and Brave left alone: the Station is reloaded on its desktop, X on its own, the shortcut sent there, and the job ends on the Station's desktop", () => {
+  const n = night({ env: { FAKE_STATION_WHERE: "elsewhere", FAKE_X_WHERE: "elsewhere", FAKE_SPACES: "4", FAKE_STATION_SPACE: "3", FAKE_X_SPACE: "2", RESTART_BRAVE: "no" } });
+  assert.match(n.last, /restarted: TradingView, the Hub app; the Station reloaded; X reloaded, the extension run, X confirmed working/);
+  const c = n.changed;
+  const iStation = c.indexOf(`reload ${STATION}`), iX = c.indexOf(`reload ${X}`), iKey = c.indexOf(`shortcut ${X}`);
+  assert.ok(iStation > 0 && iX > iStation && iKey > iX, c.join("\n"));
+  assert.ok(c.slice(iStation, iX).includes(`walk ${X} 5`), "walked to X between the two reloads");
+  assert.ok(c.slice(iKey).includes(`walk ${STATION} 5`), "and back to the Station after the shortcut, so its X box can report");
+  assert.equal(readFileSync(join(n.dir, "space.now"), "utf8").trim(), "3", "the desktop is left where the Station is");
+  assert.equal(c[c.length - 1], "activate com.apple.finder", "the app in front is put back - that changes no desktop");
+  assert.match(readFileSync(join(KIT, "night-reload.sh"), "utf8"), /The desktop is LEFT there/);
+});
+
+test("NR5: with the macOS setting on the walk still finds the window and says activating would have done; WALK_DESKTOPS=no is the 15 Oct behaviour, which on the iMac reaches nothing", () => {
+  const on = night({ env: { FAKE_STATION_WHERE: "elsewhere", FAKE_AUTO_SWOOSH: "1" } });
+  assert.match(on.log, /'switch to a Space with open windows' when activating an app: on/);
+  assert.match(on.log, /\(with that setting on, activating the app would switch the desktop by itself; the job walks all the same\)/);
+  assert.match(on.log, /found after 1 step\(s\) right/);
+  assert.match(on.last, /the Station reloaded/);
+  const no = night({ env: { FAKE_STATION_WHERE: "elsewhere", WALK_DESKTOPS: "no" } });
+  assert.match(no.log, /the Station's window is on another desktop - activating the app and leaving the desktop switch to macOS \(WALK_DESKTOPS=no\) \(ok\)/);
+  assert.equal(no.changed.filter((c) => /^walk /.test(c)).length, 0);
+  assert.match(no.note, /the Station could not be reached: its window is on another desktop and could not be brought within reach/, "activating switched nothing: the two nights of 15 and 16 Oct");
+  const noOn = night({ env: { FAKE_STATION_WHERE: "elsewhere", WALK_DESKTOPS: "no", FAKE_AUTO_SWOOSH: "1" } });
+  assert.match(noOn.last, /the Station reloaded/, "with Alan's setting on, activating is enough even without the walk");
+  assert.match(readFileSync(join(KIT, "config.example.env"), "utf8"), /^WALK_DESKTOPS=yes$/m);
+});
+
+test("NR5: the box never blocks - the nightly job prints no NOTE line: the note goes to LAST-NIGHT.txt and the log, and a notification is posted; a supervised test still gets its box line", () => {
+  const n = night({ env: { FAKE_STATION_WHERE: "elsewhere", FAKE_STUCK: "1" } });
+  assert.doesNotMatch(n.run.stdout, /^NOTE\t/m, "nothing on stdout for the launcher to show");
+  assert.match(n.log, /NOTE \(not a box; in LAST-NIGHT\.txt\): Night reload, .*: the Station and X were not reloaded: the Station could not be reached/);
+  assert.match(n.log, /a notification is posted instead of a box \(posted\)/);
+  assert.ok(n.gui.some((c) => /^notify There is a note for you in Scintilla\/night-reload\/LAST-NIGHT\.txt: Night reload, /.test(c)), n.gui.join("\n"));
+  assert.match(n.last, /^Night reload, .*the Station could not be reached/);
+  const t = night({ mode: "test", env: { FAKE_STATION_WHERE: "elsewhere", FAKE_STUCK: "1", TEST_IDLE_SECONDS: "0" } });
+  assert.match(t.run.stdout, /^NOTE\tNight reload, .*could not be reached/m, "a person started the test and gets the line for a box");
+  assert.equal(t.gui.filter((c) => /^notify /.test(c)).length, 0);
+  const dry = night({ mode: "dry-run", env: { FAKE_STATION_WHERE: "elsewhere", FAKE_STUCK: "1" } });
+  assert.equal(dry.gui.filter((c) => /^notify /.test(c)).length, 0, "a dry run posts nothing");
+});
+
+test("NR5: a second start while a job is running is refused with one clear log line and does nothing; a lock left by a job that is gone stops nobody", () => {
+  const first = night({});
+  assert.equal(existsSync(join(first.dir, ".running")), false, "the lock is given back at the end");
+  writeFileSync(join(first.dir, ".running"), `${process.pid} run 2026-10-16 04:00:07\n`);
+  const second = night({ dir: first.dir, hhmm: "0410" });
+  assert.equal(second.run.status, 0);
+  assert.match(second.log, /REFUSED: another night job is still running on this Mac \(started 2026-10-16 04:00:07 as run, process \d+\) - this run start does nothing, so nothing is closed, reloaded or pressed twice/);
+  assert.deepEqual(second.asked, [], "it asked the Mac nothing");
+  assert.doesNotMatch(second.run.stdout, /NOTE/);
+  assert.ok(existsSync(join(first.dir, ".running")), "the other job's lock is left alone");
+  const t = night({ dir: first.dir, mode: "test", env: { TEST_IDLE_SECONDS: "0" } });
+  assert.match(t.run.stdout, /Another night job is still running \(started 2026-10-16 04:00:07 as run\)\. This start does nothing\./);
+  assert.deepEqual(t.asked, []);
+  writeFileSync(join(first.dir, ".running"), "2000000 run 2026-10-15 04:00:07\n");    /* no process can have that number on macOS */
+  const third = night({ dir: first.dir, hhmm: "0410" });
+  assert.equal((third.log.match(/REFUSED/g) || []).length, 2, "the log is one file for the night: the two refusals above, and no third");
+  assert.equal(existsSync(join(first.dir, ".running")), false, "the stale lock was taken over and given back");
+});
+
+test("NR5: the kit - spaces.js reads the keys, the desktops, Stage Manager and the setting (the iMac's values and others); the helpers are the same bytes in both kits; install.sh installs spaces.js; the launcher keeps no box for more than a minute; the supervised test runs box-free", () => {
+  for (const f of ["spaces.js", "gui.applescript", "windows.js"]) assert.equal(readFileSync(join(KIT, f), "utf8"), readFileSync(join(NR1_KIT, f), "utf8"), `${f} differs between the kits`);
+  const dir = mkdtempSync(join(tmpdir(), "nr5-"));
+  /* the iMac on 16 Oct 2026: Mission Control's default keys (the 0x800000 bit is the left-control device flag, not a key), 2 desktops here with
+     a full-screen one added, Stage Manager on, the switch-on-activate setting off */
+  writeFileSync(join(dir, "imac.json"), JSON.stringify({ hotkeys: { 79: { enabled: true, value: { type: "standard", parameters: [65535, 123, 8650752] } }, 81: { enabled: true, value: { type: "standard", parameters: [65535, 124, 8650752] } } },
+    spaces: { "Management Data": { Monitors: [{ Spaces: [{ type: 0 }, { type: 0 }, { type: 4 }] }, { "Collapsed Space": {} }] } }, stage: true, swoosh: false }));
+  const r = spawnSync("/usr/bin/osascript", ["-l", "JavaScript", join(KIT, "spaces.js"), "--from", join(dir, "imac.json")], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), "spaces 3\nstage on\nswoosh off\nleft 123 control\nright 124 control");
+  writeFileSync(join(dir, "other.json"), JSON.stringify({ hotkeys: { 79: { enabled: false, value: { parameters: [65535, 123, 393216] } }, 81: { enabled: true, value: { parameters: [65535, 124, 1179648] } } }, spaces: {}, stage: 0, swoosh: 1 }));
+  const o = spawnSync("/usr/bin/osascript", ["-l", "JavaScript", join(KIT, "spaces.js"), "--from", join(dir, "other.json")], { encoding: "utf8" });
+  assert.equal(o.stdout.trim(), "spaces 1\nstage off\nswoosh on\nleft 123 control+shift disabled\nright 124 shift+command", "Alan's own keys, and a switched-off one said so");
+  const gui = readFileSync(join(KIT, "gui.applescript"), "utf8").split("\n");
+  const walk = gui.slice(gui.findIndex((l) => /^on walkTo\(/.test(l)), gui.findIndex((l) => /^end walkTo/.test(l)));
+  assert.ok(walk.some((l) => /set steps to 2 \* maxSteps/.test(l)) && walk.some((l) => /delay 1$/.test(l)), "right up to max, then left up to twice that; a second's rest after every key for the desktop to slide");
+  assert.ok(walk.some((l) => /if k is not "" then return "found:" & dirName/.test(l)), "one look after every step");
+  assert.match(readFileSync(join(KIT, "install.sh"), "utf8"), /spaces\.js/);
+  const launcher = readFileSync(join(KIT, "launcher.applescript"), "utf8");
+  for (const m of launcher.matchAll(/display dialog[^\n]*/g)) assert.match(m[0], /giving up after 60$/, m[0]);
+  assert.match(launcher, /if noteText is not "" and mode is "run" then\n\s*display notification noteText/);
+  assert.doesNotMatch(launcher, /72000/);
+  const sup = readFileSync(join(KIT, "supervised-test.sh"), "utf8");
+  assert.equal((sup.match(/\/usr\/bin\/open -W/g) || []).length, 1, "one way to start the small app");
+  assert.match(sup, /open -W -g -a "\$APP" --env SCINTILLA_NIGHT_RELOAD_MODE=run --env SCINTILLA_NIGHT_RELOAD_KIT="\$w"/, "always in its run dress: no box");
+  assert.match(sup, /pgrep -f "Scintilla Night Reload.app\/Contents\/MacOS\/applet"/, "and a start while one is up is refused");
+  const home = mkdtempSync(join(tmpdir(), "nr2-home-"));
+  const ex = spawnSync("/bin/bash", [join(KIT, "supervised-test.sh"), "--explain"], { env: { PATH, HOME: home }, encoding: "utf8" });
+  for (const want of [/Control\+Right/, /ANOTHER desktop and in native full screen/, /No box/, /Stage Manager strip/, /REFUSED: the small app/]) assert.match(ex.stdout, want);
 });

@@ -40,6 +40,9 @@ case "$1" in
   raise) echo ok ;;
   reload) case "$2" in ${X}) echo "\${FAKE_RELOAD_X:-ok:menu}" ;; *) echo ok:menu ;; esac ;;
   shortcut) echo "\${FAKE_SHORTCUT:-sent}" ;;
+  spaces) printf 'spaces 3\\nstage on\\nswoosh off\\nleft 123 control\\nright 124 control\\n' ;;
+  walk) echo not-found:15 ;;
+  notify) echo posted ;;
 esac
 `);
   chmodSync(gui, 0o755);
@@ -65,7 +68,7 @@ echo "$line"
   const run = spawnSync("/bin/bash", [JOB, opts.mode || "run"], { env, encoding: "utf8" });
   const asked = readFileSync(calls, "utf8").split("\n").filter(Boolean);
   const read = (name) => (existsSync(join(dir, name)) ? readFileSync(join(dir, name), "utf8") : "");
-  return { dir, run, asked, changed: asked.filter((c) => CHANGES.test(c)), note: (/^NOTE\t(.*)$/m.exec(run.stdout) || [])[1] || "",
+  return { dir, run, asked, changed: asked.filter((c) => CHANGES.test(c)), note: (/^NOTE\t(.*)$/m.exec(run.stdout) || /NOTE \(not a box; in LAST-NIGHT\.txt\): (.*)$/m.exec(existsSync(join(dir, "log.txt")) ? readFileSync(join(dir, "log.txt"), "utf8") : "") || [])[1] || "",
     last: read("LAST-NIGHT.txt"), log: read("log.txt"), stamped: readdirSync(dir).some((f) => f.startsWith(".done-")) };
 }
 
@@ -141,7 +144,7 @@ test("two X windows: it cannot tell which one feeds the Station, so it reloads n
 test("a minimised X window: 15 Oct 2026 - it is brought back from the Dock first; only one that will not come back stops the night, and the note says so", () => {
   /* this stand-in cannot un-minimise: the window stays minimised after the attempt */
   const stuck = night({ env: { FAKE_X_WINDOWS: "Home / X\\tmin\\n", FAKE_X_EVERYWHERE: "off\\tnormal\\t1062x678\\n" } });
-  assert.deepEqual(stuck.changed, [`unminimise ${X}`, `unminimise ${X}`, "activate com.apple.finder"], "two attempts, then the front app put back; no reload, no key");
+  assert.deepEqual(stuck.changed, [`unminimise ${X}`, `unminimise ${X}`, `unminimise ${X}`, "activate com.apple.finder"], "three attempts (16 Oct: one more, for a walk and then the stage), then the front app put back; no reload, no key");
   assert.match(stuck.note, /the X window is minimised and would not come back from the Dock, so the shortcut cannot reach it/);
   assert.doesNotMatch(stuck.note, /minimised or closed/, "the old guess is gone");
 });
@@ -250,6 +253,13 @@ test("the kit carries no key, and the window helper types only after checking wh
   const typed = lines.map((l, i) => (/^\s*tell application "System Events" to keystroke/.test(l) ? i : -1)).filter((i) => i >= 0);
   assert.equal(typed.length, 2, "Command-R (fallback) and Option+Shift+S, nothing else - 15 Oct added verbs, not keys");
   for (const i of typed) assert.ok(lines.slice(i - 3, i).some((l) => /notReady\(p, bid\)/.test(l)), `line ${i + 1} types without the check`);
+  /* 16 Oct 2026: one more key, Mission Control's own (Control+Right / Control+Left, Alan's keys), only inside the walk, which first looks
+     whether the window is already on this desktop and looks again after every single step */
+  const coded = lines.map((l, i) => (/^\s*tell application "System Events" to key code/.test(l) ? i : -1)).filter((i) => i >= 0);
+  assert.equal(coded.length, 1, "the walk's key and nothing else");
+  const walkStart = lines.findIndex((l) => /^on walkTo\(/.test(l)), walkEnd = lines.findIndex((l) => /^end walkTo/.test(l));
+  assert.ok(walkStart > 0 && coded[0] > walkStart && coded[0] < walkEnd, "and only inside the walk");
+  assert.ok(lines.slice(walkStart, coded[0]).some((l) => /if k is not "" then return "found:here/.test(l)), "which first looks whether the window is already on this desktop");
   const plist = readFileSync(join(KIT, "com.scintilla.night-reload.plist"), "utf8");
   assert.match(plist, /__HOME__/, "the timetable in the repo is a template and cannot run as it is");
   assert.doesNotMatch(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
