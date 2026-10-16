@@ -27151,6 +27151,14 @@ window.SC_CLEAN_READS = scComputeCleanReads();
 try { const seen = listsRecall(); if (seen) { LISTS.favorites = seen.favorites; LISTS.radar = seen.radar; } S.coh = cohBootFor(LISTS, S.fav, !!seen); } catch (_) {}
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
+/* N2 (15 Oct 2026) — A COMPANY BY ADDRESS. /#co=NVDA opens that company the way a board click does, so a page beside the
+   Hub (the NEWS trial's ticker chips, a notification's tap) can send the reader to a name. Any other hash is untouched. */
+(function () {
+  function coFromHash() { var m = /^#co=([A-Za-z0-9.\-]{1,12})$/.exec(String(location.hash || "")); return m ? m[1].toUpperCase() : null; }
+  function openFromHash() { var t = coFromHash(); if (t && typeof openCo === "function") { try { openCo(t); } catch (_) {} } }
+  if (coFromHash()) setTimeout(openFromHash, 0);
+  window.addEventListener("hashchange", openFromHash);
+})();
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup
 favLoad();                                                          // R29 — cross-device favorites from hub_favorites
 listsLoad(); setInterval(listsLoad, 300000);                       // H-FRONT — FAVORITES + RADAR (station_lists): at load, then every 5 min
@@ -27938,6 +27946,10 @@ try {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.getRegistrations().then(function (rs) {
       var had = rs.length > 0;
+      /* N2 (15 Oct 2026) — the push worker (push-sw.js, scope /push/, controls no page, caches nothing) is the one
+         registration this block leaves alone: unregistering it would silently end the device's notifications. */
+      rs = rs.filter(function (r) { try { return !/\/push\/$/.test(r.scope); } catch (_) { return true; } });
+      had = rs.length > 0;
       return Promise.all(rs.map(function (r) { return r.unregister(); })).then(function () {
         /* nuke any leftover CacheStorage so a stale worker's cached API responses
            (which make data tabs hang forever on the installed app) can't linger */
