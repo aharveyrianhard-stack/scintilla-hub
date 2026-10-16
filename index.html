@@ -30437,8 +30437,16 @@ body.gwx-motion .gwx-pct{opacity:1}
       var TW=((window.performance&&performance.now)?performance.now():0)-T0;
       function orderPass(){
         var TO0=(window.performance&&performance.now)?performance.now():0;
-        var keepSort=S.sort; S.sort={key:"g",dir:-1};
-        try{ S.boardOrder=computeBoardOrder(); } finally { S.sort=keepSort; }
+        /* 24 Sep - Alan: "The Geiger replay is with the Geiger bar only." While the board is REWOUND, rows rank by the
+           replayed Geiger alone, whatever column the board is sorted on, and the board's own sort is left untouched.
+           RV1 (15 Oct; Alan: "it does move something, but it kind of like doesn't really re-rank by volume, high or low") -
+           ONLY while rewound. goLive() runs this same pass after it clears ASOF, and it used to force the Geiger there too:
+           MEASURED on scintillahub.ai, sorted by RVOL, one drag of the rewind and ↻ LIVE left the rows in Geiger order
+           under "RVol ▼" until the next 45 s pull (36 s on that run). Live, the board ranks by its own sort. */
+        if(ASOF){
+          var keepSort=S.sort; S.sort={key:"g",dir:-1};
+          try{ S.boardOrder=computeBoardOrder(); } finally { S.sort=keepSort; }
+        } else S.boardOrder=computeBoardOrder();
         var frag=document.createDocumentFragment();
         (S.boardOrder||[]).forEach(function(tk){ if(byT[tk]) frag.appendChild(byT[tk]); });
         bs.appendChild(frag);

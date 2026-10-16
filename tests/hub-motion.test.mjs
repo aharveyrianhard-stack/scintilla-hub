@@ -97,7 +97,8 @@ function harness(board, S, { speedMs = 700 } = {}) {
     createDocumentFragment: () => ({ _kids: [], appendChild(n) { this._kids.push(n); } }),
     querySelectorAll: () => [], querySelector: () => null,
     body: { classList: { toggle: (c, on) => { on ? classes.add(c) : classes.delete(c); } } } };
-  const src = "var PREV={}, SPEEDS=[['\\u00bd\\u00d7',1400],['1\\u00d7'," + speedMs + "]], SPEED_I=1;\n" + SRC +
+  /* RV1 (15 Oct) — the replay's Geiger-only rank holds while the board is rewound (ASOF set), and these are replays */
+  const src = "var PREV={}, ASOF=\"2026-09-24\", SPEEDS=[['\\u00bd\\u00d7',1400],['1\\u00d7'," + speedMs + "]], SPEED_I=1;\n" + SRC +
     "\nreturn { repaint, motionOn, flushPend, PERF, motion: () => MOTION, dur: motionDur };";
   const api = new Function(
     "E", "S", "computeBoardOrder", "scScint", "paintTM", "badges", "cohortGeigerHTML",
