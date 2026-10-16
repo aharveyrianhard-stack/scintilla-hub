@@ -64,7 +64,7 @@ button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; 
 .wrap{ display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0 28px; padding:0 18px 60px; max-width:2400px; margin:0 auto; }
 .feed{ min-width:0; }
 .rail{ min-width:0; position:sticky; top:96px; align-self:start; max-height:calc(100vh - 110px); overflow:auto; padding-top:14px; }
-@media (max-width:1100px){ .wrap{ grid-template-columns:minmax(0,1fr); } .rail{ position:static; max-height:none; order:-1; } }
+@media (max-width:1100px){ .wrap{ grid-template-columns:minmax(0,1fr); } .rail{ position:static; max-height:none; } }   /* narrow: the feed first, the rail under it */
 
 /* ── groups ───────────────────────────────────────────────────────────────── */
 .grp{ margin-top:18px; }
@@ -138,8 +138,10 @@ button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; 
   :root{ --ttl:18px; --meta:12px; --chip:11.5px; }
   .hd__row{ padding:10px 14px 6px; gap:10px; }
   .hd__brand{ font-size:12px; letter-spacing:.24em; }
-  .hd__time, .hd__live span{ display:none; }
-  .hd__search input{ width:84px; }
+  .hd__time, .hd__live{ display:none; }
+  .hd__brand{ font-size:11px; letter-spacing:.16em; }
+  .hd__search input{ width:66px; height:28px; font-size:12px; }
+  .scnav button{ height:26px; padding:0 8px; font-size:10px; }
   .wrap{ padding:0 14px 40px; gap:0; }
   .rail{ padding-top:10px; }
   .art{ padding:11px 0 10px; gap:0 10px; }
@@ -180,7 +182,7 @@ button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; 
 "use strict";
 /* ── the pull layer: the Hub's own address and key (public in index.html) ────────────────────────── */
 const SB = "https://wadinxqplrggagkvrdag.supabase.co";
-const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZGlueHFwbHJnZ2Fna3ZyZGFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NDk0MTYsImV4cCI6MjA5NjEyNTQxNn0.1UKKUb_fY-xOy33vNUszDzxGECqQxdcwaxb9kN7KY";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhZGlueHFwbHJnZ2Fna3ZyZGFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NDk0MTYsImV4cCI6MjA5NjEyNTQxNn0.1UKKUb_fY-xOy33vNUszDzxGECqQxdcwaxb9kN7KY-g";
 const FN = SB.replace(".supabase.co", ".functions.supabase.co") + "/notify-push";
 const el = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -237,14 +239,27 @@ const SEL = "select=ticker,title,snippet,site,feed,url,published_ts&order=publis
 const CACHE = new Map();                                   // scope key → { items, ts }
 const TTL = 60000;
 function chunk(a, n) { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
+/* TODAY and YESTERDAY are two pulls, not one: a busy scope (FAVORITES carries 200+ TGT headlines on a results day) fills a
+   single newest-first pull with today alone, and yesterday never appears. Each pull is windowed on published_ts (the
+   Hub's NEWS-WINDOW lesson: a windowed read answers in a quarter of the time of an unbounded one). */
+function midnightET(daysBack) {
+  const [y, m, d] = dayKey(new Date(Date.now() - daysBack * 86400000)).split("-").map(Number);
+  let t = Date.UTC(y, m - 1, d, 5, 0, 0);                           // 05:00Z = 00:00 ET in winter; one hour earlier in summer
+  if (ET_HM.format(new Date(t)) === "01:00") t -= 3600000;
+  return Math.floor(t / 1000);
+}
 async function pullScope(key) {
-  const since = Math.floor(Date.now() / 1000) - 48 * 3600;
-  if (key.indexOf("TQ|") === 0) return pg("news?ticker=like." + encodeURIComponent(key.slice(3)) + "*&published_ts=gte." + since + "&" + SEL + "&limit=200");
-  if (key === "ALL") return pg("news?published_ts=gte." + since + "&" + SEL + "&limit=300");
-  const m = scopeMembers(key) || [];
-  if (!m.length) return [];
-  const parts = await Promise.all(chunk(m, 35).map((ck) => pg("news?ticker=in.(" + ck.join(",") + ")&published_ts=gte." + since + "&" + SEL + "&limit=200").catch(() => [])));
-  return parts.flat().sort((a, b) => (b.published_ts || 0) - (a.published_ts || 0)).slice(0, 400);
+  const t0 = midnightET(0), y0 = midnightET(1);
+  const windows = [["published_ts=gte." + t0, 300], ["published_ts=gte." + y0 + "&published_ts=lt." + t0, 120]];
+  const one = (filter) => Promise.all(windows.map(([w, lim]) => pg("news?" + filter + w + "&" + SEL + "&limit=" + lim).catch(() => [])));   // [today, yesterday]
+  let parts;
+  if (key.indexOf("TQ|") === 0) parts = [await one("ticker=like." + encodeURIComponent(key.slice(3)) + "*&")];
+  else if (key === "ALL") parts = [await one("")];
+  else { const m = scopeMembers(key) || []; if (!m.length) return []; parts = await Promise.all(chunk(m, 35).map((ck) => one("ticker=in.(" + ck.join(",") + ")&"))); }
+  const newest = (a, b) => (b.published_ts || 0) - (a.published_ts || 0);
+  /* each day keeps its own newest rows: a busy today (chunks of 300) must not push yesterday off the end */
+  const today = parts.map((p) => p[0]).flat().sort(newest).slice(0, 400), yday = parts.map((p) => p[1]).flat().sort(newest).slice(0, 150);
+  return today.concat(yday);
 }
 const scopeKey = () => (S.tq ? "TQ|" + S.tq : S.scope);
 async function fill(force) {
@@ -313,7 +328,7 @@ const GROUPS = [["hour", "Last hour"], ["today", "Today"], ["yday", "Yesterday"]
 /* ── paint ─────────────────────────────────────────────────────────────────── */
 function artHTML(n, g) {
   const title = stripSrcTail(n.title, n.site || n.feed);
-  const snip0 = stripMarkup(n.snippet), snip = snip0 && norm(snip0) === norm(title) ? "" : snip0;
+  const snip0 = stripMarkup(n.snippet), snip = snip0 && norm(snip0).indexOf(norm(title).slice(0, 40)) === 0 ? "" : snip0;   // a body that only repeats the title (plus its source) is not printed twice
   const src = n.site || n.feed || "";
   const isPR = PR.test(src) || PR.test(n.url || "");
   const tks = Array.from(n.tickers).sort();
@@ -343,8 +358,7 @@ function paint(items) {
 
 /* ── what moved: the names with the most headlines today (every ticker-tagged row since midnight ET) ── */
 async function loadMoved() {
-  const midnight = (() => { const [y, m, d] = dayKey(new Date()).split("-").map(Number); let t = Date.UTC(y, m - 1, d, 4, 0, 0); /* 04:00Z is 00:00 ET in summer, 23:00 ET the day before in winter — corrected below */
-    const back = new Date(t); if (dayKey(back) !== dayKey(new Date())) t += 3600000; return Math.floor(t / 1000); })();
+  const midnight = midnightET(0);
   const rows = await pgAll("news?select=ticker,title,published_ts&published_ts=gte." + midnight + "&ticker=neq._MARKET&order=published_ts.desc", 10).catch(() => []);
   const counts = {}, last = {};
   for (const r of rows) { const t = String(r.ticker || "").toUpperCase(); if (!t) continue; counts[t] = (counts[t] || 0) + 1; if (!last[t]) last[t] = r; }
@@ -352,12 +366,12 @@ async function loadMoved() {
   const max = top.length ? top[0][1] : 1;
   const inScope = (t) => { const m = scopeMembers(S.scope); return !m || m.indexOf(t) !== -1; };
   el("moved").innerHTML = "<h4>What moved · <b>today</b></h4>" + (top.length ? top.map(([t, c]) =>
-    '<div class="mv' + (c >= 40 ? " is-hot" : "") + '" data-t="' + esc(t) + '" title="' + c + ' headlines today — show $' + esc(t) + '">' +
+    '<div class="mv' + (c >= 100 ? " is-hot" : "") + '" data-t="' + esc(t) + '" title="' + c + ' headlines today — show $' + esc(t) + '">' +
       '<span class="mv__tk' + (inScope(t) ? "" : " is-mkt") + '">$' + esc(t) + "</span>" +
       '<span class="mv__bar sc-clip"><i style="width:' + Math.max(4, Math.round(c / max * 100)) + '%"></i></span>' +
       '<span class="mv__n">' + c + "<small>today</small></span>" +
       '<div class="mv__last">' + esc(stripSrcTail(last[t].title, "")) + "</div></div>").join("") +
-    '<div class="leg">' + rows.length.toLocaleString() + " ticker-tagged headlines since midnight ET · bar = share of the busiest name · dim name = outside this scope</div>"
+    '<div class="leg">' + rows.length.toLocaleString() + " ticker-tagged headlines since midnight ET · bar = share of the busiest name · green = 100 or more · dim name = outside this scope · tap a name to show it</div>"
     : '<div class="empty" style="padding:12px 0">no ticker-tagged headlines yet today.</div>');
 }
 
