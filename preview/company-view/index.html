@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 7b66061) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from cdad67a) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -27153,13 +27153,12 @@ window.SC_CLEAN_READS = scComputeCleanReads();
 try { const seen = listsRecall(); if (seen) { LISTS.favorites = seen.favorites; LISTS.radar = seen.radar; } S.coh = cohBootFor(LISTS, S.fav, !!seen); } catch (_) {}
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
-/* N2 (15 Oct 2026) — A COMPANY BY ADDRESS. /#co=NVDA opens that company the way a board click does, so a page beside the
-   Hub (the NEWS trial's ticker chips, a notification's tap) can send the reader to a name. Any other hash is untouched. */
+/* N2 (15 Oct 2026) — A COMPANY BY ADDRESS. /#co=NVDA opens that company on arrival, the way a board click does, so a page
+   beside the Hub (the NEWS trial's ticker chips, a notification's tap) can send the reader to a name. On arrival only: the
+   Hub keeps its ONE hashchange listener (the room vocabulary, tests/economic-entry), and a chip or a tap always arrives. */
 (function () {
-  function coFromHash() { var m = /^#co=([A-Za-z0-9.\-]{1,12})$/.exec(String(location.hash || "")); return m ? m[1].toUpperCase() : null; }
-  function openFromHash() { var t = coFromHash(); if (t && typeof openCo === "function") { try { openCo(t); } catch (_) {} } }
-  if (coFromHash()) setTimeout(openFromHash, 0);
-  window.addEventListener("hashchange", openFromHash);
+  var m = /^#co=([A-Za-z0-9.\-]{1,12})$/.exec(String(location.hash || ""));
+  if (m) setTimeout(function () { try { if (typeof openCo === "function") openCo(m[1].toUpperCase()); } catch (_) {} }, 0);
 })();
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup
 favLoad();                                                          // R29 — cross-device favorites from hub_favorites
