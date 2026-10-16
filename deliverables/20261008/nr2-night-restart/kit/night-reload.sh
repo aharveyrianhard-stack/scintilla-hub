@@ -70,7 +70,8 @@
 #
 # Settings: config.env beside this file (see config.example.env). Log: ~/Library/Logs/scintilla-night-reload.log.
 # Last result: LAST-NIGHT.txt beside this file - the first line says what happened, the lines under it give each app's memory before
-# and after. A line beginning "NOTE<tab>" on stdout is shown on screen by the launcher.
+# and after. A line beginning "NOTE<tab>" on stdout is shown on screen by the launcher - in a supervised test only; the nightly job
+# (16 Oct 2026) posts a notification instead, so no box ever waits for a click and blocks the next start.
 
 set -u
 MODE="${1:-dry-run}"
@@ -112,6 +113,11 @@ SETTLE_WAIT="${SETTLE_WAIT:-15}"              # seconds for Brave's reopened web
 REOPEN_BRAVE_WINDOWS="${REOPEN_BRAVE_WINDOWS:-yes}"
 BRAVE_PROFILE="${BRAVE_PROFILE:-$HOME/Library/Application Support/BraveSoftware/Brave-Browser/Default}"
 REFRESH_WEBAPPS="${REFRESH_WEBAPPS:-yes}"     # on a night Brave itself cannot be restarted: close and reopen the Station and X windows instead
+# the desktops (16 Oct 2026): a window on another desktop is reached by walking the desktops with Mission Control's own keys. See "the windows
+# wherever they are" below. no = activate the app and hope it switches the desktop, as before 16 Oct (it does only when "When switching to an
+# application, switch to a Space with open windows for the application" is on in System Settings > Desktop & Dock - Alan's choice, not this job's).
+WALK_DESKTOPS="${WALK_DESKTOPS:-yes}"
+WALK_MIN_STEPS="${WALK_MIN_STEPS:-5}"         # the walk tries at least this many steps right, then twice as many left, even when the Mac counts fewer desktops
 NR_KILL="${NR_KILL:-/bin/kill}"               # these three are replaced by stand-ins in the tests, never on a real Mac
 NR_OPEN="${NR_OPEN:-/usr/bin/open}"
 NR_CAFFEINATE="${NR_CAFFEINATE:-/usr/bin/caffeinate}"
@@ -126,6 +132,7 @@ PS_SNAP=""; REG_SNAP=""; TOP_SNAP=""; STOPPED=0; PLAN=""; WHY=""; BEFORE=""
 TV_PID=""; TV_BID=""; TV_CMD=""; TV_ARGS=""; TV_PIDS=""; HUB_PID=""; HUB_BID=""; HUB_NAME=""; HUB_CMD=""; HUB_PIDS=""
 BR_PID=""; BR_BID=""; BR_KIND=""; BR_CMD=""; BR_SHIMS=""; BR_PIDS=""
 BR_REC=""; BR_REC_HOW=""; BR_OWN=0; BR_CONSENT=""; BR_PARTS=""; WEBAPPS_REFRESHED=0; REFRESH_LINE=""
+SPACES=""; SPACE_KEYS=""; STAGE=""; SWOOSH=""; WALK_MAX=0; MY_LOCK=0; LOCK=""
 TV_B="0 0 0"; HUB_B="0 0 0"; BR_B="0 0 0"; SYS_B="0 0"; TV_WHY=""; HUB_WHY=""; BR_WHY=""; TV_W0=0; HUB_W0=0; X_TITLE0=""
 TV_PID0=""; TV_ARGS0=""; TV_BID0=""; HUB_PID0=""; HUB_BID0=""; HUB_NAME0=""; HUB_CMD0=""; BR_PID0=""; BR_BID0=""; BR_SHIMS0=""; TV_A="0 0 0"; HUB_A="0 0 0"; BR_A="0 0 0"; SYS_A="0 0"; R1=""; R2=""
 
@@ -192,10 +199,10 @@ sys_memory() {      # the whole Mac: "<kilobytes pushed out to disk> <percent of
 # ---- the windows: every call goes through here, and nothing that changes a window can run in dry-run ---------------------------------
 gui() {
   case "$1" in
-    trusted|front|windows|find-reload|everywhere|consent|tabs) ;;
+    trusted|front|windows|find-reload|everywhere|consent|tabs|spaces) ;;
     ask-consent)   # the ONE click (15 Oct 2026): only a dry run started by supervised-test.sh --consent may make macOS ask
       if [ "$MODE" != dry-run ] || [ -z "${SCINTILLA_NIGHT_RELOAD_ASK_CONSENT:-}" ]; then echo "refused:only from supervised-test.sh --consent"; return 0; fi ;;
-    activate|raise|reload|shortcut|unminimise|active-tab)
+    activate|raise|reload|shortcut|unminimise|active-tab|walk|notify)
       if [ "$MODE" != run ] && [ "$MODE" != test ]; then say "  (dry run - not done: $*)"; echo dry; return 0; fi ;;
     *) echo "error:unknown verb"; return 2 ;;
   esac
@@ -317,10 +324,19 @@ count_windows() {   # prints "<open windows> <minimised ones>" for one app
 #   minimised -> bring it back from the Dock;  another desktop or native full screen -> switch to that desktop (open -b, as "activate"
 #   already does);  closed (the app runs without a window) -> open the web app again (it comes back on its start page). Then count again.
 # "none" is the plan only when the window truly cannot be reached, and the morning line then says which of the four it was.
+# 16 Oct 2026 (two nights of "switching to that desktop (ok)" and then "0 window(s)"): on the iMac activating an app makes it frontmost
+# and changes NO desktop - "When switching to an application, switch to a Space with open windows for the application" is off there, and
+# Stage Manager is on. So "another desktop" and "native full screen" are now reached by walking the desktops with Mission Control's own
+# keys (Control+Right, then Control+Left; Alan's keys read from his settings), one step and one look at the window server at a time, and
+# stopping on the desktop where the window is. The desktop is LEFT there: the job ends by bringing the Station forward so its X box can
+# report, and nothing read without a private interface says which desktop was in front before, so walking "back" could land anywhere.
+# A fifth case: with Stage Manager on, a window set aside in the strip at the side of the desktop is "on" screen at thumbnail size and
+# out of every key's reach - the app is activated (that puts the window on the stage) and the count is made again.
 where_words() {     # $1 = where -> plain words
   case "$1" in
     reachable) echo "open on this desktop" ;;
     fullscreen-here) echo "in native full screen on this desktop" ;;
+    strip) echo "on this desktop but set aside in the Stage Manager strip" ;;
     minimised) echo "minimised (in the Dock)" ;;
     elsewhere) echo "on another desktop" ;;
     fullscreen) echo "in native full screen, on a desktop of its own" ;;
@@ -332,42 +348,46 @@ where_words() {     # $1 = where -> plain words
 fix_words() {       # $1 = where -> what the job does about it
   case "$1" in
     minimised) echo "bring it back from the Dock" ;;
-    elsewhere) echo "switch to that desktop" ;;
-    fullscreen) echo "switch to its full-screen desktop" ;;
+    strip) echo "bring it onto the stage" ;;
+    elsewhere) echo "walk through the desktops to it" ;;
+    fullscreen) echo "walk through the desktops to its full-screen one" ;;
     closed) echo "open it again (it comes back on its start page)" ;;
     *) echo "nothing" ;;
   esac
 }
-look_everywhere() { # $1 = bundle id -> "<on this desktop> <elsewhere> <of those, full screen>", from the window server
+look_everywhere() { # $1 = bundle id -> "<on this desktop, reachable size> <elsewhere> <of those, full screen> <on this desktop, in the strip>"
   local out; out="$(gui everywhere "$1")"
-  case "$out" in no-gui|no-process|none|error:*|"") echo "0 0 0"; return ;; esac
-  echo "$(printf '%s\n' "$out" | grep -c '^on') $(printf '%s\n' "$out" | grep -c '^off') $(printf '%s\n' "$out" | grep -c "^off$(printf '\t')full")"
+  case "$out" in no-gui|no-process|none|error:*|"") echo "0 0 0 0"; return ;; esac
+  echo "$(printf '%s\n' "$out" | grep -c "^on$(printf '\t')[fn]") $(printf '%s\n' "$out" | grep -c '^off') $(printf '%s\n' "$out" | grep -c "^off$(printf '\t')full") $(printf '%s\n' "$out" | grep -c "^on$(printf '\t')strip")"
 }
 L_WINDOWS=0; L_MIN=0; L_WHERE=""; L_WHY=""
 locate() {          # $1 = bundle id, $2 = what to call it. Finds its window wherever it is and, in run and test, brings it within reach.
                     # Leaves L_WINDOWS (windows a reload can reach), L_MIN (minimised), L_WHERE (see where_words) and L_WHY ("" = reachable).
-  local bid="$1" name="$2" n m on off full tries=0 r w
+  local bid="$1" name="$2" n m on off full strip tries=0 r w
   L_WINDOWS=0; L_MIN=0; L_WHERE=""; L_WHY=""
   [ "$GUI" = none ] && return 0
   while :; do
     set -- $(count_windows "$bid"); n="$1"; m="$2"
-    set -- $(look_everywhere "$bid"); on="$1"; off="$2"; full="$3"
+    set -- $(look_everywhere "$bid"); on="$1"; off="$2"; full="$3"; strip="$4"
     if [ $(( n - m )) -ge 1 ]; then L_WHERE=reachable; L_WINDOWS="$n"; L_MIN="$m"
     elif [ "$m" -ge 1 ]; then L_WHERE=minimised; L_WINDOWS="$n"; L_MIN="$m"
     elif [ "$on" -ge 1 ]; then L_WHERE=fullscreen-here; L_WINDOWS="$on"; L_MIN=0    # Accessibility lists nothing, the window server shows it in front
+    elif [ "$strip" -ge 1 ]; then L_WHERE=strip; L_WINDOWS=0; L_MIN=0               # on this desktop at thumbnail size: Stage Manager has it in the strip
     elif [ "$off" -ge 1 ]; then L_WHERE=elsewhere; [ "$full" -ge 1 ] && L_WHERE=fullscreen; L_WINDOWS=0; L_MIN=0
     elif [ "$(gui windows "$bid")" = no-process ]; then L_WHERE=gone; L_WINDOWS=0; L_MIN=0
     else L_WHERE=closed; L_WINDOWS=0; L_MIN=0; fi
     case "$L_WHERE" in reachable|fullscreen-here) [ "$tries" -gt 0 ] && say "  $name's window is now $(where_words "$L_WHERE")"; return 0 ;; esac
-    [ "$tries" -ge 2 ] && break
+    [ "$tries" -ge 3 ] && break               # three moves at most (a walk, then the stage, then once more), each followed by a fresh count
     tries=$(( tries + 1 ))
     if [ "$MODE" != run ] && [ "$MODE" != test ]; then
+      case "$L_WHERE" in elsewhere|fullscreen) spaces_info ;; esac
       say "  $name's window is $(where_words "$L_WHERE") - tonight the job would $(fix_words "$L_WHERE") first, then count again"
       L_WINDOWS=1; L_MIN=0; L_WHY=""; return 0
     fi
     case "$L_WHERE" in
       minimised) own unminimise "$bid"; r="$OWN_R"; say "  $name's window is minimised - bringing it back from the Dock ($r)"; nap 2 ;;
-      elsewhere|fullscreen) own activate "$bid"; r="$OWN_R"; say "  $name's window is $(where_words "$L_WHERE") - switching to that desktop ($r)"; nap 2 ;;
+      strip) own activate "$bid"; r="$OWN_R"; say "  $name's window is $(where_words "$L_WHERE") - bringing it onto the stage ($r)"; nap 2 ;;
+      elsewhere|fullscreen) walk_to "$bid" "$name" || tries=3 ;;     # a walk that never saw it is not tried again: one more count, then the truth
       closed) "$NR_OPEN" -g -b "$bid" 2>>"$LOG"; say "  $name runs but has no window - opening it again (it comes back on its start page)"
               w=0; while [ "$w" -lt "${OPEN_WAIT:-60}" ]; do set -- $(count_windows "$bid"); [ "$1" -ge 1 ] && break; nap 2; w=$(( w + 2 )); done ;;
       *) break ;;
@@ -375,6 +395,52 @@ locate() {          # $1 = bundle id, $2 = what to call it. Finds its window whe
   done
   L_WHY="its window is $(where_words "$L_WHERE") and could not be brought within reach"
   return 0
+}
+spaces_info() {     # once per run: how many desktops, Stage Manager, the switch-on-activate setting, and Alan's keys for moving between desktops
+  [ -n "$SPACES" ] && return 0
+  local out ln w code mods lk="Control+Left" rk="Control+Right"
+  out="$(gui spaces)"; SPACES=1; STAGE=off; SWOOSH=off
+  while IFS= read -r ln; do
+    set -- $ln
+    case "${1:-}" in
+      spaces) SPACES="${2:-1}" ;; stage) STAGE="${2:-off}" ;; swoosh) SWOOSH="${2:-off}" ;;
+      left|right) code="${2:-}"; mods="${3:-}"; w="key code $code"
+        case "$code" in 123) w="Left" ;; 124) w="Right" ;; 125) w="Down" ;; 126) w="Up" ;; esac
+        mods="$(printf '%s' "$mods" | sed 's/control/Control/; s/shift/Shift/; s/option/Option/; s/command/Command/; s/none//')"
+        w="${mods:+$mods+}$w${4:+ ($4)}"
+        [ "$1" = left ] && lk="$w" || rk="$w" ;;
+    esac
+  done <<EOF
+$out
+EOF
+  case "$SPACES" in ''|*[!0-9]*) SPACES=1 ;; esac
+  SPACE_KEYS="$rk / $lk"; WALK_MAX=$(( SPACES + 1 )); [ "$WALK_MAX" -lt "$WALK_MIN_STEPS" ] && WALK_MAX="$WALK_MIN_STEPS"
+  say "  desktops: $SPACES on the display (Stage Manager $STAGE; 'switch to a Space with open windows' when activating an app: $SWOOSH); the keys: $SPACE_KEYS; a walk tries up to $WALK_MAX steps right, then $(( 2 * WALK_MAX )) left"
+  [ "$SWOOSH" = on ] && say "  (with that setting on, activating the app would switch the desktop by itself; the job walks all the same)"
+  return 0
+}
+walk_to() {         # $1 = bundle id, $2 = what to call it: the window is on another desktop - go there, one step and one look at a time
+  local bid="$1" name="$2" r
+  if [ "$WALK_DESKTOPS" != yes ]; then
+    own activate "$bid"; r="$OWN_R"; say "  $name's window is $(where_words "$L_WHERE") - activating the app and leaving the desktop switch to macOS (WALK_DESKTOPS=no) ($r)"; nap 2; return 0
+  fi
+  spaces_info
+  own walk "$bid" "$WALK_MAX"; r="$OWN_R"
+  case "$r" in
+    found:here:*) say "  $name's window is $(where_words "$L_WHERE") - but the window server now shows it on this desktop ($r)" ;;
+    found:*) set -- $(printf '%s' "$r" | tr ':' ' ')
+             say "  $name's window is $(where_words "$L_WHERE") - walked the desktops with $SPACE_KEYS: found after $3 step(s) $2 (the window server shows it $4 size, Accessibility lists ${5#ax=} window(s) there); the desktop stays here" ;;
+    *) say "  $name's window is $(where_words "$L_WHERE") - walked the desktops with $SPACE_KEYS, up to $WALK_MAX steps right and $(( 2 * WALK_MAX )) left, and never saw it on screen ($r)"; nap 1; return 1 ;;
+  esac
+  nap 1
+}
+reach() {           # $1 = bundle id, $2 = what to call it: the window wherever it is NOW (another desktop, the Dock, the strip, closed), then
+                    # the app in front. The reload stage goes through here, because its earlier walk to the other app may have left this one
+                    # on another desktop again. OWN_R = ok | the reason. Reads only when the window is already on this desktop.
+  locate "$1" "$2"
+  if [ -n "$L_WHY" ]; then OWN_R="not reached: $L_WHY"; return 1; fi
+  own activate "$1"
+  [ "$OWN_R" = ok ]
 }
 count_all() {       # how many windows the Station and X have within reach, after locate() has done what it can
   STATION_WHERE=""; STATION_WHY=""; X_WHERE=""; X_WHY=""
@@ -411,14 +477,25 @@ finish() {
   if [ -n "$RESTART_NOTE" ]; then
     if [ -n "$NOTE_TEXT" ]; then NOTE_TEXT="$NOTE_TEXT Also: $RESTART_NOTE"; else NOTE_TEXT="Night restart, $(when): $RESTART_NOTE"; fi
   fi
-  [ -n "$NOTE_TEXT" ] && printf 'NOTE\t%s\n' "$NOTE_TEXT"; exit 0
+  if [ -n "$NOTE_TEXT" ]; then
+    if [ "$MODE" = run ]; then
+      # 16 Oct 2026: at night nobody clicks. A NOTE line on stdout made the launcher show a box that waited for a click (twenty hours), kept
+      # the launcher alive, and blocked every later start ("was already running"). The note is in LAST-NIGHT.txt and the log; a
+      # notification at the top right says there is one, and waits for nobody.
+      say "NOTE (not a box; in LAST-NIGHT.txt): $NOTE_TEXT"
+      say "a notification is posted instead of a box ($(gui notify "There is a note for you in Scintilla/night-reload/LAST-NIGHT.txt: $NOTE_TEXT"))"
+    else
+      printf 'NOTE\t%s\n' "$NOTE_TEXT"
+    fi
+  fi
+  exit 0
 }
 last_slot() { [ $(( $(mins "$(now_hhmm)") + SLOT_MINUTES )) -ge "$(mins "$WINDOW_END")" ]; }
 
 # ---- the reloads --------------------------------------------------------------------------------------------------------------------
 reload_app() {      # $1 = bundle id, $2 = how many windows, $3 = what to call it. The app must already be provably reachable.
   local i=1 r
-  own activate "$1"; r="$OWN_R"; [ "$r" = ok ] || { say "  could not bring $3 to the front ($r) - not reloaded"; return 1; }
+  reach "$1" "$3"; r="$OWN_R"; [ "$r" = ok ] || { say "  could not bring $3 to the front ($r) - not reloaded"; return 1; }
   while [ "$i" -le "$2" ]; do
     if [ "$2" -gt 1 ]; then own raise "$1" "$i"; r="$OWN_R"; [ "$r" = ok ] || { say "  $3 window $i could not be raised ($r) - skipped"; i=$(( i + 1 )); continue; }; fi
     own reload "$1"; r="$OWN_R"
@@ -435,12 +512,12 @@ connect_x() {       # reload X, wait, press the shortcut in X, bring the Station
   fi
   say "  waiting ${LOAD_WAIT}s for the pages to load"; nap "$LOAD_WAIT"
   alan_is_back && { STOPPED=1; return 1; }
-  own activate "$X_BID"; r="$OWN_R"; [ "$r" = ok ] || { say "  could not bring X to the front for the shortcut ($r)"; return 1; }
+  reach "$X_BID" X; r="$OWN_R"; [ "$r" = ok ] || { say "  could not bring X to the front for the shortcut ($r)"; return 1; }
   t="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   own shortcut "$X_BID"; r="$OWN_R"
   [ "$r" = sent ] || { say "  the shortcut was NOT sent ($r)"; return 1; }
   say "  Option+Shift+S sent to the X window"
-  own activate "$STATION_BID"; r="$OWN_R"; [ "$r" = ok ] || say "  could not bring the Station back to the front ($r); its X box may be hidden and unable to report"
+  reach "$STATION_BID" "the Station"; r="$OWN_R"; [ "$r" = ok ] || say "  could not bring the Station back to the front ($r); its X box may be hidden and unable to report"
   wait_for_x "$t"
 }
 
@@ -566,7 +643,7 @@ session_words() {   # brave-session.pl's answer, for the log: ordinary windows w
 brave_record() {    # BR_REC = one line per window "window <n> <active tab, from 1>" then "tab <n> <url>" per tab, in order. 0 = read, 1 = not
   local out f="" sf w t a_rec="" b_rec="" a_w=0 a_t=0 b_t=0 b_how="" b_short="not tried (Brave answered)"
   BR_REC=""; BR_REC_HOW=""
-  set -- $(look_everywhere "$BR_BID"); BR_OWN=$(( $1 + $2 ))
+  set -- $(look_everywhere "$BR_BID"); BR_OWN=$(( $1 + $2 + $4 ))
   BR_CONSENT="$(gui consent "$BR_BID")"
   # (a) asked of Brave itself - only with the one click given
   if [ "$BR_CONSENT" = allowed ]; then
@@ -888,7 +965,7 @@ restart_stage() {   # the real thing. Called once per run, after every check the
   if [ -z "$BR_WHY" ]; then
     # Brave feeds X. Reach X and the Station BEFORE Brave is closed: if they cannot be brought forward now, X could not be reconnected.
     X_TITLE0="$(x_title)"
-    own activate "$X_BID"; R1="$OWN_R"; own activate "$STATION_BID"; R2="$OWN_R"
+    reach "$X_BID" X; R1="$OWN_R"; reach "$STATION_BID" "the Station"; R2="$OWN_R"
     if [ "$R1" != ok ] || [ "$R2" != ok ]; then BR_WHY="X and the Station could not be brought to the front (X: $R1, Station: $R2), so X could not be reconnected afterwards"; fi
   fi
   [ -n "$BR_WHY" ] && [ -n "$BR_PID0" ] && say "  Brave is not restarted tonight: $BR_WHY"
@@ -980,6 +1057,7 @@ restart_wrapup() {  # at the very end of the job: nothing left closed, the memor
 on_exit() {         # whatever ends this job, an app it closed is not left closed, and the screen is given back to its own timers
   if [ -n "$REOPEN_OWED" ]; then say "the job is ending while an app it closed is still closed - opening it again"; "$REOPEN_OWED" >/dev/null 2>&1; fi
   stop_awake
+  [ "$MY_LOCK" = 1 ] && rm -f "$LOCK" 2>/dev/null; return 0
 }
 trap on_exit EXIT
 trap 'exit 1' HUP INT TERM
@@ -987,6 +1065,19 @@ trap 'exit 1' HUP INT TERM
 # =====================================================================================================================================
 case "$MODE" in run|test|dry-run) ;; *) echo "usage: night-reload.sh dry-run | test | run"; exit 2 ;; esac
 mkdir -p "$(dirname "$LOG")" "$STATE_DIR" 2>/dev/null
+# 16 Oct 2026: one job at a time. The launcher started at 04:26 was still up at 04:50 (its end-of-run box waited for a click), and the
+# timetable's 04:30 start was refused by macOS ("was already running") with nothing in this log. Had it got through, two jobs would have
+# closed and reloaded the same apps at once. So a job that finds another one still running says so here and does nothing.
+LOCK="$STATE_DIR/.running"
+if [ -f "$LOCK" ]; then
+  read -r OPID OMODE OWHEN < "$LOCK" 2>/dev/null || OPID=""
+  if [ -n "${OPID:-}" ] && kill -0 "$OPID" 2>/dev/null; then
+    say "REFUSED: another night job is still running on this Mac (started $OWHEN as $OMODE, process $OPID) - this $MODE start does nothing, so nothing is closed, reloaded or pressed twice"
+    [ "$MODE" = run ] || printf 'Another night job is still running (started %s as %s). This start does nothing.\n' "$OWHEN" "$OMODE"
+    exit 0
+  fi
+fi
+printf '%s %s %s\n' "$$" "$MODE" "$(date '+%Y-%m-%d %H:%M:%S')" > "$LOCK" 2>/dev/null && MY_LOCK=1
 HHMM="$(now_hhmm)"; IN_WINDOW=no
 [ "$HHMM" -ge "$WINDOW_START" ] && [ "$HHMM" -lt "$WINDOW_END" ] && IN_WINDOW=yes
 NEED="$IDLE_SECONDS"; [ "$MODE" = test ] && NEED="$TEST_IDLE_SECONDS"
@@ -1114,7 +1205,7 @@ case "$PLAN" in
   station-only) if reload_app "$STATION_BID" "$STATION_WINDOWS" "the Station"; then result "$DID the Station reloaded; $WHY"; else result "$DID the Station could not be reloaded (see the log); $WHY"; fi ;;
   full)
     # reach both BEFORE reloading either: after this point the Station is reloaded and X must be reconnected
-    own activate "$X_BID"; R1="$OWN_R"; own activate "$STATION_BID"; R2="$OWN_R"
+    reach "$X_BID" X; R1="$OWN_R"; reach "$STATION_BID" "the Station"; R2="$OWN_R"
     if [ "$R1" != ok ] || [ "$R2" != ok ]; then
       note "the Station and X were not reloaded: I could not bring them to the front (X: $R1, Station: $R2)."
     elif alan_is_back; then say "somebody came back before anything was reloaded - stopping; next try in ${SLOT_MINUTES} min"; KEEP_NIGHT_OPEN=1; result "$DID stopped before reloading the Station: somebody came back"

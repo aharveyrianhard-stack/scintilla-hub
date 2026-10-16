@@ -20,13 +20,27 @@
 --   osascript gui.applescript tabs <bundle id>        Brave's own windows and tabs (brave-tabs.js) - ONLY when consent says allowed;
 --                                                     otherwise "refused:no consent" and nothing is asked of Brave
 --   osascript gui.applescript active-tab <bundle id> <window n> <tab n>   ok | refused:no consent | error:...
+-- 16 Oct 2026 - the job switches desktops itself (on the iMac activating an app makes it frontmost and changes no desktop: "When switching
+-- to an application, switch to a Space with open windows for the application" is off, and Stage Manager is on):
+--   osascript gui.applescript spaces                  the desktops and the keys that move between them (spaces.js): spaces <n> | stage on|off |
+--                                                     swoosh on|off | left <key code> <modifiers> | right <key code> <modifiers>     (looks only)
+--   osascript gui.applescript walk <bundle id> <max>  walks the desktops with Mission Control's own keys (Alan's, from spaces.js; Control+Right
+--                                                     and Control+Left by default), one step at a time - at most <max> steps right, then
+--                                                     2 x <max> steps left - and after every step reads the window server: it stops as soon
+--                                                     as that app has a window on the desktop in front, full-screen desktops included, and
+--                                                     leaves the desktop there.   found:<right|left|here>:<steps>:<full|normal|strip>:ax=<n>
+--                                                     (ax = windows Accessibility lists there) | not-found:<key presses> | error:...
+--   osascript gui.applescript notify <text>           a notification at the top right, which never waits for a click   posted | error:...
 -- TWO RULES THAT LIVE HERE AND NOWHERE ELSE:
 --   - "reload" presses that app's own menu item (the one whose shortcut is Command-R), found by its shortcut so the menu's wording and
 --     language do not matter. A menu item belongs to one app, so it cannot land in another window. Only if the app has no such item does
 --     it type Command-R, and then only after the check below.
 --   - a key is typed ONLY when the app in front, read at that very moment, is the app asked for and it has an ordinary window that is
 --     not minimised - or, when Accessibility lists no ordinary window at all, the window server shows one of its windows on the
---     desktop in front (that is a window in native full screen: Accessibility does not list it, keys still reach it).
+--     desktop in front at ordinary or full size (that is a window in native full screen: Accessibility does not list it, keys still
+--     reach it). A window of thumbnail size in the Stage Manager strip does not count: no key reaches it.
+--   - the only other keys are Mission Control's own (the walk): they go to macOS, never into an app's window, and are pressed only
+--     while that app's window is not yet on the desktop in front.
 --     Otherwise nothing is typed and the answer is "refused". Option+Shift+S typed into the wrong app would put a
 --     character into whatever Alan left open; typed into the wrong browser window it would make the extension open a new X tab.
 --
@@ -43,6 +57,14 @@ on run argv
 				tell application "System Events" to return (UI elements enabled) as text
 			else if verb is "front" then
 				tell application "System Events" to return (bundle identifier of (first application process whose frontmost is true)) as text
+			else if verb is "spaces" then
+				set rows to my helper("spaces.js", "")
+				if rows is "" then return "error:spaces.js gave no answer"
+				return rows
+			else if verb is "notify" then
+				if bid is "" then return "error:no text"
+				display notification bid with title "Scintilla night reload"
+				return "posted"
 			end if
 			if bid is "" then return "error:no app named"
 			if verb is "consent" then
@@ -75,6 +97,9 @@ on run argv
 				set rows to my helper("windows.js", pidText)
 				if rows is "" then return "none"
 				return rows
+			else if verb is "walk" then
+				if (count of argv) < 3 then return "error:no step limit"
+				return my walkTo(p, (item 3 of argv) as integer)
 			else if verb is "unminimise" then
 				set n to 0
 				tell application "System Events"
@@ -172,13 +197,96 @@ on helper(fileName, args)
 	end try
 end helper
 
+-- windows of that process on the desktop in front that a key could reach: ordinary or full size, not a Stage Manager thumbnail
 on onScreenCount(pidText)
 	set n to 0
 	repeat with ln in paragraphs of my helper("windows.js", pidText)
-		if (ln as text) starts with "on" then set n to n + 1
+		set t to ln as text
+		if t starts with "on" and t does not contain "strip" then set n to n + 1
 	end repeat
 	return n
 end onScreenCount
+
+-- "" when none of that process's windows is on the desktop in front; else full | normal | strip (the best of them)
+on onScreenKind(pidText)
+	set best to ""
+	repeat with ln in paragraphs of my helper("windows.js", pidText)
+		set t to ln as text
+		if t starts with "on" then
+			if t contains "full" then
+				return "full"
+			else if t contains "strip" then
+				if best is "" then set best to "strip"
+			else
+				set best to "normal"
+			end if
+		end if
+	end repeat
+	return best
+end onScreenKind
+
+on axCount(p)
+	tell application "System Events" to return count of (windows of p whose subrole is "AXStandardWindow")
+end axCount
+
+-- the walk (16 Oct 2026). Alan's own Mission Control keys from spaces.js; the defaults when it cannot be read. One step, one look.
+on walkTo(p, maxSteps)
+	set pidText to ""
+	tell application "System Events" to set pidText to (unix id of p) as text
+	set k to my onScreenKind(pidText)
+	if k is not "" then return "found:here:0:" & k & ":ax=" & my axCount(p)
+	set rightCode to 124
+	set leftCode to 123
+	set rightMods to {control down}
+	set leftMods to {control down}
+	repeat with ln in paragraphs of my helper("spaces.js", "")
+		set f to words of (ln as text)
+		if (count of f) is greater than or equal to 2 then
+			if item 1 of f is "right" then
+				set rightCode to (item 2 of f) as integer
+				set rightMods to my modsOf(f)
+			else if item 1 of f is "left" then
+				set leftCode to (item 2 of f) as integer
+				set leftMods to my modsOf(f)
+			end if
+		end if
+	end repeat
+	set presses to 0
+	repeat with pass from 1 to 2
+		if pass is 1 then
+			set theCode to rightCode
+			set theMods to rightMods
+			set dirName to "right"
+			set steps to maxSteps
+		else
+			set theCode to leftCode
+			set theMods to leftMods
+			set dirName to "left"
+			set steps to 2 * maxSteps
+		end if
+		repeat with i from 1 to steps
+			tell application "System Events" to key code theCode using theMods
+			set presses to presses + 1
+			delay 1
+			set k to my onScreenKind(pidText)
+			if k is not "" then return "found:" & dirName & ":" & i & ":" & k & ":ax=" & my axCount(p)
+		end repeat
+	end repeat
+	return "not-found:" & presses
+end walkTo
+
+-- {"right", "124", "control", "shift"} -> {control down, shift down}; "none" -> {}
+on modsOf(f)
+	set m to {}
+	repeat with i from 3 to (count of f)
+		set w to item i of f
+		if w is "control" then set end of m to control down
+		if w is "shift" then set end of m to shift down
+		if w is "option" then set end of m to option down
+		if w is "command" then set end of m to command down
+	end repeat
+	return m
+end modsOf
 
 on bringToFront(p, bid)
 	-- 12 Oct 2026, measured on the iMac: for a Brave web app, System Events "set frontmost" answers true while the OTHER web app stays in
