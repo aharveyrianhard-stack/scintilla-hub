@@ -121,6 +121,13 @@ def ntm(est_rows, q0, ttm_rev):
             "fy1": {"end": fy1["date"], "revenue_m": m(r1), "low_m": m(fy1.get("revenueLow")), "high_m": m(fy1.get("revenueHigh")), "analysts": fy1.get("numAnalystsRevenue"), "eps": fy1.get("epsAvg"), "net_income_m": m(fy1.get("netIncomeAvg"))},
             "fy2": ({"end": fy2["date"], "revenue_m": m(r2), "low_m": m(fy2.get("revenueLow")), "high_m": m(fy2.get("revenueHigh")), "analysts": fy2.get("numAnalystsRevenue"), "eps": fy2.get("epsAvg"), "net_income_m": m(fy2.get("netIncomeAvg"))} if fy2 else None)}
 
+def money(v):
+    if v is None:
+        return "—"
+    a = abs(v)
+    s = "−" if v < 0 else ""
+    return "%s$%.1fB" % (s, a / 1000) if a >= 1000 else "%s$%.0fM" % (s, a)
+
 def build(t, deep=True):
     o13 = OCT13.get(t) or {}
     prof, w_prof = first("profile", t)
@@ -153,6 +160,19 @@ def build(t, deep=True):
     if csti is None and cash is not None:
         csti = cash + (sti or 0)
     lti = b0.get("longTermInvestments")
+    # FMP counts restricted cash as cash (Hut 8: $6.8B of project-financing escrow). Where the 13 Oct filing read covers the
+    # same balance-sheet date and tagged restricted cash, take it out and say so.
+    l13 = o13.get("liquidity") or {}
+    restricted_note = None; csti_fmp = csti
+    if csti is not None and l13.get("filing_end") == (b0.get("date") or "")[:10] and (l13.get("restricted_cash") or 0) > 0 and (l13.get("filing_cash") is not None):
+        rc = l13["restricted_cash"] * M
+        fil = (l13["filing_cash"] + (l13.get("filing_sti") or 0)) * M
+        if fil > 1.05 * csti:
+            csti = fil
+            restricted_note = "FMP's cash and short-term investments of %s sit below the filing's unrestricted %s (the provider does not carry this balance sheet's short-term investments; 13 Oct filing read, %s filed %s); the filing figure is used" % (money(csti_fmp / M), money(fil / M), l13.get("filing_form"), l13.get("filing_filed"))
+        elif rc > 0.02 * csti:
+            csti = max(csti - rc, fil)
+            restricted_note = "FMP's cash of %s includes %s of restricted cash (13 Oct filing read, %s filed %s); the unrestricted figure is used" % (money(csti_fmp / M), money(rc / M), l13.get("filing_form"), l13.get("filing_filed"))
     debt = b0.get("totalDebt"); leases = b0.get("capitalLeaseObligations") or 0
     net_cash = (csti - debt) if (csti is not None and debt is not None) else None
     d13 = o13.get("debt") or {}
@@ -231,7 +251,7 @@ def build(t, deep=True):
         "tam": {"stated_m": tam.get("stated"), "stated_words": tam.get("stated_words"), "stated_year": tam.get("stated_year"), "stated_src": tam.get("stated_src"), "stated_date": tam.get("stated_date"),
                 "stated_caveat": tam.get("stated_caveat"), "stated_note": tam.get("stated_note"), "independent": tam.get("independent"), "independent_m": tam.get("independent_m"),
                 "independent_src": tam.get("independent_src"), "revenue_share_pct": tam_share},
-        "funding": {"balance_date": b0.get("date"), "filing_date": b0.get("filingDate"), "cash_m": m(cash), "short_term_investments_m": m(sti), "cash_and_sti_m": m(csti), "long_term_investments_m": m(lti),
+        "funding": {"balance_date": b0.get("date"), "filing_date": b0.get("filingDate"), "cash_m": m(cash), "short_term_investments_m": m(sti), "cash_and_sti_m": m(csti), "cash_and_sti_fmp_m": m(csti_fmp), "restricted_cash_13oct_m": l13.get("restricted_cash"), "restricted_note": restricted_note, "long_term_investments_m": m(lti),
                     "total_debt_m": m(debt), "debt_ex_leases_m": m((debt - leases) if debt is not None else None), "leases_m": m(leases), "net_cash_m": m(net_cash),
                     "convertible_notes_m_13oct": d13.get("convertible_notes"), "debt_filing_13oct_m": d13.get("filing_borrowings"), "due_within_12m_13oct": d13.get("due_within_12m"),
                     "equity_issued_4q_m": m(eq_raised), "net_equity_issued_4q_m": m(net_eq), "net_debt_issued_4q_m": m(net_debt_iss),
@@ -443,7 +463,7 @@ for f in glob.glob(os.path.join(C, "_calls_*.json")):
     d = json.load(open(f)); calls[os.path.basename(f)] = d["calls"]
 fetch_times = sorted(d["fetched_utc"] for d in IDX.values())
 meta = {"title": "The pre-profit study: growth, market size, funding, debt, cash, burn, runway, lock-ups", "lane": "SCINTILLA-20261019-PP2", "built_utc": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ"),
-        "fmp_fetch_window_utc": [fetch_times[0], fetch_times[-1]] if fetch_times else None, "fmp_calls": calls, "fmp_calls_total": sum(v.get("network", 0) for v in calls.values()),
+        "fmp_fetch_window_utc": [fetch_times[0], fetch_times[-1]] if fetch_times else None, "fmp_calls": calls, "fmp_calls_total": len(IDX),
         "lists_read_utc": dt.datetime.utcfromtimestamp(os.path.getmtime(os.path.join(S, "db", "station_lists.json"))).strftime("%Y-%m-%dT%H:%MZ"),
         "radar": RADAR, "favorites_count": len(FAV), "liked_count": len(LIKED), "class_a_count": len(CLASS_A), "class_b_count": len(CLASS_B),
         "rules": {"pre_profit": "trailing-twelve-month GAAP net income ≤ 0 on FMP's quarterly income statements tonight, or the 13 Oct study's class (pre-profit or pre-revenue)",
