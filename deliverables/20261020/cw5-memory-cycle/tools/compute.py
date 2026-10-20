@@ -233,7 +233,7 @@ def micron_cycle(res):
             eq_m = after[0] if after else None
         out["windows"][label] = {"price_peak": {"date": pk[0], "price": pk[1]} if pk else None, "at_price_peak": m,
                                  "eps_ttm_peak": {"quarter": eq["date"], "eps_ttm": eq["eps_ttm"], "gm_ttm": eq.get("gm_ttm")} if eq else None, "at_eps_peak": eq_m}
-    for label, lo, hi in (("2016-17 low", "2016-10-01", "2017-03-31"), ("2019 trough", "2018-10-01", "2019-06-30"), ("2022-23 trough", "2022-06-30", "2023-06-30")):
+    for label, lo, hi in (("2016-17 low", "2016-10-01", "2017-03-31"), ("2018-19 low", "2018-10-01", "2019-06-30"), ("2022-23 low", "2022-06-30", "2023-06-30")):
         tr = peak(lo, hi, min); out["windows"][label] = {"price_trough": {"date": tr[0], "price": tr[1]} if tr else None, "at_price_trough": mon.get(tr[0]) if tr else None}
     out["today"] = mu["today"]
     # the premium to Korea, month by month
