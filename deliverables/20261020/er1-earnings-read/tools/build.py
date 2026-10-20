@@ -145,7 +145,8 @@ def bar_chart(items, title, subtitle, fmt, width=1240, lo=None, hi=None, markers
             out.append(f'<text x="{x+bw/2:.1f}" y="{y(0)-6:.1f}" fill="#9aa3b2" text-anchor="middle" font-size="10">n/a</text>')
         else:
             y0, y1 = sorted([y(0), y(v)]); out.append(f'<rect x="{x+3:.1f}" y="{y0:.1f}" width="{bw-6:.1f}" height="{max(1,y1-y0):.1f}" fill="{col}" rx="2"/>')
-            ty = y(v) - 5 if v >= 0 else y(v) + 13; out.append(f'<text x="{x+bw/2:.1f}" y="{ty:.1f}" fill="#e6e9ef" text-anchor="middle" font-size="10.5" font-variant-numeric="tabular-nums">{fmt(v)}</text>')
+            ty = y(v) - 5 if v >= 0 else (y(v) + 13 if y(v) + 16 < base else y(0) + 12)  # a deep negative bar carries its label inside, just under the zero line
+            out.append(f'<text x="{x+bw/2:.1f}" y="{ty:.1f}" fill="#e6e9ef" text-anchor="middle" font-size="10.5" font-variant-numeric="tabular-nums">{fmt(v)}</text>')
         if markers and markers[i] is not None:
             my = y(markers[i]); out.append(f'<line x1="{x+6:.1f}" x2="{x+bw-6:.1f}" y1="{my:.1f}" y2="{my:.1f}" stroke="#00d4ff" stroke-width="2"/>')
         out.append(f'<text x="{x+bw/2:.1f}" y="{base+18}" fill="#e6e9ef" text-anchor="middle" font-weight="700" font-size="11.5">{esc(lab)}</text><text x="{x+bw/2:.1f}" y="{base+32}" fill="#9aa3b2" text-anchor="middle" font-size="9.5">{esc(sub)}</text>')
