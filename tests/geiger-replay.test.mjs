@@ -58,7 +58,8 @@ function harness(board, S, { crossing = true } = {}) {
     querySelectorAll: () => [],
     querySelector: () => null,
   };
-  const src = "var PREV={};\n" + SRC +
+  /* RV1 (15 Oct) — the replay's Geiger-only rank holds while the board is rewound (ASOF set), and these are replays */
+  const src = "var PREV={}, ASOF=\"2026-09-24\";\n" + SRC +
     "\nreturn { repaint: repaint, PERF: PERF, PREV: function(){return PREV;}, setPrev: function(p){PREV=p;} };";
   return new Function(
     "E", "S", "computeBoardOrder", "scScint", "paintTM", "badges", "cohortGeigerHTML",

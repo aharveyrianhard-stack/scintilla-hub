@@ -1,0 +1,71 @@
+{
+ "name": "RV1 live: which names have no RVol number on ALL, and why (read only)",
+ "target": "live",
+ "width": 1680,
+ "height": 1050,
+ "log": true,
+ "out": "/Users/alanharvey/SCINTILLA 0.5/_worktrees/rv1-board-sort-20261015/deliverables/20261015/rv1-board-sort/evidence/live-coverage.json",
+ "steps": [
+  {
+   "do": "load",
+   "path": "/"
+  },
+  {
+   "do": "ready",
+   "ms": 90000
+  },
+  {
+   "do": "click",
+   "label": "ALL tab",
+   "sel": ".sc-coh[data-key=\"ALL\"]",
+   "ms": 2500
+  },
+  {
+   "do": "ready",
+   "ms": 60000
+  },
+  {
+   "do": "wait",
+   "ms": 3000
+  },
+  {
+   "do": "eval",
+   "label": "ALL \u00b7 rows without a number, by reason; the table's top names and whether they are on the board",
+   "js": "(() => { const rows = S.rows || []; const onBoard = new Set(rows.map((r) => r.t)); const reason = (r) => { const bv = BOARDVOL[String(r.t).toUpperCase()]; if (!bv) return 'no board_volume row'; if (!scRvolCurrent(bv.updated_ts)) return 'stale row (newest ' + String(bv.updated_ts).slice(0, 10) + ')'; if (bv.rvol_at_time == null) return 'no rvol_at_time'; return 'other'; }; const none = rows.filter((r) => r.rv == null); const by = {}; none.forEach((r) => { const k = reason(r); (by[k] = by[k] || []).push(r.t); }); const counts = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.length])); const sample = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.slice(0, 25)])); const top = Object.values(BOARDVOL).filter((v) => scRvolCurrent(v.updated_ts) && v.rvol_at_time != null).sort((a, b) => b.rvol_at_time - a.rvol_at_time).slice(0, 12).map((v) => ({ t: v.ticker, at: +(+v.rvol_at_time).toFixed(2), onAllBoard: onBoard.has(String(v.ticker).toUpperCase()) })); return { allRows: rows.length, numbered: rows.length - none.length, withoutNumber: none.length, counts, sample, tableTop: top }; })()"
+  },
+  {
+   "do": "eval",
+   "label": "ALL \u00b7 whose number is from which session day (ET)",
+   "js": "(() => { const day = (ts) => new Date(Date.parse(ts)).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); const one = (rows) => { const out = { rows: rows.length, numbered: 0, numberBySessionDay: {}, noNumber: 0 }; rows.forEach((r) => { const bv = BOARDVOL[String(r.t).toUpperCase()]; if (r.rv == null) { out.noNumber++; return; } out.numbered++; const k = bv ? day(bv.updated_ts) : '?'; out.numberBySessionDay[k] = (out.numberBySessionDay[k] || 0) + 1; }); const prior = rows.filter((r) => r.rv != null && BOARDVOL[String(r.t).toUpperCase()] && day(BOARDVOL[String(r.t).toUpperCase()].updated_ts) !== day(new Date().toISOString())).map((r) => r.t + ' ' + r.rv.toFixed(2)); out.priorSessionNames = prior.slice(0, 50); return out; }; return { today: day(new Date().toISOString()), board: S.coh, result: one(S.rows || []) }; })()"
+  },
+  {
+   "do": "eval",
+   "label": "ALL \u00b7 write times of the rows the board treats as stale; current rows by hour (UTC)",
+   "js": "(() => { const rows = S.rows || []; const st = rows.map((r) => BOARDVOL[String(r.t).toUpperCase()]).filter((bv) => bv && !scRvolCurrent(bv.updated_ts)); const byHour = {}; st.forEach((bv) => { const k = String(bv.updated_ts).slice(0, 13) + 'Z'; byHour[k] = (byHour[k] || 0) + 1; }); const all = Object.values(BOARDVOL); const cur = all.filter((v) => scRvolCurrent(v.updated_ts)); const curByHour = {}; cur.forEach((v) => { const k = String(v.updated_ts).slice(0, 13) + 'Z'; curByHour[k] = (curByHour[k] || 0) + 1; }); const eose = BOARDVOL.EOSE || null; return { now: new Date().toISOString(), staleOnAllBoardByHour: byHour, currentRowsByHour: curByHour, EOSE: eose, GPN: BOARDVOL.GPN || null, maxAgeHours: RVOL_MAX_AGE_MS / 3600e3 }; })()"
+  },
+  {
+   "do": "click",
+   "label": "FAVORITES tab",
+   "sel": ".sc-coh[data-key=\"FAVORITES\"]",
+   "ms": 2500
+  },
+  {
+   "do": "ready",
+   "ms": 60000
+  },
+  {
+   "do": "wait",
+   "ms": 2000
+  },
+  {
+   "do": "eval",
+   "label": "FAVORITES \u00b7 rows without a number, by reason",
+   "js": "(() => { const rows = S.rows || []; const onBoard = new Set(rows.map((r) => r.t)); const reason = (r) => { const bv = BOARDVOL[String(r.t).toUpperCase()]; if (!bv) return 'no board_volume row'; if (!scRvolCurrent(bv.updated_ts)) return 'stale row (newest ' + String(bv.updated_ts).slice(0, 10) + ')'; if (bv.rvol_at_time == null) return 'no rvol_at_time'; return 'other'; }; const none = rows.filter((r) => r.rv == null); const by = {}; none.forEach((r) => { const k = reason(r); (by[k] = by[k] || []).push(r.t); }); const counts = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.length])); const sample = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.slice(0, 25)])); const top = Object.values(BOARDVOL).filter((v) => scRvolCurrent(v.updated_ts) && v.rvol_at_time != null).sort((a, b) => b.rvol_at_time - a.rvol_at_time).slice(0, 12).map((v) => ({ t: v.ticker, at: +(+v.rvol_at_time).toFixed(2), onAllBoard: onBoard.has(String(v.ticker).toUpperCase()) })); return { allRows: rows.length, numbered: rows.length - none.length, withoutNumber: none.length, counts, sample, tableTop: top }; })()"
+  },
+  {
+   "do": "eval",
+   "label": "FAVORITES \u00b7 whose number is from which session day (ET)",
+   "js": "(() => { const day = (ts) => new Date(Date.parse(ts)).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); const one = (rows) => { const out = { rows: rows.length, numbered: 0, numberBySessionDay: {}, noNumber: 0 }; rows.forEach((r) => { const bv = BOARDVOL[String(r.t).toUpperCase()]; if (r.rv == null) { out.noNumber++; return; } out.numbered++; const k = bv ? day(bv.updated_ts) : '?'; out.numberBySessionDay[k] = (out.numberBySessionDay[k] || 0) + 1; }); const prior = rows.filter((r) => r.rv != null && BOARDVOL[String(r.t).toUpperCase()] && day(BOARDVOL[String(r.t).toUpperCase()].updated_ts) !== day(new Date().toISOString())).map((r) => r.t + ' ' + r.rv.toFixed(2)); out.priorSessionNames = prior.slice(0, 50); return out; }; return { today: day(new Date().toISOString()), board: S.coh, result: one(S.rows || []) }; })()"
+  }
+ ]
+}
