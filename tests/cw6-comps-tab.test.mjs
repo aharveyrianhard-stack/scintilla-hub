@@ -79,3 +79,10 @@ test("the Hub loads CW6; the browser makes no FMP call and no write; the deliver
   for (const f of ["CHECK.md", "sql/20261022_comps_fmp_answers.sql", "sql/20261022_comps_fmp_answers_ROLLBACK.sql", "tools/fill_store.py", "tools/check.mjs", "tools/shots.mjs", "README.md"]) assert.ok(existsSync(here(D + f)), f);
   for (const t of ["MU", "NVDA", "IREN", "SHOP", "BE", "AAPL", "LRCX"]) for (const s of ["1680x1050", "2560x1440"]) assert.ok(existsSync(here(`${D}pictures/${t}-${s}.png`)), `${t} ${s}`);
 });
+
+test("coordinator 22 Oct: a reviewed set opens with the size band off; the business-lines sets keep ±10×", () => {
+  const tab = readFileSync(here("../deliverables/20261022/cw6-comps-tab/tab.mjs"), "utf8");
+  assert.match(tab, /S\.path = "curated";[^\n]*\n(?:\s*\/\*[\s\S]*?\*\/\n)?\s*S\.band = null;/, "the curated branch turns the band off");
+  assert.match(tab, /const S = \{ root, opts, T, band: BAND_DEFAULT,/, "every other set starts at the default band");
+  assert.match(tab, /starts on for the business-lines sets and off for the reviewed sets/, "the page says so");
+});
