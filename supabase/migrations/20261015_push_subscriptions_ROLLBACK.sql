@@ -3,6 +3,7 @@
 -- them cannot blank a room. Subscriptions already stored are lost with the table: every device then needs its one
 -- "Allow notifications" click again (Alan's click, on each device).
 drop function if exists public.push_events_pending();
+drop function if exists public.push_followed();   -- added 22 Oct with the lists scope
 drop function if exists public.push_quiet_now();
 drop function if exists public.push_can_send_now();
 drop function if exists public.news_usual_per_hour(text);

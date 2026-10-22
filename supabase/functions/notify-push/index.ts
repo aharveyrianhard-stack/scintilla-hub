@@ -16,7 +16,8 @@
 // SECRETS. VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT live in the function's environment (supabase secrets),
 // never in the repository, never printed by this code. Deployed with --no-verify-jwt: this file checks the bearer itself,
 // as grokbot-inbox does, so pg_cron and curl can call it with the functions key.
-// NOT WIRED. Nothing calls this on a schedule until the coordinator schedules it (two lines in N2-NEWS.html).
+// WIRED 22 Oct 2026: pg_cron 'notify-push-events' calls ?mode=events every minute on weekdays with the Vault bearer
+// (checked through public.push_cron_key_ok); the events follow Alan's lists (public.push_followed()).
 import { sendPush } from "./webpush.mjs";
 
 const SB = Deno.env.get("SUPABASE_URL") || "";
@@ -35,9 +36,19 @@ async function pg(path: string, init: RequestInit = {}) {
 }
 const rpc = (fn: string, args: Record<string, unknown> = {}) => pg("rpc/" + fn, { method: "POST", body: JSON.stringify(args) });
 
-function authorized(req: Request) {
+/* 22 Oct (coordinator): pg_cron's bearer lives only in Vault ('scintilla_functions_key', made inside the database, never
+   printed). Rather than hold a copy, the function asks the database whether a bearer is that key, and remembers a yes
+   for ten minutes so the once-a-minute schedule costs one lookup in ten. */
+let cronKeyYes: { b: string; until: number } | null = null;
+async function authorized(req: Request) {
   const b = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  return !!b && (b === SERVICE || (!!FUNCTIONS_KEY && b === FUNCTIONS_KEY));
+  if (!b) return false;
+  if (b === SERVICE || (!!FUNCTIONS_KEY && b === FUNCTIONS_KEY)) return true;
+  if (cronKeyYes && cronKeyYes.b === b && Date.now() < cronKeyYes.until) return true;
+  try {
+    if ((await rpc("push_cron_key_ok", { k: b })) === true) { cronKeyYes = { b, until: Date.now() + 600_000 }; return true; }
+  } catch (_) { /* a failed lookup is a no */ }
+  return false;
 }
 
 type Msg = { kind: string; key: string; title: string; body?: string; url?: string; at?: string };
@@ -75,7 +86,7 @@ Deno.serve(async (req) => {
   const u = new URL(req.url), mode = u.searchParams.get("mode") || "";
   if (req.method === "GET" && mode === "vapid") return VAPID.publicKey ? J({ publicKey: VAPID.publicKey }) : J({ error: "VAPID keys are not set" }, 503);
   if (req.method !== "POST") return J({ error: "POST a message, or GET ?mode=vapid" }, 405);
-  if (!authorized(req)) return J({ error: "unauthorized" }, 401);
+  if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
   if (!SB || !SERVICE) return J({ error: "function environment incomplete" }, 500);
   try {
     if (mode === "events") {

@@ -1,0 +1,14 @@
+-- 2026-10-22 · coordinator — what was APPLIED on scintilla-live for N2, on Alan's word (22 Oct 14:10 ET: "why are you waiting on me
+-- on things that I've asked for ages ago?"). Three migrations, in this order:
+--   1. push_subscriptions_n2_20261022 = 20261015_push_subscriptions.sql with two corrections against the real schema:
+--        · earnings_events.beat is TEXT ('true' / 'beat' / 'false'), so the 'actual' sentence reads it with lower(beat) in (...);
+--        · the events follow Alan's lists — new public.push_followed() = station_lists favorites + radar ∪ hub_favorites (158
+--          names) — instead of the whole universe (12 actuals and ~30 transcripts a day would be too many pushes);
+--        · service_role grants on both tables and the push_log sequence (this project gives new tables no default grants).
+--   2. push_cron_key_20261022: Vault secret 'scintilla_functions_key' made inside the database (encode(gen_random_bytes(32),'hex'),
+--      never printed) + public.push_cron_key_ok(k) (security definer, execute: service_role only). notify-push v2 asks it.
+--   3. cron job 301 'notify-push-events' '* * * * 1-5' → POST notify-push?mode=events with the Vault bearer.
+-- Before the schedule, the 21 events already pending were written to push_log as announced (sent 0, body marked
+-- "[not sent: already out when notifications were switched on, 22 Oct]") so the first Allow does not replay them.
+-- Checks: vault bearer → 200 {"event":null,"pending":0}; no bearer → 401; wrong bearer → 401; ?mode=vapid → public key.
+-- ROLLBACK: 20261022_push_wiring_ROLLBACK.sql (then 20261015_push_subscriptions_ROLLBACK.sql to remove the tables).
