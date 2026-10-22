@@ -254,21 +254,22 @@ export const FMT = { usd0, x1, pc, bn };
 
 export function verdictWords(R, { setWords, refuse = null } = {}) {
   const c = R.company, m = c.m, md = R.median, w = [];
+  const vs = (s, med) => med != null ? `${s} against ${x1(med)}` : `${s} (too few meaningful peers for a median)`;
   const priced = Object.values(R.implied);
   if (R.thin) w.push(`Thin set: ${R.carrying} peer${R.carrying === 1 ? "" : "s"} carr${R.carrying === 1 ? "ies" : "y"} figures${R.band ? ` inside ±${R.band}×` : ""} — read with care, no single upside.`);
   else if (refuse) w.push(refuse);
   else if (R.midpoint != null) w.push(`${c.ticker} is ${R.read}: ${usd0(c.price)} against a ${usd0(R.midpoint)} midpoint of its peers' implied prices, ${rel(R.distance_pct)} it; ${priced.length} row${priced.length === 1 ? "" : "s"} priced on ${setWords}.`);
   else w.push(`${c.ticker}: no row could be priced on ${setWords} (a row needs three meaningful peers).`);
   const parts = [];
-  if (c.loss_maker) parts.push(`loss-making: priced on sales only — ${x1(m.ev_sales)} EV/sales ${m.ev_sales_basis === "NTM" ? "NTM" : "trailing (no estimate)"} against ${x1(md.ev_sales)} for the set; no P/E or PEG on a negative figure`);
-  else if (c.financial) { if (m.pe != null) parts.push(`${x1(m.pe)} NTM earnings against ${x1(md.pe)}`); if (m.pb != null) parts.push(`${x1(m.pb)} book against ${x1(md.pb)}`); }
-  else { if (m.pe != null) parts.push(`${x1(m.pe)} NTM earnings against ${x1(md.pe)}`); if (m.ev_sales != null) parts.push(`EV/sales ${x1(m.ev_sales)} against ${x1(md.ev_sales)}`); }
-  if (m.ps != null && md.ps != null) parts.push(`P/S ${x1(m.ps)} against ${x1(md.ps)}`);
+  if (c.loss_maker) parts.push(`Loss-making: priced on sales only — ${x1(m.ev_sales)} EV/sales ${m.ev_sales_basis === "NTM" ? "NTM" : "trailing (no estimate)"} against ${x1(md.ev_sales)} for the set; no P/E or PEG on a negative figure`);
+  else if (c.financial) { if (m.pe != null) parts.push(vs(`${x1(m.pe)} NTM earnings`, md.pe)); if (m.pb != null) parts.push(vs(`${x1(m.pb)} book`, md.pb)); }
+  else { if (m.pe != null) parts.push(vs(`${x1(m.pe)} NTM earnings`, md.pe)); if (m.ev_sales != null) parts.push(vs(`EV/sales ${x1(m.ev_sales)}`, md.ev_sales)); }
+  if (m.ps != null && md.ps != null) parts.push(vs(`P/S ${x1(m.ps)}`, md.ps));
   if (m.rev_growth_ntm_pct != null && R.peer_median_growth != null) parts.push(`growing ${m.rev_growth_ntm_pct.toFixed(0)}% against ${R.peer_median_growth.toFixed(0)}%`);
   if (parts.length) w.push(parts.join(", ") + ".");
   if (m.ps != null && md.ps != null && m.rev_growth_ntm_pct != null && R.peer_median_growth != null) {
     const sp = (m.ps / md.ps - 1) * 100, gd = m.rev_growth_ntm_pct - R.peer_median_growth;
-    if (sp >= 25) w.push(`On price to sales it is ${sp.toFixed(0)}% over the set while growing ${Math.abs(gd).toFixed(0)} points ${gd >= 0 ? "faster" : "slower"}${m.ps_g != null && md.ps_g != null ? ` (P/S ÷ growth ${x1(m.ps_g)} against ${x1(md.ps_g)})` : ""}${gd < 0 || (m.ps_g != null && md.ps_g != null && m.ps_g > md.ps_g * 1.15) ? ": rich on sales even counting the growth" : ": the growth carries the sales premium"}.`);
+    if (sp >= 25) w.push(`On price to sales it is ${sp.toFixed(0)}% over the set while growing ${Math.abs(gd).toFixed(0)} points ${gd >= 0 ? "faster" : "slower"}${m.ps_g != null && md.ps_g != null ? ` (P/S ÷ growth ${x1(m.ps_g)} against ${x1(md.ps_g)} for the peers growing 10% or more)` : ""}${gd < 0 || (m.ps_g != null && md.ps_g != null && m.ps_g > md.ps_g * 1.15) ? ": rich on sales even counting the growth" : ""}.`);
   }
   const a = R.analysts;
   if (a.median != null && c.price) w.push(`Analysts ${usd0(a.low)} · ${usd0(a.median)} · ${usd0(a.high)} (low · median · high${a.last_quarter_n != null ? `, ${a.last_quarter_n} in the last quarter` : ""}); the median is ${rel((a.median / c.price - 1) * 100)} today's price.`);
