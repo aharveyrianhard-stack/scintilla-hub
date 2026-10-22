@@ -94,6 +94,6 @@ test("the tab: info marks fainter and labelled, the business line under the set'
   const a = code.indexOf("function pageSpecsHTML"), b = code.indexOf("function wire"), specs = code.slice(a, b), content = code.slice(0, a) + code.slice(b);
   assert.match(content, /class="fl\$\{isVote\(c\.key\) \? "" : " inf"\}"/); assert.match(content, /information only/); assert.match(content, /id="cm5Biz"/); assert.match(content, /peer set mostly different business/); assert.match(content, /fix the peers, not the outliers/);
   assert.match(specs, /Only the valuation multiples vote/); assert.match(specs, /trailing and forward P\/E as one vote/); assert.match(specs, /never count/); assert.match(specs, /Same business\?/);
-  assert.match(readFileSync(here("../index.html"), "utf8"), /import\("\/deliverables\/20261003\/comps-c5\/tab\.mjs"\)/, "index.html is untouched");
+  assert.match(readFileSync(here("../index.html"), "utf8"), /import\("\/deliverables\/2026(1003\/comps-c5|1022\/cw6-comps-tab)\/tab\.mjs"\)/, "index.html mounts C5 or the tab built on it (CW6, 22 Oct)");
   const page = readFileSync(here("../deliverables/20261005/comps-c6b/COMPS-C6B.html"), "utf8"); assert.match(page, /sc-pagespecs/); for (const t of ["MU", "NVDA", "CRWV", "CBRS"]) assert.ok(page.includes(`shots/${t}-set-1680.png`), t + " picture");
 });

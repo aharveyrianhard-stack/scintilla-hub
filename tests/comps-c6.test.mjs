@@ -112,6 +112,6 @@ test("the tab: marks on flagged cells, outlier rows last and greyed with the cou
   assert.match(content, /set\.kept\.filter\(\(r\) => !c6\.ruleOff\.has\(r\.ticker\)\), \.\.\.c6\.outliers/, "outlier rows sit at the bottom of the set");
   assert.match(specs, /Outliers, on price only\./); assert.match(specs, /median absolute deviation/); assert.match(specs, /log scale/); assert.match(specs, /never deleted/);
   assert.ok(!/median absolute deviation|typical spread/.test(content), "the rule's sentence lives in PAGE SPECS only");
-  assert.match(readFileSync(here("../index.html"), "utf8"), /import\("\/deliverables\/20261003\/comps-c5\/tab\.mjs"\)/, "index.html is untouched: the Hub still mounts the same file");
+  assert.match(readFileSync(here("../index.html"), "utf8"), /import\("\/deliverables\/2026(1003\/comps-c5|1022\/cw6-comps-tab)\/tab\.mjs"\)/, "the Hub mounts C5 or the tab built on it (CW6, 22 Oct)");
   const page = readFileSync(here("../deliverables/20261005/comps-c6/COMPS-C6.html"), "utf8"); assert.match(page, /sc-pagespecs/); for (const t of ["MU", "NVDA", "CRWV", "CBRS"]) assert.ok(page.includes(`shots/after/${t}-set-1680.png`), t + " picture");
 });

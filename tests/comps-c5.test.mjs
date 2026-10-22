@@ -97,8 +97,11 @@ test("the tab: no descriptions in the content, PAGE SPECS carry them and say an 
   for (const words of [/what a dollar/i, /candidates from FMP/i, /the box is their middle half/i, /is not expected to grow/i, /the peers run from/i]) assert.ok(!words.test(content), "not in the content: " + words);
   assert.match(code.slice(specsStart, specsEnd), /<details class="sc-pagespecs"><summary>PAGE SPECS<\/summary>/); assert.match(code.slice(specsStart, specsEnd), /Edits are saved for every screen/);
   assert.match(code, /data-cm="way"/); assert.match(code, /cm5Mini/); assert.match(code, /class="wrow"/); assert.ok(!/border:\.8px solid rgba\(0,212,255/.test(code), "no frames");
-  const html = readFileSync(here("../index.html"), "utf8"); assert.match(html, /import\("\/deliverables\/20261003\/comps-c5\/tab\.mjs"\)/);
-  assert.match(readFileSync(here("../preview/company-view/index.html"), "utf8"), /comps-c5\/tab\.mjs/, "the trial copy was rebuilt after the index.html edit");
+  /* CW6 (22 Oct): the Hub's COMPS tab now loads deliverables/20261022/cw6-comps-tab/tab.mjs (the CW3 method for any name); C5's
+     machine stays on disk, its comment stays in the loader, and CW6 builds the set of a name no lane reviewed with C5's lines.mjs */
+  const html = readFileSync(here("../index.html"), "utf8"); assert.match(html, /import\("\/deliverables\/20261022\/cw6-comps-tab\/tab\.mjs"\)/); assert.match(html, /C5 \(3 Oct\): business similarity decides the set/);
+  assert.match(readFileSync(here("../deliverables/20261022/cw6-comps-tab/tab.mjs"), "utf8"), /20261003\/comps-c5\/lines\.mjs/, "CW6 builds the business-lines set with C5's lines.mjs");
+  assert.match(readFileSync(here("../preview/company-view/index.html"), "utf8"), /cw6-comps-tab\/tab\.mjs/, "the trial copy was rebuilt after the index.html edit");
   for (const f of ["../supabase/migrations/20261003_revenue_segments.sql", "../supabase/migrations/20261003_revenue_segments_ROLLBACK.sql", "../scripts/revenue-segments-sync.mjs", "../deliverables/20261003/comps-c5/segments-2026-10-03.json", "../deliverables/20261003/comps-c5/COMPS-C5.html", "../deliverables/20261003/comps-c5/sets-before-c4-2026-10-03.json"]) assert.ok(existsSync(here(f)), f);
   const job = readFileSync(here("../scripts/revenue-segments-sync.mjs"), "utf8"); assert.match(job, /\/stable\/revenue-product-segmentation/); assert.ok(!/api\/v3\//.test(job) && !/SUPABASE_SERVICE_ROLE_KEY/.test(job));
   for (const t of ["AMZN", "NVDA", "MU", "JPM"]) { assert.ok(existsSync(here(`../deliverables/20261003/comps-c5/shots/before/${t}-1680.png`)), "before " + t); assert.ok(existsSync(here(`../deliverables/20261003/comps-c5/shots/after/${t}-1680.png`)), "after " + t); }
