@@ -47,7 +47,10 @@ test("the migration is additive, RLS is on, and the rollback (written first) dro
 });
 test("the function checks the bearer itself, serves only the public key without one, and keeps the private key in its environment", () => {
   assert.match(fn, /Deno\.env\.get\("VAPID_PRIVATE_KEY"\)/); assert.doesNotMatch(fn, /BEGIN (EC )?PRIVATE KEY|"VAPID_PRIVATE_KEY":\s*"[A-Za-z0-9_-]{40}/);
-  assert.match(fn, /if \(!authorized\(req\)\) return J\(\{ error: "unauthorized" \}, 401\)/);
+  /* 22 Oct (coordinator): the check became async — it also asks the database whether a bearer is pg_cron's Vault key
+     (push_cron_key_ok), so the schedule needs no copy of a key; still no answer but the public key without a bearer. */
+  assert.match(fn, /if \(!\(await authorized\(req\)\)\) return J\(\{ error: "unauthorized" \}, 401\)/);
+  assert.match(fn, /rpc\("push_cron_key_ok", \{ k: b \}\)/);
   assert.match(fn, /mode === "vapid"/); assert.match(fn, /push_can_send_now/); assert.match(fn, /push_quiet_now/); assert.match(fn, /push_events_pending/);
   for (const f of ["push-sw.js", "preview/news/index.html", "supabase/functions/notify-push/index.ts", "supabase/functions/notify-push/webpush.mjs"]) assert.doesNotMatch(read(f), /[A-Za-z0-9_-]{43}\n?VAPID|VAPID_PRIVATE_KEY=/, f + " carries no key");
 });
