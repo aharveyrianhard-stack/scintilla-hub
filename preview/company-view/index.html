@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from f22b514) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 640a138) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -27398,6 +27398,13 @@ window.SC_CLEAN_READS = scComputeCleanReads();
 try { const seen = listsRecall(); if (seen) { LISTS.favorites = seen.favorites; LISTS.radar = seen.radar; } S.coh = cohBootFor(LISTS, S.fav, !!seen); } catch (_) {}
 try { seedBoardFromCache(S.coh, S.fav); } catch (_) {}
 buildMtabs(); sync();   /* FIX B — buildCohrow() removed: the search moved into the board header (cohTabsHTML) */
+/* N2 (15 Oct 2026) — A COMPANY BY ADDRESS. /#co=NVDA opens that company on arrival, the way a board click does, so a page
+   beside the Hub (the NEWS trial's ticker chips, a notification's tap) can send the reader to a name. On arrival only: the
+   Hub keeps its ONE hashchange listener (the room vocabulary, tests/economic-entry), and a chip or a tap always arrives. */
+(function () {
+  var m = /^#co=([A-Za-z0-9.\-]{1,12})$/.exec(String(location.hash || ""));
+  if (m) setTimeout(function () { try { if (typeof openCo === "function") openCo(m[1].toUpperCase()); } catch (_) {} }, 0);
+})();
 loadCohSets().catch(() => {});                                       // FIX A — ONE cohort→Set map, built at startup
 favLoad();                                                          // R29 — cross-device favorites from hub_favorites
 listsLoad(); setInterval(listsLoad, 300000);                       // H-FRONT — FAVORITES + RADAR (station_lists): at load, then every 5 min
@@ -28185,6 +28192,10 @@ try {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.getRegistrations().then(function (rs) {
       var had = rs.length > 0;
+      /* N2 (15 Oct 2026) — the push worker (push-sw.js, scope /push/, controls no page, caches nothing) is the one
+         registration this block leaves alone: unregistering it would silently end the device's notifications. */
+      rs = rs.filter(function (r) { try { return !/\/push\/$/.test(r.scope); } catch (_) { return true; } });
+      had = rs.length > 0;
       return Promise.all(rs.map(function (r) { return r.unregister(); })).then(function () {
         /* nuke any leftover CacheStorage so a stale worker's cached API responses
            (which make data tabs hang forever on the installed app) can't linger */
