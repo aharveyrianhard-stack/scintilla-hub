@@ -351,7 +351,8 @@ test("28 Sep — the tape keeps its place, never grows or loops, glides, and alw
 });
 
 test("DAY reads across the screen, and nothing that was in it is lost", () => {
-  assert.match(src, /const ERC_DAY_SLOTS = \[\[0, "before the open"\], \[1, "at a set time"\], \[2, "after the close"\], \[3, "time not announced"\]\];/,
+  /* E1 (15 Oct): "at a set time" became "during the session" — a clock is placed by the US session it falls in (ernSlot) */
+  assert.match(src, /const ERC_DAY_SLOTS = \[\[0, "before the open"\], \[1, "during the session"\], \[2, "after the close"\], \[3, "time not announced"\]\];/,
     "a report with no stated time says the time was not announced — it is never guessed");
   assert.match(src, /\.se-dcols\{ display:flex; gap:10px; align-items:stretch; \}/);
   assert.match(src, /const grow = Math\.min\(6, 1 \+ Math\.round\(inSlot\.length \/ 3\)\);/,

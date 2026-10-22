@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from fd45f16) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from f22b514) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -3200,6 +3200,29 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .se-drow .s{ margin-left:auto; font-size:8px; }
 .se-drow.beat .s{ color:var(--up); } .se-drow.miss .s{ color:var(--dn); } .se-drow.inline .s{ color:var(--dim); }
 .se-dnone{ font-family:var(--mono); font-size:8px; letter-spacing:.1em; color:var(--mute); padding:2px 0 6px; }
+/* E1 (15 Oct) — the day's cut in one line; the "NEW · transcript in" chips; the folds in the extras column */
+.se-dcut{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink3); padding:0 2px 7px; }
+.ern-trnew{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; padding:5px 10px 3px; scrollbar-width:thin; }
+.ern-trnew::-webkit-scrollbar{ height:4px; } .ern-trnew::-webkit-scrollbar-thumb{ background:var(--line2); border-radius:3px; }
+.ern-trchip{ flex:none; white-space:nowrap; }
+/* E1 — inside a square the card's header wraps: the readable time label takes its own line under the name and the date */
+.se-card .sc-ern__top{ flex-wrap:wrap; row-gap:4px; }
+.se-card .sc-ern__pill{ order:9; flex:0 0 100%; margin-left:0; width:fit-content; max-width:100%; white-space:normal; line-height:1.45; }
+.se-card .sc-ern__days{ white-space:nowrap; }
+.ern-trnew__lbl{ flex:none; white-space:nowrap; font-family:var(--mono); font-size:8px; letter-spacing:.2em; color:var(--ink3); margin-right:2px; }
+.ern-trchip{ display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:9px; color:var(--ink); background:transparent;
+  border:.6px solid rgba(0,212,255,.34); border-radius:3px; padding:3px 8px; cursor:pointer; }
+.ern-trchip b{ color:var(--crk); font-weight:600; letter-spacing:.1em; font-size:8px; }
+.ern-trchip span{ color:var(--ink); }
+.ern-trchip i{ font-style:normal; color:var(--dim); font-size:8px; }
+.ern-trchip:hover{ border-color:var(--crk); }
+.ern-trin{ color:var(--crk); }
+.sc-ern__in{ color:var(--dim); font-weight:400; }
+.ev-fold{ position:relative; }
+.ev-foldx{ position:absolute; right:12px; top:9px; cursor:pointer; color:var(--dim); font-size:11px; line-height:1; padding:2px 5px; border:.6px solid var(--line2); border-radius:2px; }
+.ev-foldx:hover{ color:var(--ink); border-color:var(--crk); }
+.ev-fold.is-shut .ev-foldx{ transform:rotate(-90deg); }
+.ev-fold.is-shut > .ev-ulkwrap, .ev-fold.is-shut > .ev-pastwrap, .ev-fold.is-shut > #evRelPanel{ display:none; }
 .se-dmore{ margin-top:12px; border-top:.5px solid var(--line); padding-top:8px; }
 .se-dmore > summary{ font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase;
   color:var(--dim); cursor:pointer; list-style:none; }
@@ -3257,7 +3280,7 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .se-sq .se-dcol{ flex:1 1 138px; }
 .se-sq .se-dlist{ max-height:none; overflow:visible; grid-template-columns:repeat(auto-fill, minmax(88px, 1fr)); }
 .se-sq .se-dhd{ padding-bottom:6px; }
-.se-sq .se-card{ margin-top:8px; }
+.se-sq .se-card{ margin:2px 0 10px; }   /* E1 — above the names now, so it keeps its distance below */
 .se-oldsay{ font-family:var(--mono); font-size:8px; letter-spacing:.12em; color:var(--dim);
   padding:8px 10px 6px; border-bottom:.5px solid var(--line); margin-bottom:8px; }
 
@@ -5636,28 +5659,40 @@ let UNIVERSE = null; // Set of cohort tickers (events-room scope)
    FedEx's Sep 17 row read "1d ago", every "Nd ago" was one too many, and date-bounded reads started a day late. */
 const todayISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
+/* E1 (15 Oct) — ONE READ FOR ONE PATH. MEASURED on a cold load of the EARNINGS room (live 7b66061): the same GET was in
+   flight several times at once from different callers — cohorts?select=ticker ×4, company_profile ×3, cohorts?select=
+   ticker,cohort ×3, the same earnings_events stretch ×2. An identical path asked while the first answer is still coming
+   now shares that answer; every caller after the first gets its own copy, so one caller's sort cannot reorder another's. */
 async function pg(path, _tries) {
+  const inflight = pg._inflight || (pg._inflight = new Map());   // kept on the function itself: pg is extracted and run alone by tests
+  const k = String(path), have = inflight.get(k);
+  if (have) { const v = await have; return v && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v; }
   /* RESILIENCE — the DB intermittently 503/504s under pipeline load; without a retry a
      single transient failure leaves a data tab stuck on "loading" forever. Retry up to
      3× on 503/504/429/network errors with backoff + jitter (jitter avoids a thundering
      herd from the many parallel board/company reads). Real 4xx errors throw immediately. */
-  const tries = _tries == null ? 3 : _tries;
-  let lastErr;
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await fetch(SB + "/rest/v1/" + path, {
-        headers: { apikey: ANON, Authorization: "Bearer " + ANON },
-      });
-      if (r.ok) return r.json();
-      if (r.status === 503 || r.status === 504 || r.status === 429) {
-        lastErr = new Error("pg " + path + " → " + r.status);   // DB busy → retry
-      } else {
-        throw new Error("pg " + path + " → " + r.status);       // real error → fail fast
-      }
-    } catch (e) { lastErr = e; }                                 // network error → retry
-    if (i < tries - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1) + Math.random() * 300));
-  }
-  throw lastErr;
+  const run = (async () => {
+    const tries = _tries == null ? 3 : _tries;
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try {
+        const r = await fetch(SB + "/rest/v1/" + path, {
+          headers: { apikey: ANON, Authorization: "Bearer " + ANON },
+        });
+        if (r.ok) return r.json();
+        if (r.status === 503 || r.status === 504 || r.status === 429) {
+          lastErr = new Error("pg " + path + " → " + r.status);   // DB busy → retry
+        } else {
+          throw new Error("pg " + path + " → " + r.status);       // real error → fail fast
+        }
+      } catch (e) { lastErr = e; }                                 // network error → retry
+      if (i < tries - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1) + Math.random() * 300));
+    }
+    throw lastErr;
+  })();
+  inflight.set(k, run);
+  run.then(() => inflight.delete(k), () => inflight.delete(k));
+  return run;
 }
 
 /* R22 FIX 5 — pgPatch: PostgREST PATCH (anon UPDATE grant on cohorts.cohort is
@@ -15228,6 +15263,7 @@ function eventsRoomHTML() {
            strip; this room now opens on the earnings tape — the band from the foot of the screen, same rows, same
            states, same diamond on a result beyond its own usual surprise — so the two rooms read alike. */
         '<div class="ern-roomtape" id="ernRoomTape"></div>' +
+        '<div id="ernTrNew"></div>' +   /* E1 — "NEW · transcript in" chips, newest first */
         /* M40 — the room is a dashboard with tabs. PAST REPORTED is a tab of its own
            again (Alan: "we lost the tracking of the past reported… we need it back"),
            and the section he had before this revamp is still one tap away, kept
@@ -15249,10 +15285,14 @@ function eventsRoomHTML() {
       '<div class="panel"><div class="sc-plabel sc-plabel--row"><span>earnings extras</span>' + SECFS_BTN + '</div><div class="rail" id="evExtras">' +
         '<div class="card"><h4>UPCOMING · EARNINGS</h4><div class="sc-senttxt ev-upwrap" id="evUpcoming">—</div></div>' +
         /* R2 (2 Oct) — IPO LOCK-UPS: every Hub stock whose lock-up ends in the next 12 months, the last 6 months' dimmed */
+        /* E1 (15 Oct) — Alan: "earnings, extras, upcoming earnings, seems a little bit like … shit everywhere." The pieces he
+           loves stay, every one; the ones he does not read every day fold away. UPCOMING stays open. IPO LOCK-UPS and the
+           RELEASES panel open shut; PAST · REPORTED opens open. A fold remembers its state (hub.ern.fold.*). The chevron is
+           the control; the headings are untouched. */
         (typeof unlockSectionHTML === "function" && UNLOCK_ON
-          ? '<div class="card"><h4>IPO LOCK-UPS · NEXT 12 MONTHS</h4><div class="ev-ulkwrap" id="evLockups">' + unlockSectionHTML() + "</div></div>" : "") +
-        '<div class="card"><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
-        '<div id="evRelPanel"></div>' +
+          ? '<div class="card ev-fold' + (ernFoldShut("lockups", true) ? " is-shut" : "") + '"><span class="ev-foldx" data-act="ernfold" data-k="lockups" title="fold / unfold">▾</span><h4>IPO LOCK-UPS · NEXT 12 MONTHS</h4><div class="ev-ulkwrap" id="evLockups">' + unlockSectionHTML() + "</div></div>" : "") +
+        '<div class="card ev-fold' + (ernFoldShut("past", false) ? " is-shut" : "") + '"><span class="ev-foldx" data-act="ernfold" data-k="past" title="fold / unfold">▾</span><h4>PAST · REPORTED</h4><div class="ev-pastwrap" id="evPastRail">—</div></div>' +
+        '<div class="ev-fold' + (ernFoldShut("releases", true) ? " is-shut" : "") + '"><span class="ev-foldx" data-act="ernfold" data-k="releases" title="fold / unfold">▾</span><div id="evRelPanel"></div></div>' +
       "</div></div></div></div>";
 }
 /* FIX 1 (events leg) — SAME strict scope as the board/news: rows filtered to the
@@ -15267,6 +15307,8 @@ function eventsRoomHTML() {
    release so the coordinator can put either back in one line; nothing calls them. */
 const ernTab = () => "DASH";
 function ernTabsHTML() { return ""; }   /* 28 Sep — one tab is no tabs: the DASHBOARD · PAST REPORTED · THE OLDER LIST strip is gone */
+/* E1 — a fold's state: remembered per browser, else its default */
+function ernFoldShut(k, dflt) { const v = lsGet("hub.ern.fold." + k); return v == null ? !!dflt : v === "1"; }
 function renderEvents(cohort) {
   const list = el("evList");
   if (!list) return;
@@ -15280,6 +15322,7 @@ function renderEvents(cohort) {
   const sbar = el("ernSpanBar");
   if (sbar) { sbar.innerHTML = ernTab() === "DASH" ? ercSpanBarHTML() : ""; sbar.style.display = ernTab() === "DASH" ? "" : "none"; }
   ercPaintTape();                                   // the timeline is the header of every tab
+  if (typeof ernTrNewPaint === "function") ernTrNewPaint();   // E1 — "NEW · transcript in", newest first, under the tape
   if (ernTab() === "PAST") { erpRender(list, cohort); return; }
   if (ernTab() === "OLD") { list.innerHTML = ercOldListHTML(cohort); evFillExtras(ercOldUpcoming(cohort), null); return; }
   ercRenderGrid(list, cohort);
@@ -15410,7 +15453,7 @@ function evUpTableHTML(upS) {
     const rel = evRel(evDays(ev.date)), eps = num(ev.eps_estimate), rev = num(ev.revenue_estimate);
     const sess = (ev.report_time && ev.report_time !== "TBD") ? " " + esc(ev.report_time) : "";
     return '<tr data-act="row" data-t="' + esc(ev.ticker) + '" title="' + esc(ev.ticker + " · " + fmtEvDate(ev.date) +
-        (ernWhen(ev) ? ", " + ernWhen(ev) : ", time not announced") + " · tap for the company page") + '">' +
+        ", " + (typeof ernWhenFull === "function" ? ernWhenFull(ev) : (ernWhen(ev) || "time not announced")) + " · tap for the company page") + '">' +
       "<td class=\"t\"><b>" + esc(ev.ticker) + "</b></td>" +
       '<td class="n">' + (eps != null ? esc(ernNum(eps)) : '<span class="na">—</span>') + "</td>" +
       '<td class="n">' + (rev != null && rev > 0 ? esc(ercMoney(rev)) : '<span class="na">—</span>') + "</td>" +
@@ -15678,8 +15721,8 @@ function ercOrder(list, mcap) {
 }
 const ercWhenShort = (r) => { const w = ernWhen(r); return w === "before the open" ? "open" : w === "after the close" ? "close" : w; };
 function ercTitle(r) {
-  const res = ernResult(r), w = ernWhen(r);
-  return r.ticker + " · " + ernWeekday(r.date) + " " + ernMonthDay(r.date) + (w ? ", " + w : ", time not set") +
+  const res = ernResult(r), w = typeof ernWhenFull === "function" ? ernWhenFull(r) : ernWhen(r);   /* E1 — his clock first, the company's own second */
+  return r.ticker + " · " + ernWeekday(r.date) + " " + ernMonthDay(r.date) + (w ? ", " + w : ", time not announced") +
     (res ? " · EPS " + ernNum(res.act) + (res.est != null ? " against an estimate of " + ernNum(res.est) : "") +
            (res.sur ? " · " + (res.cls === "beat" ? "beat by " : res.cls === "miss" ? "missed by " : "") + res.sur : "")
          : " · not reported yet") + " · click for the card";
@@ -15726,6 +15769,12 @@ function ercChipHTML(r) {
     (res && res.sur ? '<span class="s' + (wild ? " is-scint" : "") + '"' + (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") +
       ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "") + "</span>";
 }
+/* E1 (15 Oct) — the squares scroll inside themselves: after a pick the card is scrolled into view where it was drawn */
+function ercShowPick() {
+  if (!S.ernPick || typeof document === "undefined" || !document.querySelector) return;
+  const card = document.querySelector("#evList .se-card");
+  if (card && typeof card.scrollIntoView === "function") { try { card.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {} }
+}
 function ercCardHTML(r) {
   return '<div class="se-card"><div class="se-card__hd"><span>' + esc(r.ticker) + " · " + esc(fmtEvDate(r.date)) + "</span>" +
     '<span class="se-card__x" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '">✕ close</span></div>' +
@@ -15736,7 +15785,7 @@ function ercWeekHTML(byDay) {
   /* the four groups are ernSlot's own order, so the week and the band agree:
      before the open, a given clock time, after the close, and — the common one for
      anything still to come — no time in the stored calendar at all. */
-  const slots = [[0, "before the open"], [1, "at a set time"], [2, "after the close"], [3, "time not set"]];
+  const slots = [[0, "before the open"], [1, "during the session"], [2, "after the close"], [3, "time not announced"]];   /* E1 — the same four words as the DAY square */
   return '<div class="se-wk">' + week.map((d) => {
     const list = ercOrder(byDay[d] || [], mcap);
     const body = list.length ? slots.map(function (sl) {
@@ -15746,11 +15795,12 @@ function ercWeekHTML(byDay) {
         inSlot.map(ercChipHTML).join("") + "</div></div>";
     }).join("") : '<div class="se-empty">no reports</div>';
     const open = (S.ernPick && S.ernPick.d === d) ? (list.filter((r) => r.ticker === S.ernPick.t)[0] || null) : null;
-    return '<div class="se-day' + (d === today ? " is-today" : d < today ? " is-past" : "") + '">' +
+    /* E1 (15 Oct) — the picked card sits ABOVE its day, not under thirty chips (see ercDayHTML) */
+    return (open ? ercCardHTML(open) : "") + '<div class="se-day' + (d === today ? " is-today" : d < today ? " is-past" : "") + '">' +
         '<div class="se-dlbl">' + esc(ernWeekday(d)) + "<b>" + esc(ernMonthDay(d)) + "</b>" +
         (list.length ? '<span class="cnt">' + list.length + " reporting</span>" : "") + "</div>" +
         "<div>" + body + "</div>" +
-      "</div>" + (open ? ercCardHTML(open) : "");
+      "</div>";
   }).join("") + "</div>";
 }
 /* ---- THE TIMELINE: the earnings room's own instrument ------------------------
@@ -16416,7 +16466,7 @@ function ercEmptyHTML(coh, all, what) {
    not announced — each with its own short scroll. A 38-name day reads on one
    screen. Nothing is dropped: the older UPCOMING | PAST · REPORTED list is still
    here, one click down, and a name still opens the same full card. */
-const ERC_DAY_SLOTS = [[0, "before the open"], [1, "at a set time"], [2, "after the close"], [3, "time not announced"]];
+const ERC_DAY_SLOTS = [[0, "before the open"], [1, "during the session"], [2, "after the close"], [3, "time not announced"]];   /* E1 — see ernSlot */
 let ERC_AUTO_DAY = null;                 /* the day the room chose for itself, and why it says so */
 function ercDayRowHTML(r) {
   const res = ernResult(r), on = S.ernPick && S.ernPick.t === r.ticker && S.ernPick.d === r.date;
@@ -16456,10 +16506,14 @@ function ercDayHTML(rows) {
   const when = d === today ? "TODAY" : d > today ? "AHEAD" : "PAST";
   const why = ERC_AUTO_DAY === d && d > today
     ? '<span class="sub">nothing reports today — this is the next day that does</span>' : "";
+  /* E1 (15 Oct) — the day says its own cut in one line ("7 before the open · 1 after the close"), and below, only the
+     groups that hold a name are drawn: Alan, of the empty ones, "all these lines … shit everywhere". */
+  const cut = list.length ? ERC_DAY_SLOTS.map((sl) => { const n = list.filter((r) => ernSlot(r) === sl[0]).length; return n ? n + " " + sl[1] : ""; }).filter(Boolean).join(" · ") : "";
   const head = '<div class="se-dhd"><span>' + esc(ernWeekday(d)) + "</span><b>" + esc(ernMonthDay(d) + " " + d.slice(0, 4)) + "</b>" +
     '<span>' + esc(when) + "</span>" +
     '<span class="sub">' + (list.length ? list.length + (list.length === 1 ? " report" : " reports") : "nothing here") +
-      (coh !== "ALL" ? " · " + allN + " across all names" : "") + "</span>" + why + "</div>";
+      (coh !== "ALL" ? " · " + allN + " across all names" : "") + "</span>" + why + "</div>" +
+    (cut ? '<div class="se-dcut">' + esc(cut) + "</div>" : "");
   if (!list.length) {
     const next = ercNextBusy(d);
     return head + '<div class="se-dnone">' +
@@ -16476,12 +16530,15 @@ function ercDayHTML(rows) {
        every name sits in one slot, and four equal columns would push it off the
        bottom of the panel — the very scroll this view exists to end. */
     const grow = Math.min(6, 1 + Math.round(inSlot.length / 3));
+    if (!inSlot.length) return "";   /* E1 — an empty group is not drawn; the cut line above already says what the day holds */
     return '<div class="se-dcol" style="flex-grow:' + grow + '"><h5>' + esc(sl[1]) + (inSlot.length ? "<b>" + inSlot.length + "</b>" : "") + "</h5>" +
-      (inSlot.length ? '<div class="se-dlist">' + inSlot.map(ercDayRowHTML).join("") + "</div>"
-                     : '<div class="se-dnone">—</div>') + "</div>";
+      '<div class="se-dlist">' + inSlot.map(ercDayRowHTML).join("") + "</div></div>";
   }).join("");
   const open = (S.ernPick && S.ernPick.d === d) ? (list.filter((r) => r.ticker === S.ernPick.t)[0] || null) : null;
-  return head + '<div class="se-dcols">' + cols + "</div>" + (open ? ercCardHTML(open) : "");
+  /* E1 (15 Oct) — Alan: "I click on TSM. Oh, it brings it out at the bottom. I could barely see that." MEASURED on live
+     7b66061 at 1680×1050: the card was appended UNDER the columns — top at y=872, bottom at 1,123, below the 1,050 px
+     window. The card now sits ABOVE the names, directly under the day's header, where the eye already is. */
+  return head + (open ? ercCardHTML(open) : "") + '<div class="se-dcols">' + cols + "</div>";
 }
 /* ============================================================================
    PAST REPORTED — a tab of its own again, and revamped
@@ -16881,10 +16938,11 @@ async function fillEvents(quiet) {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
     const today = todayISO();
     const sel = "select=ticker,date,eps_actual,eps_estimate,revenue_actual,revenue_estimate,surprise_pct,report_time,release_link,transcript_url,confirmed,call_url,release_summary,release_metrics,summary_source,release_source";   // FIX 3 (R46) — revenue_estimate for EPS+REV beat/miss
+    if (typeof ernProfEnsure === "function") ernProfEnsure();   // E1 — where each name reports from (one read, kept)
     const [up, past, tridx, csidx] = await Promise.all([
       pgErn("earnings_events?" + sel + "&date=gte." + today + "&order=date.asc&limit=300"),
       pgErn("earnings_events?" + sel + "&date=lt." + today + "&order=date.desc&limit=300"),
-      pg("earnings_call_transcripts?select=ticker,call_date&order=call_date.desc&limit=1000").catch(() => null),   // null = the read FAILED (kept apart from "no rows")  ·  REAL FIX — transcript_url column is dead (never written); this table is the real content index
+      pg("earnings_call_transcripts?select=ticker,quarter,call_date,updated_ts&order=call_date.desc&limit=1000").catch(() => null),   // null = the read FAILED (kept apart from "no rows")  ·  REAL FIX — transcript_url column is dead (never written); this table is the real content index
       pg("earnings_call_transcripts?select=ticker,quarter,call_date&ai_summary=not.is.null&order=call_date.desc&limit=1000").catch(() => null),   // keys only: which calls have a stored summary — ONE request for the whole feed, never one per card
     ]);
     if (!el("evList")) return;
@@ -16893,12 +16951,15 @@ async function fillEvents(quiet) {
        good index in place (on the very first load there is none, and the cards honestly show no control until a read works). */
     if (Array.isArray(tridx)) {
       TRANSCRIPT_IDX = new Map(); EV_TRKEYS = tridx.map((r) => r.ticker + "|" + r.call_date).join(",");
+      TRANSCRIPT_AT = new Map(); EV_TR_CHECKED = Date.now();   // E1 — each call's arrival stamp, and when this index was read
       tridx.forEach((r) => {
         if (!r.ticker || !r.call_date) return;
         const k = String(r.ticker).toUpperCase();
         if (!TRANSCRIPT_IDX.has(k)) TRANSCRIPT_IDX.set(k, []);
         TRANSCRIPT_IDX.get(k).push(r.call_date);
+        if (r.updated_ts) TRANSCRIPT_AT.set(k + "|" + r.call_date, r.updated_ts);
       });
+      if (typeof ernTrNewFrom === "function") { TR_NEW = ernTrNewFrom(tridx); TR_NEW_AT = Date.now(); }   // E1 — the "transcript is in" list, from the same read
     }
     if (Array.isArray(csidx)) { EV_CSKEYS = csidx; }
     CALLSUM_IDX = matchCallSummaries([...up, ...past], EV_CSKEYS);
@@ -21456,9 +21517,13 @@ function earningsBlockHTML(d) {
   /* REPORT TIME: the stored report_time when the calendar carries one; otherwise an explicit "time unknown". The old
      placeholder read "BMO/AMC", i.e. like a value (MEASURED 2026-09-18: 268 of 270 upcoming rows carry no report_time,
      so almost every upcoming card wore it). An unconfirmed date says so. */
-  const pill = (d.session
-    ? '<span class="sc-ern__pill">' + esc(d.session) + "</span>"
-    : '<span class="sc-ern__pill sc-ern__pill--wait" title="report time not in the stored calendar">time unknown</span>') +
+  /* E1 (15 Oct) — ONE label a person can read: his clock first, the company's own second for a name that reports from
+     abroad ("before the US open · Taipei, 12 h ahead"); "time not announced" only when nothing is stored, with whether
+     the DATE is confirmed. d.when is built by ernWhenFull; a caller without it still gets the stored session. */
+  const whenTxt = String(d.when || d.session || "").replace(" · date not confirmed", "");   // the unconfirmed pill beside it says that
+  const pill = (whenTxt && !/^time not announced/.test(whenTxt)
+    ? '<span class="sc-ern__pill" title="' + esc(whenTxt) + '">' + esc(whenTxt) + "</span>"
+    : '<span class="sc-ern__pill sc-ern__pill--wait" title="report time not in the stored calendar">' + esc(whenTxt || "time not announced") + '</span>') +
     (d.confirmed === false ? '<span class="sc-ern__pill sc-ern__pill--wait" title="date not yet confirmed by the issuer">unconfirmed</span>' : "");
   const dstr = d.date ? esc(fmtEvDate(d.date)) : "—";
   let rel = "", pastNoResult = false;
@@ -21518,8 +21583,14 @@ function earningsBlockHTML(d) {
   const foot = reported   // upcoming has nothing to link yet
     ? '<div class="sc-ern__foot">' +
         (d.releaseUrl ? '<a class="sc-ern__lnk" href="' + esc(d.releaseUrl) + '" target="_blank" rel="noopener">' + esc(ernReleaseLabel(d.releaseUrl)) + '</a>' : '<span class="sc-ern__lnk pending">◹ Release pending</span>') +
-        (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">◹ Transcript</button>' : '') +
-        (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener">◹ Call</a>' : '') +
+        /* E1 (15 Oct) — HONEST BUTTONS. Alan: "these buttons to the earnings call, what's the source? … I don't think it is
+           exactly what it is advertised to do." MEASURED: all 12 October call_url values are newswire notices ANNOUNCING the
+           call; none is a webcast. So a notice is called a notice, the company's own investor page is offered when it is
+           stored, and the transcript says when it arrived — or that it is still pending and when we last looked. */
+        (d.hasTranscript ? '<button class="sc-ern__lnk" data-act="fulltranscript" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '" title="' + esc("the stored call transcript" + (d.transcriptAt ? " · stored " + d.transcriptAt : "")) + '">◹ Transcript' + (d.transcriptAt ? " · in " + esc(d.transcriptAt) : "") + '</button>'
+          : (d.trChecked ? '<span class="sc-ern__lnk pending" title="no call transcript is stored for this report yet · the transcript index was last read at this time">◹ transcript pending · checked ' + esc(d.trChecked) + '</span>' : '')) +
+        (d.callUrl ? '<a class="sc-ern__lnk" href="' + esc(d.callUrl) + '" target="_blank" rel="noopener" title="' + esc(typeof ernCallTitle === "function" ? ernCallTitle(d.callUrl) : "the stored call link") + '">' + esc(typeof ernCallLabel === "function" ? ernCallLabel(d.callUrl) : "◹ Call") + '</a>' : '') +
+        (d.irUrl ? '<a class="sc-ern__lnk" href="' + esc(d.irUrl) + '" target="_blank" rel="noopener" title="the company\'s own investor page, where the webcast and its replay are posted">◹ IR page · ' + esc(typeof ernHost === "function" ? ernHost(d.irUrl) : "") + '</a>' : '') +
         /* the event's own stored summary comes first; only without one does the card offer the summary of THAT event's call,
            and it says so - a call summary is never presented as a release summary */
         (d.summary ? '<button class="sc-ern__lnk" data-act="ernsum" data-t="' + esc(d.ticker || "") + '" data-d="' + esc(d.date || "") + '">' + esc((d.summaryKind && d.summaryKind.btn) || "▤ Summary") + '</button>'
@@ -21547,8 +21618,164 @@ function earningsRowToBlock(row, callsum, callDays) {
     revenue: { est: num(row.revenue_estimate), actual: num(row.revenue_actual) },
     releaseUrl: row.release_link || null, transcriptUrl: row.transcript_url || null, callUrl: row.call_url || null, summary: row.release_summary || null, summaryKind: ernSummaryKind(row), metrics: row.release_metrics || null, sample: false,
     hasTranscript: transcriptExists(row.ticker, row.date, callDays),   // REAL FIX — row.transcript_url is a dead column; check the real content index instead (the company tab brings its own call dates)
+    /* E1 (15 Oct) — the readable time label, the transcript's arrival (or when we last looked), the IR page */
+    when: typeof ernWhenFull === "function" ? ernWhenFull(row) : null,
+    transcriptAt: typeof transcriptStamp === "function" ? transcriptStamp(row.ticker, row.date) : "",
+    trChecked: (typeof EV_TR_CHECKED !== "undefined" && EV_TR_CHECKED && num(row.eps_actual) != null && typeof ernEtHM === "function") ? ernEtHM(EV_TR_CHECKED) : "",
+    irUrl: typeof ernIrUrl === "function" ? ernIrUrl(row.ticker) : null,
     callSummary: (callsum instanceof Map && row.ticker && row.date) ? (callsum.get(String(row.ticker).toUpperCase() + "|" + row.date) || null) : null,
   };
+}
+/* ============================================================================
+   E1 (15 Oct) · WHERE A NAME REPORTS FROM, AND WHEN IN HIS DAY
+   Alan, 15 Oct, listening to TSMC's call: "the company reports in a time zone … very different from ours. So I imagine we
+   did not really consider Taiwanese time." company_profile.country (ISO-2) says where a company is at home; the label puts
+   his clock first and the company's own second. One read of the profile table for the whole universe, kept for the session.
+   The stored report_time is BMO, AMC or a clock written in New York time; a clock is converted with the zone's own rules
+   (daylight saving on both sides). Names whose home is not in the table (179 of 613 have no country stored) read as US.
+   ============================================================================ */
+let ERN_PROF = null, ERN_PROF_BUSY = false;
+const ERN_TZ = { TW: ["Asia/Taipei", "Taipei"], JP: ["Asia/Tokyo", "Tokyo"], KR: ["Asia/Seoul", "Seoul"], CN: ["Asia/Shanghai", "Shanghai"], HK: ["Asia/Hong_Kong", "Hong Kong"],
+  SG: ["Asia/Singapore", "Singapore"], IN: ["Asia/Kolkata", "Mumbai"], AU: ["Australia/Sydney", "Sydney"], NZ: ["Pacific/Auckland", "Auckland"], IL: ["Asia/Jerusalem", "Tel Aviv"],
+  NL: ["Europe/Amsterdam", "Amsterdam"], DE: ["Europe/Berlin", "Frankfurt"], FR: ["Europe/Paris", "Paris"], GB: ["Europe/London", "London"], IE: ["Europe/Dublin", "Dublin"],
+  CH: ["Europe/Zurich", "Zurich"], SE: ["Europe/Stockholm", "Stockholm"], DK: ["Europe/Copenhagen", "Copenhagen"], NO: ["Europe/Oslo", "Oslo"], FI: ["Europe/Helsinki", "Helsinki"],
+  ES: ["Europe/Madrid", "Madrid"], IT: ["Europe/Rome", "Milan"], BE: ["Europe/Brussels", "Brussels"], LU: ["Europe/Luxembourg", "Luxembourg"], AT: ["Europe/Vienna", "Vienna"],
+  PL: ["Europe/Warsaw", "Warsaw"], BR: ["America/Sao_Paulo", "São Paulo"], AR: ["America/Argentina/Buenos_Aires", "Buenos Aires"], UY: ["America/Montevideo", "Montevideo"],
+  MX: ["America/Mexico_City", "Mexico City"], CL: ["America/Santiago", "Santiago"], ZA: ["Africa/Johannesburg", "Johannesburg"] };
+async function ernProfEnsure() {
+  if (ERN_PROF || ERN_PROF_BUSY) return;
+  ERN_PROF_BUSY = true;
+  try {
+    const rows = await pg("company_profile?select=ticker,country,exchange,ir_url&limit=2000");
+    const m = new Map();
+    (rows || []).forEach((r) => { if (r && r.ticker) m.set(String(r.ticker).toUpperCase(), { country: r.country || null, exchange: r.exchange || null, ir_url: r.ir_url || null }); });
+    ERN_PROF = m;
+    if (typeof S !== "undefined" && S.sec === "EVENTS" && typeof renderEvents === "function") renderEvents(S.coh);   // the labels fill in once, quietly
+  } catch (_) { /* no profile: every label reads as the stored session, nothing invented */ }
+  finally { ERN_PROF_BUSY = false; }
+}
+function ernHome(t) { const p = ERN_PROF && ERN_PROF.get(String(t || "").toUpperCase()); const c = p && p.country; return c && ERN_TZ[c] ? { country: c, tz: ERN_TZ[c][0], city: ERN_TZ[c][1] } : (c ? { country: c, tz: null, city: null } : null); }
+function ernIrUrl(t) { const p = ERN_PROF && ERN_PROF.get(String(t || "").toUpperCase()); return (p && p.ir_url && /^https?:\/\//i.test(p.ir_url)) ? p.ir_url : null; }
+function ernHost(url) { try { return new URL(String(url)).hostname.replace(/^www\./, ""); } catch (_) { return ""; } }
+/* hours a zone is ahead of New York on a given day — from the two zones' own calendars, so daylight saving on either side is respected */
+function ernTzAhead(tz, iso) {
+  try {
+    const at = new Date((iso || todayISO()) + "T12:00:00Z");
+    const stamp = (z) => { const p = new Intl.DateTimeFormat("en-US", { timeZone: z, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(at);
+      const g = (k) => +p.find((x) => x.type === k).value; return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute")); };
+    return (stamp(tz) - stamp("America/New_York")) / 3600e3;
+  } catch (_) { return null; }
+}
+function ernLocalClock(hm, iso, tz) {
+  const m = String(hm || "").match(/^(\d{1,2}):(\d{2})/), a = ernTzAhead(tz, iso);
+  if (!m || a == null) return "";
+  let mins = (+m[1]) * 60 + (+m[2]) + Math.round(a * 60), day = "";
+  if (mins >= 1440) { mins -= 1440; day = " next day"; } else if (mins < 0) { mins += 1440; day = " the day before"; }
+  return String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0") + day;
+}
+const ernEtHM = (ms) => { try { return ET_HM.format(new Date(ms)) + " ET"; } catch (_) { return ""; } };
+/* ONE LABEL: "before the open" · "after the close" · "09:00 ET" for a US name; "before the US open · Taipei, 12 h ahead" or
+   "01:30 ET (13:30 Taipei)" for a name from abroad; "time not announced · date confirmed" when no time is stored. */
+function ernWhenFull(r) {
+  const w = ernWhen(r), home = ernHome(r && r.ticker), conf = r && r.confirmed;
+  const confTxt = conf === true ? "date confirmed" : conf === false ? "date not confirmed" : "";
+  if (!w) return "time not announced" + (confTxt ? " · " + confTxt : "");
+  const abroad = home && home.tz && home.country !== "US" && home.country !== "CA";
+  if (w === "before the open" || w === "after the close") {
+    if (!abroad) return w;
+    const a = ernTzAhead(home.tz, r.date), hrs = a == null ? "" : (Math.abs(a) % 1 ? Math.abs(a).toFixed(1) : String(Math.abs(a)));
+    return (w === "before the open" ? "before the US open" : "after the US close") + " · " + home.city + (a == null ? "" : ", " + hrs + " h " + (a >= 0 ? "ahead" : "behind"));
+  }
+  return w + " ET" + (abroad ? " (" + ernLocalClock(w, r.date, home.tz) + " " + home.city + ")" : "");
+}
+/* NOT SHOWN: "numbers in HH:MM". MEASURED 15 Oct: earnings_events.updated_ts is rewritten on every sweep pass while a field is
+   still missing (TSM's row read 07:10, then 07:30, then 07:40 ET on one morning), so it is the row's last write, not the
+   catch. A stamp for the catch itself (eps_actual's own set-time) would have to be stored by the sweep first. */
+/* the Call link says what it is. MEASURED 15 Oct: every stored call_url (12 in October) is a newswire notice announcing the
+   call — businesswire 5, prnewswire 5, globenewswire 2 — never the webcast itself. */
+const ERN_WIRES = /(^|\.)(businesswire|prnewswire|globenewswire|accesswire|newsfilecorp|newswire)\./i;
+function ernCallLabel(url) { const h = ernHost(url); return h && ERN_WIRES.test(h) ? "◹ Call notice · " + h.replace(/\.com$/, "") : "◹ Call" + (h ? " · " + h : ""); }
+function ernCallTitle(url) { const h = ernHost(url); return h && ERN_WIRES.test(h) ? "a newswire notice ANNOUNCING the call (dial-in, time, where the webcast will be) — not the webcast itself" : "the stored call link"; }
+/* the transcript's own arrival stamp, from the index read with the room (earnings_call_transcripts.updated_ts) */
+let TRANSCRIPT_AT = new Map(), EV_TR_CHECKED = 0;
+function transcriptStamp(ticker, date) {
+  if (!ticker || !date || !(TRANSCRIPT_AT instanceof Map)) return "";
+  const k = String(ticker).toUpperCase(), d0 = new Date(date + "T00:00:00").getTime();
+  let best = null;
+  TRANSCRIPT_AT.forEach((ts, key) => { if (key.indexOf(k + "|") !== 0) return; const cd = key.slice(k.length + 1);
+    if (Math.abs(new Date(cd + "T00:00:00").getTime() - d0) <= 3 * 86400000 && (best == null || ts > best)) best = ts; });
+  const ms = best ? Date.parse(best) : NaN;
+  return isFinite(ms) ? ernEtHM(ms) : "";
+}
+/* ============================================================================
+   E1 (15 Oct) · "TRANSCRIPT IS IN" — the plain signal
+   Alan: "Is there a way we can establish alerts for that kind of thing?" A transcript that arrived in the last two days,
+   for a call held in the last two weeks, for a name the Hub tracks (UNIVERSE = the cohorts table, his universe), is
+   listed newest first under the room's tape as "NEW · transcript in", and the same name on the Station's EVENTS tape
+   wears "◆ transcript in" and scintillates once, through the one primitive every other arrival uses (ernScintPaint).
+   Seen once in this browser, a chip stops flashing (hub.ern.trseen) but stays listed for its two days. Nothing is pushed
+   to a phone from here: that stays with the coordinator.
+   ============================================================================ */
+let TR_NEW = [], TR_NEW_AT = 0, TR_NEW_BUSY = false;
+const TR_NEW_WINDOW_MS = 48 * 3600e3, TR_NEW_CALL_DAYS = 14, TR_NEW_TTL_MS = 5 * 60e3, TR_NEW_MAX = 8;
+function ernTrNewFrom(rows, nowMs) {
+  const now = isFinite(nowMs) ? nowMs : Date.now(), out = [];
+  (rows || []).forEach((r) => {
+    if (!r || !r.ticker || !r.call_date || !r.updated_ts) return;
+    if (typeof UNIVERSE !== "undefined" && UNIVERSE && !UNIVERSE.has(r.ticker)) return;
+    const up = Date.parse(r.updated_ts), cd = Date.parse(r.call_date + "T12:00:00Z");
+    if (!isFinite(up) || !isFinite(cd) || now - up > TR_NEW_WINDOW_MS || now - up < -600e3) return;
+    if (now - cd > TR_NEW_CALL_DAYS * 86400000) return;   // a backfilled old quarter (USB's 2024 calls landed 15 Oct) is not "new"
+    out.push({ ticker: String(r.ticker).toUpperCase(), quarter: r.quarter || "", call_date: r.call_date, at: up, key: String(r.ticker).toUpperCase() + "|" + r.call_date + "|" + r.updated_ts });
+  });
+  return out.sort((a, b) => b.at - a.at);
+}
+async function ernTrNewRead(force) {
+  if (TR_NEW_BUSY || (!force && Date.now() - TR_NEW_AT < TR_NEW_TTL_MS)) return;
+  TR_NEW_BUSY = true;
+  try {
+    const since = new Date(Date.now() - TR_NEW_WINDOW_MS).toISOString(), from = ernShift(todayISO(), -TR_NEW_CALL_DAYS);
+    const rows = await pg("earnings_call_transcripts?select=ticker,quarter,call_date,updated_ts&updated_ts=gte." + encodeURIComponent(since) + "&call_date=gte." + from + "&order=updated_ts.desc&limit=60");
+    TR_NEW = ernTrNewFrom(rows); TR_NEW_AT = Date.now();
+    ernTrNewPaint();
+    try { if (typeof renderTopTape === "function") renderTopTape(Math.floor(Date.now() / 1000)); } catch (_) {}
+    try { if (typeof renderErnRoomTape === "function") renderErnRoomTape(Math.floor(Date.now() / 1000)); } catch (_) {}
+  } catch (_) { /* the last list stays */ }
+  finally { TR_NEW_BUSY = false; }
+}
+/* the entry for an earnings row: the same name, the call within three days of the report, arrived in the last day */
+function ernTranscriptJustIn(r, nowMs) {
+  if (!r || !r.ticker || !r.date || !TR_NEW.length) return null;
+  const now = isFinite(nowMs) ? nowMs : Date.now(), d0 = Date.parse(r.date + "T12:00:00Z"), k = String(r.ticker).toUpperCase();
+  for (const e of TR_NEW) {
+    if (e.ticker !== k) continue;
+    if (Math.abs(Date.parse(e.call_date + "T12:00:00Z") - d0) > 3 * 86400000) continue;
+    if (now - e.at > 24 * 3600e3) continue;
+    return { at: ernEtHM(e.at), quarter: e.quarter, call_date: e.call_date };
+  }
+  return null;
+}
+function ernTrSeen() { try { return new Set(JSON.parse(lsGet("hub.ern.trseen") || "[]")); } catch (_) { return new Set(); } }
+function ernTrNewHTML() {
+  if (!TR_NEW.length) return "";
+  const seen = ernTrSeen();
+  const chip = (e) => { const d = new Date(e.at); let when = ""; try { when = ernWeekday(ET_DAY.format(d)) + " " + ernEtHM(e.at); } catch (_) { when = ernEtHM(e.at); }
+    return '<button type="button" class="ern-trchip' + (seen.has(e.key) ? "" : " is-unseen") + '" data-act="fulltranscript" data-t="' + esc(e.ticker) + '" data-q="' + esc(e.quarter) + '" data-d="' + esc(e.call_date) + '" data-key="' + esc(e.key) +
+      '" title="' + esc("the call transcript for " + e.ticker + (e.quarter ? " " + e.quarter : "") + " arrived " + when + " · tap to read it") + '"><b>NEW · transcript in</b><span>' + esc(e.ticker) + (e.quarter ? " " + esc(e.quarter) : "") + "</span><i>" + esc(when) + "</i></button>"; };
+  return '<div class="ern-trnew"><span class="ern-trnew__lbl" title="call transcripts that arrived in the last two days, for the names the Hub tracks, newest first">TRANSCRIPTS IN →</span>' + TR_NEW.slice(0, TR_NEW_MAX).map(chip).join("") + "</div>";
+}
+function ernTrNewPaint() {
+  if (typeof document === "undefined" || typeof el !== "function") return;
+  const host = el("ernTrNew");
+  if (!host) return;
+  const html = ernTrNewHTML();
+  if (host.innerHTML !== html) host.innerHTML = html;
+  const seen = ernTrSeen(); let changed = false;
+  [].slice.call(host.querySelectorAll(".ern-trchip.is-unseen")).forEach((node) => {
+    if (!node.__scintDone) { node.__scintDone = true; try { scScint(node, true); } catch (_) {} }
+    if (!seen.has(node.dataset.key)) { seen.add(node.dataset.key); changed = true; }
+  });
+  if (changed) lsSet("hub.ern.trseen", JSON.stringify([...seen].slice(-200)));
 }
 /* WHICH CALL SUMMARY BELONGS TO WHICH EARNINGS EVENT. MEASURED 2026-09-18: FDX Jun 23, MU Jun 24 and COST May 28 (and 55
    other reported events) have no release_summary while the call held for that very event has a stored ai_summary - the
@@ -22699,7 +22926,11 @@ function ernWhen(r) {
   const hm = t.match(/^(\d{1,2}):(\d{2})/);
   return hm ? hm[1] + ":" + hm[2] : "";
 }
-const ernSlot = (r) => { const w = ernWhen(r); return w === "before the open" ? 0 : w === "after the close" ? 2 : w ? 1 : 3; };
+/* E1 (15 Oct) — a clock time is placed by the US session it falls in, not in a column of its own. "At a set time" was a
+   column that stood empty beside three others (0 of October's 290 rows carry a clock; 109 BMO, 79 AMC, 102 nothing).
+   A clock before 09:30 ET is before the open, 16:00 or later is after the close, between the two is during the session. */
+const ernSlot = (r) => { const w = ernWhen(r); if (w === "before the open") return 0; if (w === "after the close") return 2; if (!w) return 3;
+  const m = w.match(/^(\d{1,2}):(\d{2})$/), mins = m ? (+m[1]) * 60 + (+m[2]) : null; return mins == null ? 1 : mins < 570 ? 0 : mins >= 960 ? 2 : 1; };
 /* the result, read the way the calendar reads a surprise: above the estimate is the green one, below it the red one. */
 function ernResult(r) {
   const a = num(r.eps_actual);
@@ -22715,7 +22946,7 @@ function ernResult(r) {
               : (d > 0 ? "+" : "−") + Math.abs(d).toFixed(2) };
 }
 function ernTitle(r, res) {
-  const w = ernWhen(r);
+  const w = typeof ernWhenFull === "function" ? ernWhenFull(r) : ernWhen(r);   /* E1 — the hover says where the name reports from */
   return r.ticker + " · " + ernWeekday(r.date) + " " + ernMonthDay(r.date) + (w ? ", " + w : "") +
     (res ? " · EPS " + ernNum(res.act) + (res.est != null ? " against an estimate of " + ernNum(res.est) : "") +
            (res.sur ? " · " + (res.cls === "beat" ? "beat by " : res.cls === "miss" ? "missed by " : "") + res.sur : "")
@@ -22776,10 +23007,14 @@ function ernItemHTML(r, todayIso, nowMs) {
   const mark = (tier === "today" || tier === "tomorrow" || tier === "week") && ernTimeJustAnnounced(r, nowMs)
     ? '<span class="ern-new" title="the report time for this date was stored in the last day">time announced</span>' : "";
   const late = tier === "past" ? '<span class="ern-est">no result stored yet</span>' : "";
+  /* E1 (15 Oct) — the call transcript arrived in the last day: the item says so and scintillates once (the same
+     .is-scint[data-up] the surprise diamond uses, painted by ernScintPaint). Guarded: the band block runs alone in tests. */
+  const trin = typeof ernTranscriptJustIn === "function" ? ernTranscriptJustIn(r, nowMs) : null;
+  const trMark = trin ? '<span class="ern-new ern-trin is-scint" data-up="1" title="' + esc("the call transcript arrived " + trin.at + " · it is in the EARNINGS room") + '">◆ transcript in</span>' : "";
   return '<span class="sc-tape__item ern-it is-' + st + " ern-t-" + tier + (tier === "today" ? " is-live" : "") +
     '" data-act="row" data-t="' + esc(r.ticker) + '" title="' + esc(ernTitle(r, res)) + '">' +
     '<span class="ern-when' + (st === "today" ? " is-today" : "") + '">' + esc(ernWhenLabel(r, tier, todayIso)) + "</span>" +
-    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + est + late + mark + "</span>" +
+    '<span class="ern-tk">' + esc(r.ticker) + "</span>" + resHTML + est + late + mark + trMark + "</span>" +
     '<span class="sc-tape__dot">·</span>';
 }
 function ernBandItems(todayIso) {
@@ -22859,6 +23094,7 @@ async function ernRead() {
     const kept = (rows || []).filter((r) => r && r.ticker && UNIVERSE.has(r.ticker));
     ERN_ROWS = ernSupersede(kept, kept);            // a date the provider moved never rides the band
     ERN_AT = Date.now(); ERN_FAIL_AT = 0;
+    if (typeof ernTrNewRead === "function") ernTrNewRead(false);   /* E1 — "transcript in": a small read on the same ten minutes, so the tape flashes on any room */
     if (typeof H3_TAPES_ON !== "undefined" && H3_TAPES_ON && typeof ernDayHistRead === "function") ernDayHistRead();   /* H3 — once a day: how heavy is a day */
   } catch (err) {
     ERN_FAIL_AT = Date.now();            // the last good rows stay on screen; the tick retries
@@ -23097,11 +23333,14 @@ function ernEcItemHTML(it, st, todayIso) {
         (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") + ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "")
     : st === "due" ? '<span class="ecb-res">now</span>' : "";
   const day = it.day === todayIso ? "TODAY" : ernWeekday(it.day);
+  /* E1 (15 Oct) — "◆ transcript in" on the concise tape too, the same way (see ernItemHTML) */
+  const trin = typeof ernTranscriptJustIn === "function" ? ernTranscriptJustIn(it.r) : null;
+  const trMark = trin ? '<span class="ern-new ern-trin is-scint" data-up="1" title="' + esc("the call transcript arrived " + trin.at + " · it is in the EARNINGS room") + '">◆ transcript in</span>' : "";
   return '<span class="sc-tape__item ecb-it ern-ec is-' + st + ' is-high" data-act="row" data-t="' + esc(it.ticker) +
     '" title="' + esc(ernTitle(it.r, res)) + '">' +
     '<span class="ecb-dot" style="color:' + ERN_EC_HUE + '">●</span>' +
     '<span class="ecb-when' + (it.day === todayIso ? " is-today" : "") + '">' + esc(day + (it.slot ? " " + it.slot : "")) + "</span>" +
-    '<span class="ecb-nm">' + esc(it.ticker) + "</span>" + resHTML +
+    '<span class="ecb-nm">' + esc(it.ticker) + "</span>" + resHTML + trMark +
     "</span>" + '<span class="sc-tape__dot">·</span>';
 }
 /* THE CONCISE EARNINGS TAPE — the EVENTS tape's window and NOW marker, earnings only */
@@ -24343,6 +24582,11 @@ document.addEventListener("click", (e) => {
     }
     /* one tap back to the whole universe */
     case "ernall": { S.ernCohPick = "ALL"; S.ernPick = null; renderEvents(S.coh); ercRead(false); break; }
+    case "ernfold": {   /* E1 — fold or unfold one of the extras; remembered */
+      const box = a.closest ? a.closest(".ev-fold") : null;
+      if (box) { const shut = !box.classList.contains("is-shut"); box.classList.toggle("is-shut", shut); lsSet("hub.ern.fold." + (a.dataset.k || ""), shut ? "1" : "0"); }
+      break;
+    }
     case "ernjump": { S.ernDay = a.dataset.d || todayISO(); S.ernPick = null; ERC_AUTO_DAY = null; renderEvents(S.coh); ercRead(false); break; }
     case "ernday": {
       S.ernDay = a.dataset.d || todayISO(); S.ernSpan = "WEEK"; S.ernPick = null;
@@ -24353,6 +24597,7 @@ document.addEventListener("click", (e) => {
       const t = a.dataset.t, d = a.dataset.d;
       S.ernPick = (S.ernPick && S.ernPick.t === t && S.ernPick.d === d) ? null : { t: t, d: d };
       renderEvents(S.coh);
+      if (typeof ercShowPick === "function") ercShowPick();   /* E1 — and the card is brought into view inside its square */
       break;
     }
     case "cohgeigertoggle": {   // R37 — expand the hero cohort geiger to show median/min/max
