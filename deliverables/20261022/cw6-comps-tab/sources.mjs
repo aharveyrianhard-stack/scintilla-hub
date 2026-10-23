@@ -19,18 +19,26 @@ const chunk = (a, n) => { const out = []; for (let i = 0; i < a.length; i += n) 
 /** The store: one file per company; the table first when it exists. Returns {T: answers} and what was not found. */
 export async function fromStore(tickers, { fetchJson, read }) {
   const out = {}, missing = [], from = {};
+  /* coordinator, 23 Oct: the table is filled each weekday morning by the comps-fill job; tableAt is when this set's statements,
+     estimates and quotes were read (profile and FMP's peer list are carried from the store, so they do not date the read) */
+  let tableAt = null;
   if (read) {
     try {
       const rows = [];
       for (const c of chunk(tickers, 60)) rows.push(...(await read(`comps_fmp_answers?select=ticker,path,status,fetched_at,data&ticker=in.(${c.map(encodeURIComponent).join(",")})`) || []));
-      for (const r of rows) { (out[r.ticker] ||= {})[r.path] = { status: r.status, fetched_utc: r.fetched_at, data: r.data }; from[r.ticker] = "public.comps_fmp_answers"; }
+      for (const r of rows) {
+        (out[r.ticker] ||= {})[r.path] = { status: r.status, fetched_utc: r.fetched_at, data: r.data }; from[r.ticker] = "public.comps_fmp_answers";
+        if (r.status !== 200 || !r.fetched_at || r.path === "profile" || r.path === "stock-peers") continue;
+        const at = new Date(r.fetched_at).toISOString();
+        tableAt = tableAt ? { first: at < tableAt.first ? at : tableAt.first, last: at > tableAt.last ? at : tableAt.last, n: tableAt.n + 1 } : { first: at, last: at, n: 1 };
+      }
     } catch (_) { /* the table is not applied yet: the files answer */ }
   }
   await Promise.all(tickers.filter((t) => !out[t]).map(async (t) => {
     try { const r = await fetchJson(STORE + encodeURIComponent(t) + ".json"); out[t] = r.answers; from[t] = "store file " + (r.filled_utc || ""); }
     catch (_) { missing.push(t); }
   }));
-  return { answers: out, missing, from };
+  return { answers: out, missing, from, tableAt };
 }
 let FX_STORE = null;
 export async function storeFx(fetchJson) { if (FX_STORE) return FX_STORE; try { FX_STORE = await fetchJson(STORE + "_fx.json"); } catch (_) { FX_STORE = { rates: {} }; } return FX_STORE; }

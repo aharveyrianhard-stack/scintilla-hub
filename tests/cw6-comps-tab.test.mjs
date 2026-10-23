@@ -86,3 +86,21 @@ test("coordinator 22 Oct: a reviewed set opens with the size band off; the busin
   assert.match(tab, /const S = \{ root, opts, T, band: BAND_DEFAULT,/, "every other set starts at the default band");
   assert.match(tab, /starts on for the business-lines sets and off for the reviewed sets/, "the page says so");
 });
+
+test("coordinator 23 Oct: the table answers first and dates the read; profile and peers do not date it; no table → the files", async () => {
+  const { fromStore } = await import("../deliverables/20261022/cw6-comps-tab/sources.mjs");
+  const rows = [
+    { ticker: "NVDA", path: "analyst-estimates", status: 200, fetched_at: "2026-10-26T10:30:05.1+00:00", data: [] },
+    { ticker: "NVDA", path: "quote", status: 200, fetched_at: "2026-10-26T10:30:01+00:00", data: { price: 1 } },
+    { ticker: "NVDA", path: "profile", status: 200, fetched_at: "2026-10-20T03:28:57+00:00", data: [] },
+    { ticker: "NVDA", path: "income-statement-ttm", status: 429, fetched_at: "2026-10-26T10:31:00+00:00", data: null },
+  ];
+  const files = (u) => { if (u.endsWith("/AMD.json")) return Promise.resolve({ answers: { quote: { status: 200 } }, filled_utc: "2026-10-22T18:07:00Z" }); return Promise.reject(new Error("404")); };
+  const a = await fromStore(["NVDA", "AMD"], { fetchJson: files, read: async () => rows });
+  assert.equal(a.from.NVDA, "public.comps_fmp_answers"); assert.match(a.from.AMD, /^store file/);
+  assert.deepEqual(a.tableAt, { first: "2026-10-26T10:30:01.000Z", last: "2026-10-26T10:30:05.100Z", n: 2 });
+  const b = await fromStore(["AMD"], { fetchJson: files, read: async () => { throw new Error("404"); } });
+  assert.equal(b.tableAt, null); assert.match(b.from.AMD, /^store file/);
+  const tab = readFileSync(here(D + "tab.mjs"), "utf8");
+  assert.match(tab, /S\.tableAt = st\.tableAt/); assert.match(tab, /re-read server-side each weekday morning by the comps-fill job/);
+});
