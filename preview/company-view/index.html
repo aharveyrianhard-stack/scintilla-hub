@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from c8f81dd) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 36a209a) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -2482,6 +2482,18 @@ body.tvmodal-open{ overflow:hidden; }
    (b) values right-aligned tabular ink; impact dots styled inline in econRowHTML.
    ============================================================================ */
 body.econ .sc-cohrow{ display:none; }
+/* REPORTS (23 Oct) — market-wide room: same chrome rule as ECON; the report fills the panel */
+body.reports .sc-cohrow, body.reports .sc-cohsearch{ display:none; }
+.rep-room{ min-height:0; }
+.rep-bar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 12px; border-bottom:.8px solid var(--line); }
+.rep-chip{ font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3);
+  background:none; border:.8px solid var(--line2); padding:6px 10px; cursor:pointer; }
+.rep-chip.is-active{ color:var(--crk); border-color:var(--hair); }
+.rep-open{ margin-left:auto; font-family:var(--mono); font-size:11px; letter-spacing:.12em; color:var(--crk);
+  text-decoration:none; border:.8px solid var(--hair); padding:6px 10px; }
+.rep-sub{ font-family:var(--sans); font-size:12px; color:var(--ink3); padding:7px 12px; }
+.rep-stamp{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
+.rep-frame{ flex:1 1 auto; width:100%; min-height:72vh; border:0; background:var(--bg); }
 body.econ .sc-cohsearch{ display:none; }
 .econ-val{ margin-left:auto; flex:none; text-align:right; color:var(--ink);
   font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; }
@@ -6514,6 +6526,7 @@ function scEntryRoom() {
   try {
     const h = String((typeof location !== "undefined" && location.hash) || "").replace(/^#/, "").toLowerCase();
     if (h === "economic" || h === "calendar") return "ECONOMIC";
+    if (h === "reports" || h === "report") return "REPORTS";   /* REPORTS (23 Oct) — #reports opens the room */
     if (h === "sentiment" || h === "fear-greed") return "SENTIMENT";
     if (h === "prediction" || h === "prediction-markets" || h === "polymarket") return "SENTIMENT";   /* P2 (2 Oct) — opens on the PREDICTION MARKETS sub-tab (scEntrySentiTab) */
     if (h === "earnings" || h === "events") return "EVENTS";
@@ -6565,8 +6578,10 @@ const S = {
 
 /* R49 §5 — SCENES sits directly after DASHBOARD: it is the same Layer-0 views at
    full size, so it belongs beside the room whose cramped right pane it relieves. */
-const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "USUAL", "ECONOMIC"];   /* 27 Sep — USUAL DAY + sigma events, their own room beside EVENTS */   /* SENTIMENT — one consolidated market-wide reading (Alan, 23 Sep): sits beside SOCIAL, whose SENTIMENT sub-tab keeps its per-ticker view. */   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
-const STATION_PUBLIC_URL = "https://station.scintillahub.ai/";
+const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS", "SCREENER", "EVENTS", "USUAL", "ECONOMIC", "REPORTS"];   /* REPORTS (Alan, 23 Oct): a master tab for finished reports; the first is the dot-com / chip-cycle study */   /* 27 Sep — USUAL DAY + sigma events, their own room beside EVENTS */   /* SENTIMENT — one consolidated market-wide reading (Alan, 23 Sep): sits beside SOCIAL, whose SENTIMENT sub-tab keeps its per-ticker view. */   /* FILES removed from master tabs — reached via the logo-menu "Files" item (goSec("FILES")); the room + viewKey still handle it. */
+/* 26 Oct (Alan: "you click on Scintilla Hub, you clicked for the station and it says what device"): the STATION tab opens the Station's
+   device chooser - the wall, the iPad, the iPhone, the floating volume - one tap to the right version */
+const STATION_PUBLIC_URL = "https://station.scintillahub.ai/go/";
 /* H3 (Alan, 1 Oct: "the tree map looks great… Is there a path to get to it somehow, somewhere?") — the market → cohorts tree
    (T1 29 Sep, T1b and T2 30 Sep) opens in this tab, so its grey BACK returns here and CLOSE goes home */
 const TREE_MAP_URL = "/deliverables/20260929/tree-map/";
@@ -12776,6 +12791,33 @@ const PARKED_MSG = {
   ALERTS:   'Alerts — <b>parked</b> until the hub is settled. Data is live (alert_log) — we design it then.',
   SCREENER: 'Screener — <b>parked</b> until the hub is settled. Data is live (signals · vol_signals, with z + percentile).',
 };
+/* ── Room · REPORTS (master tab) — Alan, 23 Oct: "add a new master tab… for reports, and add that as the .com bubble
+   report. I'll review it later." Each report is its own published page; the room shows one at a time, read in place,
+   with a way out to full screen. Add a report = one row in REPORTS_LIST. */
+const REPORTS_LIST = [
+  { id: "cycle", title: "Supply vs Demand · The Chip Cycle",
+    sub: "The dot-com memory and chip cycles, quarter by quarter, against the AI build-out of 2023–2026",
+    stamp: "data to 23 Oct 2026", url: "https://scintilla-cycle-study.vercel.app/" },
+  { id: "cycle", title: "Cycle Watch",
+    sub: "The chip cycle's warning lights in one place: credit, rates, the 200-day line, memory prices, revenue forecasts, factories and inventory - green, amber or red",
+    stamp: "live", url: "https://volume-pulse-pied.vercel.app/cycle.html" },
+  { id: "credit", title: "Credit Watch",
+    sub: "Company borrowing costs: spreads by rating, intraday bond-fund moves, and 5-year default-insurance (CDS) levels for Meta, Oracle, Nvidia and the AI builders",
+    stamp: "live", url: "https://volume-pulse-pied.vercel.app/credit.html" },
+];
+let REP_SEL = 0;
+function reportsRoomHTML() {
+  const r = REPORTS_LIST[REP_SEL] || REPORTS_LIST[0];
+  const chips = REPORTS_LIST.map((x, i) =>
+    '<button class="rep-chip' + (i === REP_SEL ? " is-active" : "") + '" onclick="repPick(' + i + ')">' + x.title + "</button>").join("");
+  return '<div class="body2" style="grid-template-columns:1fr">' +
+    '<div class="panel rep-room"><div class="sc-plabel">reports · ' + REPORTS_LIST.length + "</div>" +
+    '<div class="rep-bar">' + chips + '<a class="rep-open" href="' + r.url + '" target="_blank" rel="noopener">OPEN FULL SCREEN ↗</a></div>' +
+    '<div class="rep-sub">' + r.sub + ' · <span class="rep-stamp">' + r.stamp + "</span></div>" +
+    '<iframe class="rep-frame" src="' + r.url + '" title="' + r.title + '" loading="lazy"></iframe></div></div>';
+}
+function repPick(i) { REP_SEL = i; const m = el("main"); if (m && S.sec === "REPORTS") m.innerHTML = reportsRoomHTML(); }
+
 function parkedRoomHTML(sec) {
   return '<div class="body2" style="grid-template-columns:1fr">' +
     '<div class="panel"><div class="sc-plabel">' + sec.toLowerCase() + " · parked</div>" +
@@ -24046,6 +24088,7 @@ function viewKey() {
     case "ALERTS": case "SCREENER": return S.sec;
     case "FILES": return "FILES";
     case "USUAL": return "USUAL";
+    case "REPORTS": return "REPORTS";
   }
   return S.sec;
 }
@@ -24065,6 +24108,7 @@ function roomHTML() {
     case "ECONOMIC":  return (S.econView === "REGIME") ? regimeRoomHTML() : econRoomHTML();
     case "FILES":     return filesRoomHTML();
     case "USUAL":     return udRoomHTML();
+    case "REPORTS":   return reportsRoomHTML();   // REPORTS (23 Oct) — finished reports, read in place
   }
   return "";
 }
@@ -24079,6 +24123,7 @@ function sync() {
   document.body.classList.remove("co");
   document.body.classList.toggle("econ", S.sec === "ECONOMIC"); // FIX 6 — ECON is market-wide: cohort tabs + ticker search hide, restored on leave
   document.body.classList.toggle("senti", S.sec === "SENTIMENT"); // SENTIMENT is market-wide too — same chrome rule, its own class
+  document.body.classList.toggle("reports", S.sec === "REPORTS"); // REPORTS is market-wide too: no cohort row, no ticker search
   updateMtabs(); updateCohrow(); updateLive();
   const key = viewKey();
   if (key !== mountedKey) {
