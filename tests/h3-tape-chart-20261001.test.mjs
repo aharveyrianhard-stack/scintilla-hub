@@ -166,7 +166,9 @@ test("once the Station answers that it knows ?bare=hub, the company view's frame
 test("TREE is a master tab, after STATION, opening the tree map in this tab (its BACK returns here); the studies index has its card", () => {
   const SECTIONS = JSON.parse(page.match(/^const SECTIONS = (\[[^\]]*\]);/m)[1]);
   const box = { innerHTML: "" };
-  new Function("el", "SECTIONS", page.match(/^const STATION_PUBLIC_URL = [^\n]*/m)[0] + "\n" + page.match(/^const TREE_MAP_URL = [^\n]*/m)[0] + "\n" +
+  /* restated 26 Oct (the STATION tab opens the Brave Station app from the Hub's Safari app on a Mac): the tab reads STATION_APP_URL and
+     STATION_VIA_APP too; off here, so the chooser link this test has always seen */
+  new Function("el", "SECTIONS", page.match(/^const STATION_PUBLIC_URL = [^\n]*/m)[0] + "\n" + page.match(/^const STATION_APP_URL = [^\n]*/m)[0] + "\nconst STATION_VIA_APP = false;\n" + page.match(/^const TREE_MAP_URL = [^\n]*/m)[0] + "\n" +
     page.match(/^const ALLOCATION_PUBLIC_URL = [^\n]*/m)[0] + "\n" + page.match(/^const MTAB_LABEL = [^\n]*/m)[0] + "\n" +
     page.match(/function buildMtabs\(\) \{[\s\S]*?\n\}\n/)[0] + "buildMtabs();")(() => box, SECTIONS);
   const tabs = [...box.innerHTML.matchAll(/data-sec="([A-Z]+)"/g)].map((m) => m[1]);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 4f7c580) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 8375bee) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -6582,6 +6582,17 @@ const SECTIONS = ["DASHBOARD", "SCENES", "NEWS", "SOCIAL", "SENTIMENT", "ALERTS"
 /* 26 Oct (Alan: "you click on Scintilla Hub, you clicked for the station and it says what device"): the STATION tab opens the Station's
    device chooser - the wall, the iPad, the iPhone, the floating volume - one tap to the right version */
 const STATION_PUBLIC_URL = "https://station.scintillahub.ai/go/";
+/* 26 Oct (Alan: "Don't open the fucking station in Safari … I opened the station from the Scintilla or in the station PWA"): inside the Hub's
+   own Safari app on a Mac (the iMac's SCINTILLA app) a link to the Station opened inside that Safari app, where the X bridge (in Brave) cannot
+   reach it. There the STATION tab asks the iMac's SCINTILLA Station Opener (scintilla-station://) to bring up the Brave Station app instead;
+   everywhere else it opens the device chooser, as before. */
+const STATION_APP_URL = "scintilla-station://wall";
+const STATION_VIA_APP = stationViaApp(typeof navigator === "undefined" ? null : navigator, typeof matchMedia === "function" ? matchMedia : null);
+function stationViaApp(nav, mm) {
+  const ua = (nav && nav.userAgent) || "";
+  if (!/Macintosh/.test(ua) || !/AppleWebKit\//.test(ua) || /Chrome|Chromium|CriOS|Edg|Firefox|FxiOS|OPR/.test(ua) || (nav.maxTouchPoints || 0) > 1) return false;
+  return nav.standalone === true || !!(mm && mm("(display-mode: standalone)").matches);
+}
 /* H3 (Alan, 1 Oct: "the tree map looks great… Is there a path to get to it somehow, somewhere?") — the market → cohorts tree
    (T1 29 Sep, T1b and T2 30 Sep) opens in this tab, so its grey BACK returns here and CLOSE goes home */
 const TREE_MAP_URL = "/deliverables/20260929/tree-map/";
@@ -7673,7 +7684,9 @@ const MTAB_LABEL = { USUAL: "USUAL DAY", EVENTS: "EARNINGS" };
 function buildMtabs() {
   el("mtabs").innerHTML = SECTIONS.map((s) =>
     (s === "SCENES"
-      ? '<a role="tab" class="sc-mtab" data-sec="STATION" href="' + STATION_PUBLIC_URL + '" target="_blank" rel="noopener">STATION</a>' +
+      ? (STATION_VIA_APP
+          ? '<a role="tab" class="sc-mtab" data-sec="STATION" href="' + STATION_APP_URL + '" title="opens the SCINTILLA Station app (Brave), where X reaches it">STATION</a>'
+          : '<a role="tab" class="sc-mtab" data-sec="STATION" href="' + STATION_PUBLIC_URL + '" target="_blank" rel="noopener">STATION</a>') +
         '<a role="tab" class="sc-mtab" data-sec="TREE" href="' + TREE_MAP_URL + '" title="the market tree: market → asset class → sector → cohort → names, a Geiger on every one">TREE</a>'
       : '<button role="tab" class="sc-mtab" data-act="mtab" data-sec="' + s + '">' + (MTAB_LABEL[s] || s) + "</button>") +
     (s === "DASHBOARD" ? '<a role="tab" class="sc-mtab" data-sec="ALLOCATION" href="' + ALLOCATION_PUBLIC_URL + '">ALLOCATION</a>' : "")).join("");
