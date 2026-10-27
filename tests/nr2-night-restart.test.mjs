@@ -41,7 +41,7 @@ function night(opts = {}) {
   if (fresh) {
     const made = spawnSync("/bin/bash", [FAKEMAC, "init"], { env: { PATH, ...mac }, encoding: "utf8" });
     assert.equal(made.status, 0, made.stderr);
-    for (const n of ["kill", "open", "caffeinate", "gui"]) symlinkSync(FAKEMAC, join(dir, n));
+    for (const n of ["kill", "open", "caffeinate", "gui", "tvl"]) symlinkSync(FAKEMAC, join(dir, n));
   }
   if (opts.behave) writeFileSync(join(dir, "behave"), Object.entries(opts.behave).map(([k, v]) => `${k}=${v}`).join("\n") + "\n");
   const calls = join(dir, "calls.txt"), health = join(dir, "health.txt"), idle = join(dir, "idle.txt");
@@ -53,7 +53,7 @@ function night(opts = {}) {
   const env = {
     PATH, HOME: dir, ...mac,
     SCINTILLA_NIGHT_RELOAD_STATE: dir, NIGHT_RELOAD_LOG: join(dir, "log.txt"), SCINTILLA_NIGHT_RELOAD_GUI: join(dir, "gui"),
-    NR_KILL: join(dir, "kill"), NR_OPEN: join(dir, "open"), NR_CAFFEINATE: join(dir, "caffeinate"),
+    NR_KILL: join(dir, "kill"), NR_OPEN: join(dir, "open"), NR_CAFFEINATE: join(dir, "caffeinate"), NR_TVL: join(dir, "tvl"),
     NR_FAKE_HHMM: opts.hhmm || "0400", NR_FAKE_LOCKED: opts.locked || "no", NR_NO_SLEEP: "1", NR_FAKE_MACHINE: "Alan's iMac",
     NR_FAKE_IDLE_CMD: `${fm} pop "${idle}"`, NR_FAKE_HEALTH_CMD: `${fm} pop "${health}"`,
     NR_FAKE_APPS_CMD: `${fm} apps`, NR_FAKE_PS_CMD: `${fm} ps`, NR_FAKE_TOP_CMD: `${fm} top`, NR_FAKE_REGISTRY_CMD: `${fm} registry`, NR_FAKE_SYSMEM_CMD: `${fm} sysmem`,
@@ -66,7 +66,7 @@ function night(opts = {}) {
   const files = readdirSync(dir);
   const stamp = files.find((f) => f.startsWith(".restarted-"));
   return { dir, run, asked, start, end: table(dir),
-    gui: asked.filter((c) => !ACTS.test(c)), changed: asked.filter((c) => CHANGES.test(c)),
+    gui: asked.filter((c) => !ACTS.test(c) && !c.startsWith("TVL ")), changed: asked.filter((c) => CHANGES.test(c)), tvl: asked.filter((c) => c.startsWith("TVL ")),
     acts: asked.filter((c) => ACTS.test(c) && !c.startsWith("AWAKE")), awake: asked.filter((c) => c.startsWith("AWAKE")),
     closed: asked.filter((c) => c.startsWith("CLOSE")).map((c) => c.split(" ")[1]), opened: asked.filter((c) => c.startsWith("OPEN ")),
     /* 16 Oct 2026: the nightly job prints no NOTE line (a box at night blocked the next start); its note is a log line and a notification */
@@ -858,4 +858,62 @@ test("NR5: the kit - spaces.js reads the keys, the desktops, Stage Manager and t
   const home = mkdtempSync(join(tmpdir(), "nr2-home-"));
   const ex = spawnSync("/bin/bash", [join(KIT, "supervised-test.sh"), "--explain"], { env: { PATH, HOME: home }, encoding: "utf8" });
   for (const want of [/Control\+Right/, /ANOTHER desktop and in native full screen/, /No box/, /Stage Manager strip/, /REFUSED: the small app/]) assert.match(ex.stdout, want);
+});
+
+/* NR6 (27 Oct 2026) - TradingView comes back on its own layouts. On 26 Oct 04:00 and 27 Oct 04:10 TradingView reopened its three windows, then
+   moved FOCUS (D0N4w0QG) itself to the layout its third window was loading: no FOCUS, so no rotation and no play/pause until Alan fixed it by
+   hand. The job now copies what TradingView writes down as it closes, and after the restarts has kit/tv-layouts.mjs put back a moved tab
+   (its own tests: tests/nr6-tv-layouts.test.mjs). Here the stand-in Mac answers for it ("TVL ..." in calls.txt). */
+const MOVED = 'TradingView had moved one window from "CLAUDE · FOCUS iMac" (D0N4w0QG) to "combined auto diagonals and pivots" (vXFNJ5tr) - put back';
+
+test("NR6: the full night writes TradingView's windows down between its close and its open, and checks them once the restarts are done, before the Station is reloaded", () => {
+  const n = night();
+  assert.deepEqual(n.tvl, ["TVL snapshot", "TVL check 9222 fix"]);
+  const at = (re) => n.asked.findIndex((c) => re.test(c));
+  assert.ok(at(/^CLOSE tv:main/) < at(/^TVL snapshot/) && at(/^TVL snapshot/) < at(/^OPEN -g -a \/Applications\/TradingView\.app/), "written down after TradingView closed, before it opens again");
+  assert.ok(at(/^OPEN .*X\.app/) < at(/^TVL check/) && at(/^TVL check/) < at(new RegExp(`^reload ${STATION}`)), "checked after Brave is back, before the reload stage");
+  assert.deepEqual(n.changed, [`activate ${X}`, `activate ${STATION}`, ...RELOAD_STAGE], "the windows are asked exactly what they were before NR6");
+  assert.match(n.log, /TradingView: all 8 chart tabs came back on their own layouts/);
+  assert.match(n.last.split("\n")[0], /restarted: TradingView, the Hub app, Brave; the Station reloaded; X reloaded, the extension run, X confirmed working \(first try\)/);
+});
+
+test("NR6: a window TradingView moved is put back - the morning lines and the result say so", () => {
+  const n = night({ env: { FAKE_TVL_CHECK: MOVED } });
+  assert.ok(n.last.includes(MOVED), n.last);
+  assert.match(n.last.split("\n")[0], /a TradingView window put back on its own layout; the Station reloaded; X reloaded, the extension run, X confirmed working/);
+  const left = night({ env: { FAKE_TVL_CHECK: 'TradingView: one window is not back on its layout D0N4w0QG ("NVDA") - 2 windows show its charts, so it cannot tell which one was moved' } });
+  assert.match(left.last, /TradingView: one window is not back on its layout D0N4w0QG \("NVDA"\) - 2 windows show its charts/);
+  assert.doesNotMatch(left.last.split("\n")[0], /put back/);
+});
+
+test("NR6: the 27 Oct night - all three restarted, then somebody comes back before the Station is reloaded: TradingView is still checked (it only undoes TradingView's own move); nothing is reloaded", () => {
+  const n = night({ idle: ["900", "900", "900", "900", "900", "900", "sleep4", "touch", "since"], env: { FAKE_TVL_CHECK: MOVED } });
+  assert.deepEqual(n.closed, ["tv:main", "hub:main", "brave:main"]);
+  assert.deepEqual(n.tvl, ["TVL snapshot", "TVL check 9222 fix"]);
+  assert.equal(n.changed.filter((c) => /^(reload|shortcut)/.test(c)).length, 0, "nothing reloaded under their hands");
+  assert.ok(n.last.includes(MOVED));
+  const one = night({ idle: ["900", "900", "900", "900", "sleep4", "touch", "since"] });
+  assert.deepEqual(one.closed, ["tv:main"], "only TradingView was restarted before somebody came back");
+  assert.deepEqual(one.tvl, ["TVL snapshot", "TVL check 9222 fix"], "and it is still checked");
+});
+
+test("NR6: no check when TradingView was not restarted, has no debug port, its list was not found, or TV_LAYOUTS=no", () => {
+  assert.deepEqual(night({ behave: { tv: "refuses" } }).tvl, [], "it would not close: nothing to check");
+  const noport = night({ mac: { FAKEMAC_TV_ARGS: "" } });
+  assert.deepEqual(noport.tvl, []); assert.doesNotMatch(noport.log, /TradingView's windows were not written down/, "without a debug port there is nothing to say");
+  const nolist = night({ env: { FAKE_TVL_SNAPSHOT: "no" } });
+  assert.deepEqual(nolist.tvl, ["TVL snapshot"]);
+  assert.match(nolist.log, /TradingView's list of windows was not found\n.*\n?[\s\S]*TradingView's windows were not written down before it closed, so they are not checked/);
+  assert.deepEqual(night({ env: { TV_LAYOUTS: "no" } }).tvl, []);
+  const done = night({ hhmm: "0400" }); const later = night({ dir: done.dir, hhmm: "0410" });
+  assert.deepEqual(later.tvl, [], "a later try that restarts nothing checks nothing");
+});
+
+test("NR6: the kit - install.sh installs tv-layouts.mjs; it reads only TradingView's own debug port on this Mac and only ever moves a tab to a TradingView chart", () => {
+  assert.match(readFileSync(join(KIT, "install.sh"), "utf8"), /tv-layouts\.mjs/);
+  const src = readFileSync(join(KIT, "tv-layouts.mjs"), "utf8");
+  assert.deepEqual([...src.matchAll(/fetch\(`([^`]*)`/g)].map((m) => m[1]), ["http://127.0.0.1:${port}/json/list"]);
+  assert.deepEqual([...src.matchAll(/"Page\.navigate", \{ url: `([^`]*)`/g)].map((m) => m[1]), ["https://www.tradingview.com/chart/${f.layout}/"]);
+  assert.equal((src.match(/Page\.navigate/g) || []).length, 1, "one place can move a tab");
+  assert.match(src, /if \(!fix\) \{ say\(/, "without 'fix' it only says what it would do");
 });

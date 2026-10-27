@@ -233,5 +233,13 @@ case "$verb" in
       reload) case "${2:-}" in "$X_ID") echo "${FAKE_RELOAD_X:-ok:menu}" ;; *) echo ok:menu ;; esac ;;
       shortcut) echo "${FAKE_SHORTCUT:-sent}" ;;
     esac ;;
+  tvl)              # 27 Oct 2026 (NR6): kit/tv-layouts.mjs, written down as "TVL snapshot" / "TVL check <port> <fix>". FAKE_TVL_SNAPSHOT=no:
+                    # TradingView's list of windows is not found. FAKE_TVL_CHECK: what the check answers, "|" between lines (default: all home)
+    case "${1:-}" in
+      snapshot) echo "TVL snapshot" >> "$C"
+        if [ "${FAKE_TVL_SNAPSHOT:-yes}" = yes ]; then echo '{"tabs":[]}' > "$3"; echo "TradingView wrote down 8 chart tabs in 3 windows: D0N4w0QG ic90TC1n N7OPXJy3 B2I8l1CJ U0J48Wlk Ib4bi7Oh JHHbXcC5 vXFNJ5tr"
+        else echo "TradingView's list of windows was not found"; exit 2; fi ;;
+      check) echo "TVL check ${3:-} ${4:-}" >> "$C"; printf '%s\n' "${FAKE_TVL_CHECK:-TradingView: all 8 chart tabs came back on their own layouts}" | tr '|' '\n' ;;
+    esac ;;
   *) echo "fakemac.sh: unknown request '$verb'" >&2; exit 2 ;;
 esac

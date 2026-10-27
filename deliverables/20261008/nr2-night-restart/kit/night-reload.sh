@@ -20,6 +20,8 @@
 #          a line for Alan, and no further app is closed that night.
 #        - Brave is closed only when everything is in place to reconnect X afterwards (the plan below says "full", and X and the
 #          Station could just be brought to the front), and only when Brave has no window of its own (see "how Brave runs" below).
+#        - TradingView (27 Oct 2026): the list of windows and tabs it writes down as it closes is copied before it is opened again; after
+#          the restarts each chart tab is checked against that copy, and a tab TradingView itself moved to another layout is put back.
 #   4. proves it can bring X and the Station to the front BEFORE it reloads anything, so it never reloads the Station and then finds it
 #      cannot reach X.
 #   5. reloads each Station window (the app's own "Reload This Page" menu item - no typing), reloads X, waits for both to load,
@@ -109,6 +111,10 @@ QUIT_WAIT="${QUIT_WAIT:-30}"                  # seconds an app normally gets to 
 QUIT_PATIENCE="${QUIT_PATIENCE:-60}"          # more seconds for an app that is still closing; after that it is left as it is, never forced
 OPEN_WAIT="${OPEN_WAIT:-60}"                  # seconds to wait for an app (and its window) to be back, per try
 SETTLE_WAIT="${SETTLE_WAIT:-15}"              # seconds for Brave's reopened web apps to draw before the reload stage looks at them
+# TradingView's own layouts (27 Oct 2026): see "TradingView comes back on its own layouts" below. no = they are not checked
+TV_LAYOUTS="${TV_LAYOUTS:-yes}"
+TV_SUPPORT="${TV_SUPPORT:-$HOME/Library/Application Support/TradingView}"   # where TradingView writes down its windows (TVUserStorage/id-*/settings.json)
+NR_TVL="${NR_TVL:-}"                          # the command that runs kit/tv-layouts.mjs: empty = the Mac's own node; a stand-in in the tests
 # Brave's own windows (15 Oct 2026): written down before Brave is asked to quit, opened again after. See "Brave's own windows" below.
 REOPEN_BRAVE_WINDOWS="${REOPEN_BRAVE_WINDOWS:-yes}"
 BRAVE_PROFILE="${BRAVE_PROFILE:-$HOME/Library/Application Support/BraveSoftware/Brave-Browser/Default}"
@@ -133,7 +139,7 @@ TV_PID=""; TV_BID=""; TV_CMD=""; TV_ARGS=""; TV_PIDS=""; HUB_PID=""; HUB_BID="";
 BR_PID=""; BR_BID=""; BR_KIND=""; BR_CMD=""; BR_SHIMS=""; BR_PIDS=""
 BR_REC=""; BR_REC_HOW=""; BR_OWN=0; BR_CONSENT=""; BR_PARTS=""; WEBAPPS_REFRESHED=0; REFRESH_LINE=""
 SPACES=""; SPACE_KEYS=""; STAGE=""; SWOOSH=""; WALK_MAX=0; MY_LOCK=0; LOCK=""
-TV_B="0 0 0"; HUB_B="0 0 0"; BR_B="0 0 0"; SYS_B="0 0"; TV_WHY=""; HUB_WHY=""; BR_WHY=""; TV_W0=0; HUB_W0=0; X_TITLE0=""
+TV_B="0 0 0"; HUB_B="0 0 0"; BR_B="0 0 0"; SYS_B="0 0"; TV_WHY=""; HUB_WHY=""; BR_WHY=""; TV_W0=0; HUB_W0=0; X_TITLE0=""; TV_SNAP=""
 TV_PID0=""; TV_ARGS0=""; TV_BID0=""; HUB_PID0=""; HUB_BID0=""; HUB_NAME0=""; HUB_CMD0=""; BR_PID0=""; BR_BID0=""; BR_SHIMS0=""; TV_A="0 0 0"; HUB_A="0 0 0"; BR_A="0 0 0"; SYS_A="0 0"; R1=""; R2=""
 
 say() { printf '%s  [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$MODE" "$*" >> "$LOG" 2>/dev/null; [ "$VERBOSE" = 1 ] && printf '%s\n' "$*"; return 0; }
@@ -837,8 +843,45 @@ wait_window() {     # $1 = bundle id. Waits (at most OPEN_WAIT seconds) until th
     nap 2; w=$(( w + 2 ))
   done
 }
+# ---- TradingView comes back on its own layouts (27 Oct 2026) -------------------------------------------------------------------------
+# On 26 Oct 04:00 and 27 Oct 04:10 TradingView reopened its three windows, then moved FOCUS (D0N4w0QG) itself to the layout the third
+# window was loading: Alan woke to another layout in place of FOCUS and no rotation (its keeper feeds FOCUS only). What TradingView writes
+# down as it closes is copied before it is opened again; after the restarts every chart tab is checked against that copy, and a tab it
+# moved is put back - the one page that carries exactly that tab's boxes under another layout, never a guess (kit/tv-layouts.mjs).
+tvl() {             # kit/tv-layouts.mjs with the Mac's own node
+  if [ -n "$NR_TVL" ]; then "$NR_TVL" "$@"; return; fi
+  local n; for n in /usr/local/bin/node /opt/homebrew/bin/node; do [ -x "$n" ] && { "$n" "$KIT/tv-layouts.mjs" "$@"; return; }; done
+  echo "node is not installed on this Mac, so TradingView's windows cannot be checked"; return 2
+}
+tv_port() { printf '%s' "$TV_ARGS0" | sed -nE 's/.*--remote-debugging-port[= ]([0-9]+).*/\1/p'; }
+tv_snapshot() {     # right after TradingView has closed and before it is opened again
+  TV_SNAP=""
+  [ "$TV_LAYOUTS" = yes ] && [ -n "$(tv_port)" ] || return 0
+  local f="$STATE_DIR/tv-windows-before.json" line; rm -f "$f"
+  while IFS= read -r line; do [ -n "$line" ] && say "  $line"; done <<EOF
+$(tvl snapshot "$TV_SUPPORT" "$f" 2>&1)
+EOF
+  [ -s "$f" ] && TV_SNAP="$f"; return 0
+}
+tv_layouts_back() { # after the restarts, whoever is at the Mac: it only undoes a move TradingView made itself while it was opening
+  case ", $RESTARTED," in *", TradingView,"*) ;; *) return 0 ;; esac
+  [ "$TV_LAYOUTS" = yes ] || return 0
+  if [ -z "$TV_SNAP" ]; then
+    [ -n "$(tv_port)" ] && say "TradingView's windows were not written down before it closed, so they are not checked"; return 0
+  fi
+  say "TradingView: is every window back on its own layout?"
+  local out line; out="$(tvl check "$TV_SNAP" "$(tv_port)" fix 2>&1)"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in *"- put back") remark "$line"; DID="$DID a TradingView window put back on its own layout;" ;; *"not back on its layout"*|*"not confirmed"*) remark "$line" ;; *) say "  $line" ;; esac
+  done <<EOF
+$out
+EOF
+  return 0
+}
 open_tradingview() { # with the same start-up options it was running with
   may_change || return 1
+  tv_snapshot
   local a=() s="$TV_ARGS0"
   if [ -n "$s" ]; then
     s="${s#--}"
@@ -1187,6 +1230,7 @@ FRONT="$(gui front)"; say "in front before: $FRONT"
 
 restart_stage
 after_brave
+tv_layouts_back
 if [ "$SEEN_BACK" = 1 ] && [ "$BRAVE_RESTARTED" != 1 ]; then
   # the restart stopped because somebody came back, and Brave was not touched: X is as it was, so nothing is reloaded under their hands
   say "somebody is at the Mac - nothing is reloaded now; next try in ${SLOT_MINUTES} min"

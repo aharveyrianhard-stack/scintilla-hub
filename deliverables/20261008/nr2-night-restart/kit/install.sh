@@ -13,7 +13,7 @@ OSACOMPILE=/usr/bin/osacompile; CODESIGN=/usr/bin/codesign
 [ -n "${NR_TOOLS:-}" ] && { OSACOMPILE="$NR_TOOLS/osacompile"; CODESIGN="$NR_TOOLS/codesign"; }     # the tests build no real app
 mkdir -p "$DEST" "$HOME/Library/Logs"
 if [ "$SRC" != "$DEST" ]; then
-  for f in night-reload.sh gui.applescript windows.js spaces.js consent.js brave-tabs.js brave-session.pl launcher.applescript switch-on.sh rollback.sh supervised-test.sh config.example.env; do cp "$SRC/$f" "$DEST/$f"; done
+  for f in night-reload.sh gui.applescript windows.js spaces.js consent.js brave-tabs.js brave-session.pl tv-layouts.mjs launcher.applescript switch-on.sh rollback.sh supervised-test.sh config.example.env; do cp "$SRC/$f" "$DEST/$f"; done
 fi
 chmod +x "$DEST/night-reload.sh" "$DEST/switch-on.sh" "$DEST/rollback.sh" "$DEST/supervised-test.sh"
 if [ ! -f "$DEST/config.env" ]; then cp "$SRC/config.example.env" "$DEST/config.env"
