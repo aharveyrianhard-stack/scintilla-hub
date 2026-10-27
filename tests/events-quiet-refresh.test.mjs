@@ -72,7 +72,7 @@ test("master feed: a quiet re-read whose index reads are REJECTED keeps the last
   const src = take(/async function fillEvents\(quiet\) \{[\s\S]*?\n\}\n/);
   const up = [{ ticker: "COST", date: "2099-01-01", eps_actual: null }], past = [{ ticker: "FDX", date: "2026-06-23", eps_actual: 6.31, report_time: "AMC" }];
   const run = async (failIndexes) => { let redraws = 0, renders = 0;
-    const ctx = vm.createContext({ S: { sec: "EVENTS", coh: "ALL", calType: "ALL" }, el: () => ({ innerHTML: "" }), UNIVERSE: new Set(["FDX", "COST"]), todayISO: () => "2026-09-18", EV_CACHE: { up: [], past: [] }, EV_SIG: "old", EV_READ_AT: 0, EV_TRKEYS: "FDX|2026-06-23", EV_CSKEYS: [{ ticker: "FDX", quarter: "Q4 2026", call_date: "2026-06-23" }],
+    const ctx = vm.createContext({ S: { sec: "EVENTS", coh: "ALL", calType: "ALL" }, el: () => ({ innerHTML: "" }), UNIVERSE: new Set(["FDX", "COST"]), inEventsUniverse: (x) => ["FDX", "COST"].includes(x), todayISO: () => "2026-09-18", EV_CACHE: { up: [], past: [] }, EV_SIG: "old", EV_READ_AT: 0, EV_TRKEYS: "FDX|2026-06-23", EV_CSKEYS: [{ ticker: "FDX", quarter: "Q4 2026", call_date: "2026-06-23" }],
       TRANSCRIPT_IDX: new Map([["FDX", ["2026-06-23"]]]), CALLSUM_IDX: new Map(), EV_HELD_SIG: "", evBubbleOpen: () => false, loadCohSets: () => Promise.resolve(), renderEvents: () => { renders++; }, redrawKeepingPlace: (a, b, draw) => { redraws++; draw(); }, JSON, Date, Array, Map, Set, Promise,
       pg: (q) => /^earnings_events/.test(q) ? Promise.resolve(/date=gte/.test(q) ? up : past) : (failIndexes ? Promise.reject(new Error("503")) : Promise.resolve(/ai_summary/.test(q) ? [] : [])) });
     vm.runInContext(PURE + SUP + src, ctx); await vm.runInContext("fillEvents(true)", ctx);
@@ -110,7 +110,7 @@ test("company tab: a summary opened WHILE the re-read is in flight is not redraw
 test("master feed: the same - held while a summary opened mid-read is open, EV_SIG not advanced, drawn on close, and a later re-read still draws it", async () => {
   const src = take(/async function fillEvents\(quiet\) \{[\s\S]*?\n\}\n/);
   const up = [], past = [{ ticker: "FDX", date: "2026-06-23", eps_actual: 6.31, report_time: "AMC" }]; const waiting = []; let redraws = 0, open = false;
-  const ctx = vm.createContext({ S: { sec: "EVENTS", coh: "ALL", calType: "ALL", coData: null }, el: () => ({ innerHTML: "" }), UNIVERSE: new Set(["FDX"]), todayISO: () => "2026-09-18", EV_CACHE: { up: [], past: [] }, EV_SIG: "old", EV_HELD_SIG: "", EV_READ_AT: 0, EV_TRKEYS: "", EV_CSKEYS: [],
+  const ctx = vm.createContext({ S: { sec: "EVENTS", coh: "ALL", calType: "ALL", coData: null }, el: () => ({ innerHTML: "" }), UNIVERSE: new Set(["FDX"]), inEventsUniverse: (x) => x === "FDX", todayISO: () => "2026-09-18", EV_CACHE: { up: [], past: [] }, EV_SIG: "old", EV_HELD_SIG: "", EV_READ_AT: 0, EV_TRKEYS: "", EV_CSKEYS: [],
     TRANSCRIPT_IDX: new Map(), CALLSUM_IDX: new Map(), evBubbleOpen: () => open, loadCohSets: () => Promise.resolve(), renderEvents() {}, redrawKeepingPlace: () => { redraws++; }, JSON, Date, Array, Map, Set, Promise,
     pg: (q) => new Promise((resolve) => waiting.push(() => resolve(/^earnings_events/.test(q) ? (/date=gte/.test(q) ? up : past) : []))) });
   vm.runInContext(PURE + SUP + src + HELD, ctx);

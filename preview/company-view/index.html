@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 36a209a) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 392aa49) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -11685,6 +11685,16 @@ function buildCohSets(members) {                         // pure: cohorts rows �
     (map[m.cohort] = map[m.cohort] || new Set()).add(String(m.ticker).toUpperCase());
   return map;
 }
+/* 26 Oct 2026 (coordinator): EVENTS-ONLY NAMES - companies Alan follows for their earnings that the Hub does not track (not in cohorts).
+   They enter the earnings reads and the calendar, nothing else. Alan, via the markets session: "SK hynix missing". Their rows carry New
+   York dates (a KRX report comes before the Seoul open = the evening before in New York, AMC) and are written by hand until a writer
+   keeps them. Shown by name, scoped to ALL and to their own cohort. */
+const EVENTS_EXTRA = Object.freeze({
+  "000660.KS": Object.freeze({ label:"SK HYNIX", cohort:"AI_HARDWARE" }),
+  "005930.KS": Object.freeze({ label:"SAMSUNG", cohort:"AI_HARDWARE" }),
+});
+const inEventsUniverse = (t) => (!!UNIVERSE && UNIVERSE.has(t)) || Object.prototype.hasOwnProperty.call(EVENTS_EXTRA, t);
+const ercLabel = (t) => (EVENTS_EXTRA[t] ? EVENTS_EXTRA[t].label : t);
 function scopeItems(items, cohort, tq, fav, cohsets) {   // pure: ALL/FAV rules identical to the board
   return (items || []).filter((n) => {
     const t = String((n && n.ticker) || "").toUpperCase();
@@ -11694,6 +11704,7 @@ function scopeItems(items, cohort, tq, fav, cohsets) {   // pure: ALL/FAV rules 
     if (isListCoh(cohort)) return listMembers(cohort, fav).indexOf(t) !== -1;
     if (n && n.cohort !== undefined)                     // NEWS-COHORT — news rows carry the authoritative cohort column
       return String(n.cohort || "").toUpperCase() === cohort;
+    if (EVENTS_EXTRA[t]) return EVENTS_EXTRA[t].cohort === cohort;   // 26 Oct: an events-only name scopes to its own cohort
     const set = cohsets && cohsets[cohort];              // events rows (no cohort column) keep the member-set scope
     return !!(set && set.has(t));
   });
@@ -15709,7 +15720,7 @@ async function ercRead(quiet) {
     const got = await Promise.all(parts.map((p) =>
       pgErn("earnings_events?" + ERC_SEL + "&date=gte." + p.from + "&date=lte." + p.to + "&order=date.asc&limit=" + ERC_MAX)));
     const rows = got.reduce((a, g) => a.concat(g || []), []);
-    const keep = ernSupersede((rows || []).filter((x) => x && x.ticker && (!UNIVERSE || UNIVERSE.has(x.ticker))), rows || []);
+    const keep = ernSupersede((rows || []).filter((x) => x && x.ticker && (!UNIVERSE || inEventsUniverse(x.ticker))), rows || []);
     const sig = JSON.stringify(keep), changed = key !== ERC_KEY || sig !== ERC_SIG;
     ERC_TRUNC = got.some((g) => (g || []).length >= ERC_MAX);
     ERC_ROWS = keep; ERC_KEY = key; ERC_SIG = sig; ERC_FAIL_AT = 0; ERC_FAIL_KEY = "";
@@ -15774,7 +15785,7 @@ function ercCellEvHTML(r) {
   const res = ernResult(r), w = ercWhenShort(r);
   return '<div class="se-ev ' + (res && res.cls ? res.cls : "") + '">' +
     (ERC_COHORT_HUE ? '<span class="sp" style="background:' + ercHue(r.ticker) + '"></span>' : "") +
-    '<span class="tk">' + esc(r.ticker) + "</span>" + (w ? '<span class="rt">' + esc(w) + "</span>" : "") + "</div>";
+    '<span class="tk">' + esc(ercLabel(r.ticker)) + "</span>" + (w ? '<span class="rt">' + esc(w) + "</span>" : "") + "</div>";
 }
 function ercMonthHTML(byDay) {
   const d0 = ercAnchor(), grid = ercMonthGrid(d0), mo = d0.slice(0, 7), today = todayISO(), mcap = ercMcap();
@@ -15807,7 +15818,7 @@ function ercChipHTML(r) {
   return '<span class="se-chip ' + (res && res.cls ? res.cls : "") + (on ? " is-open" : "") +
     '" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '" title="' +
     esc(ercTitle(r) + (wild ? " · this surprise is " + wild.z.toFixed(1) + " of its own usual surprises away" : "")) + '">' +
-    (ERC_COHORT_HUE ? '<i style="background:' + ercHue(r.ticker) + '"></i>' : "") + ernLogoHTML(r.ticker, "se-lg--chip") + esc(r.ticker) +
+    (ERC_COHORT_HUE ? '<i style="background:' + ercHue(r.ticker) + '"></i>' : "") + ernLogoHTML(r.ticker, "se-lg--chip") + esc(ercLabel(r.ticker)) +
     (res && res.sur ? '<span class="s' + (wild ? " is-scint" : "") + '"' + (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") +
       ">" + (wild ? "◆" : "") + esc(res.sur) + "</span>" : "") + "</span>";
 }
@@ -15818,7 +15829,7 @@ function ercShowPick() {
   if (card && typeof card.scrollIntoView === "function") { try { card.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {} }
 }
 function ercCardHTML(r) {
-  return '<div class="se-card"><div class="se-card__hd"><span>' + esc(r.ticker) + " · " + esc(fmtEvDate(r.date)) + "</span>" +
+  return '<div class="se-card"><div class="se-card__hd"><span>' + esc(ercLabel(r.ticker)) + " · " + esc(fmtEvDate(r.date)) + "</span>" +
     '<span class="se-card__x" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '">✕ close</span></div>' +
     earningsBlockHTML(earningsRowToBlock(r, CALLSUM_IDX)) + "</div>";
 }
@@ -16515,7 +16526,7 @@ function ercDayRowHTML(r) {
   return '<div class="se-drow ' + (res && res.cls ? res.cls : "") + (on ? " is-open" : "") +
       '" data-act="ernchip" data-t="' + esc(r.ticker) + '" data-d="' + esc(r.date) + '" title="' + esc(ercTitle(r)) + '">' +
     (ERC_COHORT_HUE ? '<i style="background:' + ercHue(r.ticker) + '"></i>' : "") +
-    ernLogoHTML(r.ticker, "se-lg--chip") + "<span>" + esc(r.ticker) + "</span>" +
+    ernLogoHTML(r.ticker, "se-lg--chip") + "<span>" + esc(ercLabel(r.ticker)) + "</span>" +
     (res && res.sur ? (function () {
       const wild = typeof ernWildResult === "function" ? ernWildResult(r) : null;
       return '<span class="s' + (wild ? " is-scint" : "") + '"' + (wild ? ' data-up="' + (wild.up ? "1" : "0") + '"' : "") +
@@ -16841,7 +16852,7 @@ async function erpRead(more) {
   try {
     if (!UNIVERSE) UNIVERSE = new Set((await pg("cohorts?select=ticker")).map((m) => m.ticker));
     const got = await pgErn(erpPath(more ? ERP_CUR : null));
-    const rows = (got || []).filter((x) => x && x.ticker && x.date && (!UNIVERSE || UNIVERSE.has(x.ticker)));
+    const rows = (got || []).filter((x) => x && x.ticker && x.date && (!UNIVERSE || inEventsUniverse(x.ticker)));
     const keep = ernSupersede(rows, rows);
     if (!more) { ERP_ROWS = []; ERP_PAGES = 0; }
     ERP_ROWS = ERP_ROWS.concat(keep);
@@ -17005,7 +17016,7 @@ async function fillEvents(quiet) {
     }
     if (Array.isArray(csidx)) { EV_CSKEYS = csidx; }
     CALLSUM_IDX = matchCallSummaries([...up, ...past], EV_CSKEYS);
-    const inU = (ev) => UNIVERSE.has(ev.ticker);
+    const inU = (ev) => inEventsUniverse(ev.ticker);   // 26 Oct: + the events-only names
     /* R40 — a today-dated row that has already REPORTED (eps_actual present) is NOT upcoming;
        move it into the reported/past list so it stops showing as the next upcoming. */
     const upPending = up.filter((e) => e.eps_actual == null);

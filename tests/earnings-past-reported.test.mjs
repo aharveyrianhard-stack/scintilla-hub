@@ -103,7 +103,7 @@ test("PAST REPORTED pages back to 1996 with a keyset cursor, not an offset", () 
   const read = src.slice(src.indexOf("async function erpRead(more)"), src.indexOf("function erpRender(list, cohort)"));
   assert.match(read, /await pgErn\(erpPath\(more \? ERP_CUR : null\)\)/);
   assert.match(read, /ernSupersede\(rows, rows\)/);
-  assert.match(read, /UNIVERSE\.has\(x\.ticker\)/, "only the names the Hub tracks");
+  assert.match(read, /inEventsUniverse\(x\.ticker\)/, "only the names the Hub tracks, and the events-only names (26 Oct, restated: SK hynix, Samsung)");
   assert.match(read, /ERP_DONE = \(got \|\| \[\]\)\.length < ERP_PAGE;/, "it knows when it has reached the oldest row");
 });
 
