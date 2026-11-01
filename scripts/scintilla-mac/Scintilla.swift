@@ -2,11 +2,15 @@
 // computers. I need the notifications coming everywhere ... if we can make that have the Scintilla logo or something like that, because it's ugly as shit."
 // It reads the switchboard (public.notify_since) every ten seconds and shows each new row as a card, top right on every screen, over everything including full screen.
 // Its own window, not macOS Notification Center: nothing to allow, big enough to read from across the room, stays until it has been seen, always this logo.
-// Level 1 = 8 s, silent · level 2 = 16 s, a soft sound · level 3 = 40 s, the louder sound. The pointer on a card holds it. A click opens the story. The menu bar logo keeps the last ones.
+// Level 1 = 8 s, silent · level 2 = 16 s, a soft sound · level 3 = 40 s, the louder sound. The pointer on a card holds it. A click opens the story in the reader. The menu bar logo keeps the last ones.
 // No Dock icon, never takes focus. Secrets live in ~/Library/Application Support/Scintilla/config.json (600), never in this file.
+// 1.1, same day. Alan: "it is like pretty big. Can you kind of keep things sized to about what the notification center looks like?" The card is now the size of a macOS banner, on every screen.
+// "I clicked on a news story. It takes me to the article in Google Chrome. Is there any way for it to happen inside of the app? ... that I can close easily ... I'm going to leave a scatter of links":
+// a click opens the story in one reader window of our own, floating, closed by Esc or the X. It never takes the stage from what he is doing, and it holds one story at a time.
 import AppKit
+import WebKit
 
-let VERSION = "1.0"
+let VERSION = "1.1"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -53,38 +57,38 @@ final class CardView: NSView {
   init(item: Item, width: CGFloat, scale: CGFloat) {
     self.item = item; self.scale = scale
     super.init(frame: NSRect(x: 0, y: 0, width: width, height: 100))
-    wantsLayer = true; layer?.backgroundColor = PANEL.cgColor; layer?.cornerRadius = 11 * scale; layer?.borderWidth = 1; layer?.borderColor = EDGE.cgColor
+    wantsLayer = true; layer?.backgroundColor = PANEL.cgColor; layer?.cornerRadius = 13; layer?.borderWidth = 1; layer?.borderColor = EDGE.cgColor; layer?.masksToBounds = true
     let accent = item.level >= 3 ? AMBER : item.level == 2 ? CYAN : EDGE
-    let pad = 13 * scale, logoSize = 40 * scale
+    let pad: CGFloat = 10, logoSize: CGFloat = 30
     let bar = NSView(frame: .zero); bar.wantsLayer = true; bar.layer?.backgroundColor = accent.cgColor; addSubview(bar)
     let logo = NSImageView(image: trefoil(logoSize, color: CYAN, tile: false)); addSubview(logo)
-    let textX = pad + logoSize + 10 * scale, textW = width - textX - pad
+    let textX = pad + 2 + logoSize + 9, textW = width - textX - pad - 2
     // the top line: name, the day's move, then where it came from and how old
-    let who = label((item.ticker ?? (item.level >= 3 ? "SCINTILLA" : "MARKET")), .monospacedSystemFont(ofSize: 15 * scale, weight: .bold), accent == EDGE ? CYAN : accent)
+    let who = label((item.ticker ?? (item.level >= 3 ? "SCINTILLA" : "MARKET")), .monospacedSystemFont(ofSize: 12, weight: .bold), accent == EDGE ? CYAN : accent)
     who.sizeToFit(); addSubview(who)
     var pctLabel: ClearLabel? = nil
-    if let p = item.pct { let t = (p >= 0 ? "+" : "") + String(format: "%.1f%%", p); let l = label(t, .monospacedSystemFont(ofSize: 14 * scale, weight: .semibold), p >= 0 ? BULL : BEAR); l.sizeToFit(); addSubview(l); pctLabel = l }
+    if let p = item.pct { let t = (p >= 0 ? "+" : "") + String(format: "%.1f%%", p); let l = label(t, .monospacedSystemFont(ofSize: 11.5, weight: .semibold), p >= 0 ? BULL : BEAR); l.sizeToFit(); addSubview(l); pctLabel = l }
     let meta = [item.source, ageText(item.age_s)].compactMap { ($0 ?? "").isEmpty ? nil : $0 }.joined(separator: " · ")
-    let metaL = label(meta, .systemFont(ofSize: 11.5 * scale), DIM); metaL.alignment = .right; addSubview(metaL)
-    let head = label(item.title, .systemFont(ofSize: 16 * scale, weight: .medium), INK, lines: 3); addSubview(head)
+    let metaL = label(meta, .systemFont(ofSize: 10.5), DIM); metaL.alignment = .right; addSubview(metaL)
+    let head = label(item.title, .systemFont(ofSize: 13, weight: .medium), INK, lines: 3); addSubview(head)
     let headH = head.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: textW, height: 400)).height
     var bodyL: ClearLabel? = nil; var bodyH: CGFloat = 0
-    if let b = item.body, !b.isEmpty { let l = label(b, .systemFont(ofSize: 13 * scale), DIM, lines: 3); addSubview(l); bodyL = l; bodyH = l.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: textW, height: 400)).height + 4 * scale }
-    let topLineH = 20 * scale
-    wantedHeight = max(logoSize + 2 * pad, pad + topLineH + 4 * scale + headH + bodyH + pad - 2 * scale)
+    if let b = item.body, !b.isEmpty { let l = label(b, .systemFont(ofSize: 12), DIM, lines: 2); addSubview(l); bodyL = l; bodyH = l.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: textW, height: 400)).height + 1 }
+    let topLineH: CGFloat = 16
+    wantedHeight = max(logoSize + 2 * pad, pad + topLineH + 2 + headH + bodyH + pad - 1)
     let h = wantedHeight
     setFrameSize(NSSize(width: width, height: h))
-    bar.frame = NSRect(x: 0, y: 0, width: 4 * scale, height: h)
-    logo.frame = NSRect(x: pad, y: h - pad - logoSize, width: logoSize, height: logoSize)
-    let topY = h - pad - topLineH + 2 * scale
+    bar.frame = NSRect(x: 0, y: 0, width: 3, height: h)
+    logo.frame = NSRect(x: pad + 2, y: h - pad - logoSize, width: logoSize, height: logoSize)
+    let topY = h - pad - topLineH + 1
     who.frame = NSRect(x: textX, y: topY, width: min(who.frame.width + 2, textW * 0.6), height: topLineH)
-    var usedX = textX + who.frame.width + 8 * scale
-    if let l = pctLabel { l.frame = NSRect(x: usedX, y: topY, width: l.frame.width + 2, height: topLineH); usedX += l.frame.width + 8 * scale }
-    metaL.frame = NSRect(x: usedX, y: topY - 1, width: max(0, textX + textW - usedX - 18 * scale), height: topLineH)
-    head.frame = NSRect(x: textX, y: topY - 4 * scale - headH, width: textW, height: headH)
-    bodyL?.frame = NSRect(x: textX, y: topY - 8 * scale - headH - bodyH + 4 * scale, width: textW, height: bodyH)
-    close.title = "×"; close.isBordered = false; close.font = .systemFont(ofSize: 15 * scale); close.contentTintColor = DIM; close.target = self; close.action = #selector(closeTapped); close.isHidden = true
-    close.frame = NSRect(x: width - 22 * scale, y: h - 24 * scale, width: 20 * scale, height: 20 * scale); addSubview(close)
+    var usedX = textX + who.frame.width + 6
+    if let l = pctLabel { l.frame = NSRect(x: usedX, y: topY, width: l.frame.width + 2, height: topLineH); usedX += l.frame.width + 6 }
+    metaL.frame = NSRect(x: usedX, y: topY - 1, width: max(0, textX + textW - usedX - 14), height: topLineH)
+    head.frame = NSRect(x: textX, y: topY - 2 - headH, width: textW, height: headH)
+    bodyL?.frame = NSRect(x: textX, y: topY - 3 - headH - bodyH + 1, width: textW, height: bodyH)
+    close.title = "×"; close.isBordered = false; close.font = .systemFont(ofSize: 13); close.contentTintColor = DIM; close.target = self; close.action = #selector(closeTapped); close.isHidden = true
+    close.frame = NSRect(x: width - 19, y: h - 20, width: 16, height: 16); addSubview(close)
     addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
   }
   required init?(coder: NSCoder) { fatalError() }
@@ -93,6 +97,52 @@ final class CardView: NSView {
   override func mouseExited(with event: NSEvent) { close.isHidden = true; layer?.borderColor = EDGE.cgColor; onHover?(false) }
   override func mouseUp(with event: NSEvent) { onClick?() }
   @objc func closeTapped() { onClose?() }
+}
+
+// ---- the reader: one floating window, one story at a time, closed by Esc or the X ----
+final class ReaderPanel: NSPanel {
+  override var canBecomeKey: Bool { true }; override var canBecomeMain: Bool { false }
+  override func cancelOperation(_ sender: Any?) { Reader.shared.close() }
+}
+final class ReaderHeader: NSView { override var mouseDownCanMoveWindow: Bool { true } }
+final class Reader: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate {
+  static let shared = Reader()
+  var panel: ReaderPanel?; var web: WKWebView?; var titleL: ClearLabel?; var current: URL?
+  var onLoaded: (() -> Void)?
+  private var keys: Any?
+  func open(_ url: URL, title: String, offscreen: Bool = false) {
+    current = url
+    if panel == nil { build(offscreen: offscreen) }
+    titleL?.stringValue = title
+    web?.load(URLRequest(url: url))
+    panel?.makeKeyAndOrderFront(nil)   // a floating panel that never activates the app: Stage Manager keeps his stage, Esc still reaches it
+  }
+  private func build(offscreen: Bool) {
+    let mouse = NSEvent.mouseLocation, sc = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main ?? NSScreen.screens[0], vf = sc.visibleFrame
+    let w = min(1000, vf.width * 0.72), h = vf.height * 0.88
+    let rect = offscreen ? NSRect(x: -6000, y: 200, width: w, height: h) : NSRect(x: vf.midX - w / 2, y: vf.midY - h / 2, width: w, height: h)
+    let p = ReaderPanel(contentRect: rect, styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
+    p.titleVisibility = .hidden; p.titlebarAppearsTransparent = true; p.level = .floating; p.hidesOnDeactivate = false; p.isReleasedWhenClosed = false; p.delegate = self; p.minSize = NSSize(width: 420, height: 320)
+    p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .auxiliary, .ignoresCycle]; p.backgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1); p.animationBehavior = .none
+    let root = NSView(frame: NSRect(origin: .zero, size: rect.size)); root.autoresizingMask = [.width, .height]; p.contentView = root
+    let headH: CGFloat = 36
+    let head = ReaderHeader(frame: NSRect(x: 0, y: rect.height - headH, width: rect.width, height: headH)); head.autoresizingMask = [.width, .minYMargin]; head.wantsLayer = true; head.layer?.backgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor; root.addSubview(head)
+    let logo = NSImageView(image: trefoil(22, color: CYAN, tile: false)); logo.frame = NSRect(x: 76, y: 7, width: 22, height: 22); head.addSubview(logo)
+    let t = label("", .systemFont(ofSize: 12.5, weight: .medium), DIM); t.frame = NSRect(x: 104, y: 9, width: rect.width - 104 - 190, height: 18); t.autoresizingMask = [.width]; head.addSubview(t); titleL = t
+    let closeB = NSButton(title: "Close  esc", target: self, action: #selector(closeTapped)); closeB.bezelStyle = .rounded; closeB.frame = NSRect(x: rect.width - 88, y: 5, width: 82, height: 26); closeB.autoresizingMask = [.minXMargin]; head.addSubview(closeB)
+    let out = NSButton(title: "Browser ↗", target: self, action: #selector(toBrowser)); out.bezelStyle = .rounded; out.frame = NSRect(x: rect.width - 178, y: 5, width: 86, height: 26); out.autoresizingMask = [.minXMargin]; head.addSubview(out)
+    let cfg = WKWebViewConfiguration(); cfg.websiteDataStore = .default()   // a site he signs in to here stays signed in
+    let v = WKWebView(frame: NSRect(x: 0, y: 0, width: rect.width, height: rect.height - headH), configuration: cfg); v.autoresizingMask = [.width, .height]; v.navigationDelegate = self; v.uiDelegate = self; v.allowsBackForwardNavigationGestures = true
+    v.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"; root.addSubview(v)
+    panel = p; web = v
+    keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in if e.keyCode == 53 { self?.close(); return nil }; return e }
+  }
+  @objc func closeTapped() { close() }
+  @objc func toBrowser() { if let u = web?.url ?? current { NSWorkspace.shared.open(u) }; close() }
+  func close() { panel?.close() }
+  func windowWillClose(_ n: Notification) { web?.stopLoading(); web?.navigationDelegate = nil; web?.uiDelegate = nil; web?.removeFromSuperview(); web = nil; panel = nil; titleL = nil; if let k = keys { NSEvent.removeMonitor(k); keys = nil } }   // nothing stays in memory after a story
+  func webView(_ w: WKWebView, createWebViewWith c: WKWebViewConfiguration, for a: WKNavigationAction, windowFeatures f: WKWindowFeatures) -> WKWebView? { if a.targetFrame == nil { w.load(a.request) }; return nil }   // a link that wants a new window stays in this one
+  func webView(_ w: WKWebView, didFinish n: WKNavigation!) { onLoaded?(); onLoaded = nil }
 }
 
 // One notification, on every screen
@@ -157,11 +207,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   }
   func build(_ card: Card) {
     for sc in NSScreen.screens {
-      let scale = min(1.5, max(1, sc.frame.width / 1600)), width = 440 * scale
-      let v = CardView(item: card.item, width: width, scale: scale)
+      let width: CGFloat = 360
+      let v = CardView(item: card.item, width: width, scale: 1)
       let p = CardPanel(contentRect: NSRect(x: sc.visibleFrame.maxX + 10, y: sc.visibleFrame.maxY - v.wantedHeight, width: width, height: v.wantedHeight), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
       p.level = .statusBar; p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]; p.hidesOnDeactivate = false; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true; p.isMovable = false; p.animationBehavior = .none; p.contentView = v
-      v.onClick = { [weak self, weak card] in guard let self = self, let card = card else { return }; if let s = card.item.url, let u = URL(string: s) { NSWorkspace.shared.open(u) }; self.drop(card); self.layout(animated: true) }
+      v.onClick = { [weak self, weak card] in guard let self = self, let card = card else { return }; if let s = card.item.url, let u = URL(string: s) { Reader.shared.open(u, title: [card.item.ticker, card.item.source].compactMap { $0 }.joined(separator: " · ")) }; self.drop(card); self.layout(animated: true) }
       v.onClose = { [weak self, weak card] in guard let self = self, let card = card else { return }; self.drop(card); self.layout(animated: true) }
       v.onHover = { [weak self, weak card] on in guard let self = self, let card = card else { return }; if on { card.timer?.invalidate() } else { card.left = max(card.left, 5); self.arm(card) } }
       p.orderFrontRegardless(); card.panels.append((sc, p, v))
@@ -171,10 +221,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func drop(_ card: Card) { card.timer?.invalidate(); for (_, p, _) in card.panels { p.orderOut(nil); p.close() }; card.panels = []; cards.removeAll { $0 === card } }
   func layout(animated: Bool) {
     for sc in NSScreen.screens {
-      let vf = sc.visibleFrame; let scale = min(1.5, max(1, sc.frame.width / 1600)); var y = vf.maxY - 10 * scale
+      let vf = sc.visibleFrame; var y = vf.maxY - 8
       for card in cards { guard let e = card.panels.first(where: { $0.0 == sc }) else { continue }
         let h = e.2.wantedHeight, w = e.2.frame.width; y -= h
-        let f = NSRect(x: vf.maxX - w - 10 * scale, y: y, width: w, height: h); y -= 7 * scale
+        let f = NSRect(x: vf.maxX - w - 8, y: y, width: w, height: h); y -= 6
         if animated { NSAnimationContext.runAnimationGroup { $0.duration = 0.16; e.1.animator().setFrame(f, display: true) } } else { e.1.setFrame(f, display: true) }
       }
     }
@@ -196,7 +246,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let pause = NSMenuItem(title: paused ? "Resume now" : "Pause for an hour", action: #selector(togglePause), keyEquivalent: ""); pause.target = self; menu.addItem(pause)
     let quit = NSMenuItem(title: "Quit until the next login", action: #selector(quit), keyEquivalent: ""); quit.target = self; menu.addItem(quit)
   }
-  @objc func openRecent(_ s: NSMenuItem) { if let t = s.representedObject as? String, let u = URL(string: t) { NSWorkspace.shared.open(u) } }
+  @objc func openRecent(_ s: NSMenuItem) { if let t = s.representedObject as? String, let u = URL(string: t) { Reader.shared.open(u, title: s.title) } }
   @objc func setLevel(_ s: NSMenuItem) { minLevel = s.tag }
   @objc func togglePause() { pausedUntil = (pausedUntil.map { $0 > Date() } ?? false) ? nil : Date().addingTimeInterval(3600) }
   @objc func quit() { NSApp.terminate(nil) }
@@ -210,8 +260,8 @@ func renderSamples(_ path: String) {
     Item(id: 3, age_s: 70, level: 1, kind: "macro", ticker: nil, title: "OPEC, Allies Keep Output Steady While Gulf Shipping Remains Under Threat", body: nil, source: "WSJ", url: nil, pct: nil),
     Item(id: 4, age_s: 95, level: 3, kind: "research", ticker: nil, title: "Catch-down gauge: stage 1 to 2", body: "S&P 3.3% off its closing high: the index is starting to follow.", source: "Research", url: nil, pct: nil),
   ]
-  let scale: CGFloat = 1.3, width = 440 * scale, gap: CGFloat = 10
-  let views = samples.map { CardView(item: $0, width: width, scale: scale) }
+  let width: CGFloat = 360, gap: CGFloat = 8
+  let views = samples.map { CardView(item: $0, width: width, scale: 1) }
   let total = views.reduce(gap) { $0 + $1.wantedHeight + gap }
   let host = NSView(frame: NSRect(x: 0, y: 0, width: width + 2 * gap, height: total)); host.wantsLayer = true; host.layer?.backgroundColor = NSColor(srgbRed: 0.09, green: 0.1, blue: 0.14, alpha: 1).cgColor
   var y = total - gap; for v in views { y -= v.wantedHeight; v.setFrameOrigin(NSPoint(x: gap, y: y)); host.addSubview(v); y -= gap }
@@ -223,6 +273,13 @@ func renderSamples(_ path: String) {
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--render" { renderSamples(CommandLine.arguments[2]); exit(0) }
+// for tests: the reader alone, off the screen unless asked, for a set number of seconds
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--reader", let u = URL(string: CommandLine.arguments[2]) {
+  let on = CommandLine.arguments.contains("--onscreen"), secs = Double(CommandLine.arguments.last ?? "") ?? 8
+  DispatchQueue.main.async { Reader.shared.onLoaded = { print("loaded", Reader.shared.web?.url?.absoluteString.prefix(80) ?? "") }; Reader.shared.open(u, title: "TEST · reader", offscreen: !on); print("window", Reader.shared.panel?.windowNumber ?? 0) }
+  DispatchQueue.main.asyncAfter(deadline: .now() + secs) { exit(0) }
+  app.run()
+}
 let others = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.scintilla.notify").filter { $0 != NSRunningApplication.current }
 if !others.isEmpty { exit(0) }
 let delegate = App(); app.delegate = delegate; app.run()
