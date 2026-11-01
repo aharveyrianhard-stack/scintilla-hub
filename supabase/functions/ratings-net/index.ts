@@ -3,11 +3,22 @@
 // The headline feeds (analyst-feed-5m -> analyst_target_news -> notify_rating_row) can go thin: the research session measured 5 of 28 target cuts on 30 Oct when TheFly's stories stopped.
 // So every 15 minutes, for each name he follows: FMP's per-stock grades (clean firm names, a date, no time) -> a card for each upgrade or downgrade dated today,
 // and once an hour the analysts' average target -> a card when it falls 1% or more (no firm named, FMP gives none there). Each event carries one key, so it cards once.
-// Writes only public.notify_stream and public.rating_net_state. The FMP key comes from public.app_config and never leaves this function.
+// Third pass: the memory names that are not Hub symbols. FMP files SK hynix under SKHY, HBM or KS, never its Korean symbol, and the collector keeps Hub symbols only, so their stories never reached the cards.
+// The markets session caught this on 1 Nov; here the headline's words decide, with the same rule as the collector's cards.
+// ?dry=1 writes nothing and returns what it would card; &hours= and &pages= look further back. Writes only public.notify_stream and public.rating_net_state. The FMP key comes from public.app_config and never leaves this function.
 const SB = Deno.env.get("SUPABASE_URL") || "", SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const H = { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "content-type": "application/json" };
 const J = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
-const FMP = "https://financialmodelingprep.com/stable/", CONC = 8, FALL = 0.99;
+const FMP = "https://financialmodelingprep.com/stable/", CONC = 8, FALL = 0.99, WORD_H = 6;
+const NO_SYMBOL: Array<[RegExp, string]> = [[/sk hynix/i, "SK HYNIX"], [/kioxia/i, "KIOXIA"], [/samsung electronics/i, "SAMSUNG"]];
+const ROUNDUP = /top analyst calls|top \d+ stock calls|what you missed|wall street's top|buy\/sell:|now streaming|here's what/i;
+/* the same rule as public.notify_rating_row: only what the headline says counts. A memory name's target cut reaches the phone like a followed name's */
+function headlineLevel(t: string) {
+  if (/\b(downgrade|upgrade)|\bcut to (hold|neutral|sell|underweight|underperform|equal|market perform|sector perform)/i.test(t)) return 2;
+  if (/\bPT\b|target/i.test(t) && /lower|\bcut|reduc|trim/i.test(t)) return 2;
+  if (/\bPT\b|target/i.test(t) && /rais|boost|increas|hike|\blifts?\b/i.test(t)) return 1;
+  return /initiat/i.test(t) ? 1 : 0;
+}
 async function pg(path: string, init: RequestInit = {}) { const r = await fetch(SB + "/rest/v1/" + path, { ...init, headers: { ...H, ...(init.headers || {}) } }); const t = await r.text(); if (!r.ok) throw new Error(path.split("?")[0] + " -> " + r.status + " " + t.slice(0, 200)); return t ? JSON.parse(t) : null; }
 const rpc = (fn: string, a: Record<string, unknown> = {}) => pg("rpc/" + fn, { method: "POST", body: JSON.stringify(a) });
 let cronKeyYes: { b: string; until: number } | null = null;
@@ -18,7 +29,7 @@ const nyHour = (d = new Date()) => +new Intl.DateTimeFormat("en-US", { timeZone:
 Deno.serve(async (req) => {
   if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
   try {
-    const u = new URL(req.url), today = nyDate(), hour = nyHour(), avgRun = new Date().getUTCMinutes() < 15 || u.searchParams.get("avg") === "1";
+    const u = new URL(req.url), today = nyDate(), hour = nyHour(), avgRun = new Date().getUTCMinutes() < 15 || u.searchParams.get("avg") === "1", dry = u.searchParams.get("dry") === "1", wordH = +(u.searchParams.get("hours") || WORD_H);
     const K = String((await pg("app_config?select=value&key=eq.FMP_KEY"))?.[0]?.value || "").trim(); if (!K) return J({ error: "no key" }, 500);
     const names: string[] = (await rpc("push_followed")).map((r: { ticker: string }) => r.ticker).filter((t: string) => !/USD$|^\^/.test(t));
     const state = new Map<string, number>((await pg("rating_net_state?select=ticker,avg_target") || []).map((r: { ticker: string; avg_target: number }) => [r.ticker, +r.avg_target]));
@@ -36,6 +47,14 @@ Deno.serve(async (req) => {
       const old = state.get(t); next.push({ ticker: t, avg_target: v, at: new Date().toISOString() });
       if (old && v < old * FALL) { const pct = Math.round(1000 * (v / old - 1)) / 10; cards.push({ level: pct <= -3 ? 2 : 1, kind: "news", ticker: t, title: t + ": analysts' average price target fell " + Math.abs(pct).toFixed(1) + "% to $" + v.toFixed(2) + ", from $" + old.toFixed(2), source: "Ratings", pct, key: "rating-avg|" + t + "|" + today + "|" + v.toFixed(2), event_at: new Date().toISOString() }); }
     }));
+    const seen = new Set<string>();
+    for (const route of ["grades-latest-news", "price-target-latest-news"]) for (let page = 0; page < +(u.searchParams.get("pages") || 2); page++) for (const x of await fmp(route + "?page=" + page + "&limit=100", K)) {
+      const t = String(x.newsTitle || ""), who = NO_SYMBOL.find(([re]) => re.test(t)); if (!who || ROUNDUP.test(t) || !(Date.now() - Date.parse(x.publishedDate) < wordH * 3600000)) continue;
+      const key = "rating|" + (x.newsURL || who[1] + "|" + t), level = headlineLevel(t); if (!level || seen.has(key)) continue; seen.add(key);
+      const m = /\$?([\d,.]+)\s+from\s+\$?([\d,.]+)/.exec(t), pct = m ? Math.round(1000 * (parseFloat(m[1].replace(/,/g, "")) / parseFloat(m[2].replace(/,/g, "")) - 1)) / 10 : NaN;
+      cards.push({ level, kind: "news", ticker: who[1], title: t.slice(0, 300), source: "Ratings", url: x.newsURL || null, pct: Number.isFinite(pct) ? pct : null, key, event_at: x.publishedDate });
+    }
+    if (dry) return J({ dry: true, names: names.length, cards: cards.length, sample: cards.slice(0, 30) });
     if (next.length) await pg("rating_net_state?on_conflict=ticker", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(next) });
     if (cards.length) await pg("notify_stream?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(cards) });
     return J({ names: names.length, read, today, hour, avgRun, cards: cards.length, sample: cards.slice(0, 3) });

@@ -71,6 +71,7 @@ def report_context(limit=9000):
         for part in parts:
             m = re.match(r"<h2[^>]*>(.*?)</h2>", part, re.S); name = re.sub(r"<[^>]+>", " ", m.group(1)).strip() if m else ""
             if re.search(r"whole story|four paths|how we will know", name, re.I): keep.append("## " + name + "\n" + strip_html(part)[:limit // 2])
+        if not keep: log("report headings not found, reading the whole page"); return strip_html(h)[:limit]   # the report gets rewritten; never lose its context over a renamed heading
         return "\n\n".join(keep)[:limit]
     except Exception as e: log("no report context", str(e)[:120]); return ""
 
