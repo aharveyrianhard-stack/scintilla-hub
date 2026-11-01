@@ -10,7 +10,7 @@
 import AppKit
 import WebKit
 
-let VERSION = "1.1"
+let VERSION = "1.2"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -60,9 +60,9 @@ final class CardView: NSView {
     wantsLayer = true; layer?.backgroundColor = PANEL.cgColor; layer?.cornerRadius = 13; layer?.borderWidth = 1; layer?.borderColor = EDGE.cgColor; layer?.masksToBounds = true
     let accent = item.level >= 3 ? AMBER : item.level == 2 ? CYAN : EDGE
     let pad: CGFloat = 10, logoSize: CGFloat = 30
-    let bar = NSView(frame: .zero); bar.wantsLayer = true; bar.layer?.backgroundColor = accent.cgColor; addSubview(bar)
+    // no coloured stripe down the left edge. Alan, 1 Nov: "I have never liked these things where you put the cyan thing on the left side ... I fucking hate it". The name's colour says the level.
     let logo = NSImageView(image: trefoil(logoSize, color: CYAN, tile: false)); addSubview(logo)
-    let textX = pad + 2 + logoSize + 9, textW = width - textX - pad - 2
+    let textX = pad + logoSize + 9, textW = width - textX - pad
     // the top line: name, the day's move, then where it came from and how old
     let who = label((item.ticker ?? (item.level >= 3 ? "SCINTILLA" : "MARKET")), .monospacedSystemFont(ofSize: 12, weight: .bold), accent == EDGE ? CYAN : accent)
     who.sizeToFit(); addSubview(who)
@@ -78,8 +78,7 @@ final class CardView: NSView {
     wantedHeight = max(logoSize + 2 * pad, pad + topLineH + 2 + headH + bodyH + pad - 1)
     let h = wantedHeight
     setFrameSize(NSSize(width: width, height: h))
-    bar.frame = NSRect(x: 0, y: 0, width: 3, height: h)
-    logo.frame = NSRect(x: pad + 2, y: h - pad - logoSize, width: logoSize, height: logoSize)
+    logo.frame = NSRect(x: pad, y: h - pad - logoSize, width: logoSize, height: logoSize)
     let topY = h - pad - topLineH + 1
     who.frame = NSRect(x: textX, y: topY, width: min(who.frame.width + 2, textW * 0.6), height: topLineH)
     var usedX = textX + who.frame.width + 6
