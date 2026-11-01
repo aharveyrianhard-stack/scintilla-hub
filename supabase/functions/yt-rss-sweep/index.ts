@@ -30,7 +30,7 @@ const SB_KEY = adminKey();
 /* Every channel feed is one account key here, in the video shell's FEED_PROFILES and in the
    deck's VIDEO_FEEDS. An account with no refresh token and no project-side channel cache simply
    contributes no channels this pass and is reported as "not connected" — it never fails the sweep. */
-const ACCOUNTS = ["personal", "scintilla", "soundscapes", "golf", "ai_research", "fitness"] as const;
+const ACCOUNTS = ["personal", "scintilla", "soundscapes", "golf", "ai_research", "fitness", "networks"] as const;   /* 1 Nov: networks = CNBC, Bloomberg, Yahoo Finance, a list of ours (yt_sub_channels_networks), not a YouTube account */
 type Account = typeof ACCOUNTS[number];
 const iso2sec = (d: string) => {
   const m = (d || "").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);

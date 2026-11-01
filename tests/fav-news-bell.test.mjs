@@ -12,6 +12,5 @@ test("the favourite-news bell parses epoch-second timestamps (news.published_ts)
   assert.ok(Number.isNaN(tsMs(null)) && Number.isNaN(tsMs("junk")));
   assert.ok(tsMs(1789698100) > tsMs(1789698022), "a newer epoch compares newer (the old Date.parse gave NaN > NaN = false, so no alert ever fired)");
   assert.notEqual(agoStr(1789698022), "", "age renders for an epoch value");
-  assert.match(page, /if\(!cur \|\| tsMs\(r\.published_ts\) > tsMs\(cur\.ts\)\)\{/);
-  assert.match(page, /var isNewer = !last \|\| !isFinite\(tsMs\(last\)\) \|\| tsMs\(item\.ts\) > tsMs\(last\);/);
+  assert.match(page, /pg\("notify_stream\?select=id,at,ticker,title,url&level=gte\.2&at=gte\."/, "1 Nov: the bell reads the switchboard, not the raw news table");
 });

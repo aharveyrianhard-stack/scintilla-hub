@@ -1,0 +1,22 @@
+#!/bin/bash
+# scintilla-notify: the one door for every alert on this Mac. Every system posts here; the switchboard carries it to both Macs and the phone, with the Scintilla logo.
+# Never use osascript "display notification": it shows up as Script Editor, on this Mac only.
+#   scintilla-notify --title "Catch-down gauge: stage 1 to 2" [--body "..."] [--url https://...] [--kind research] [--level 3] [--key unique-key] [--ticker MU] [--source Research]
+# Levels: 3 = alert (default; both Macs + phone, louder) · 2 = both Macs + phone · 1 = Macs only, silent. The same --key twice sends once. Exit 0 = accepted.
+exec /usr/bin/python3 -I - "$@" <<'PY'
+import json,os,sys,urllib.request
+a=sys.argv[1:]; o={"title":"","body":None,"url":None,"kind":"alert","level":"3","key":None,"ticker":None,"source":None}
+i=0
+while i<len(a):
+    k=a[i].lstrip("-")
+    if k not in o or i+1>=len(a): sys.exit("scintilla-notify: unknown or empty option "+a[i])
+    o[k]=a[i+1]; i+=2
+if not o["title"]: sys.exit("scintilla-notify: --title is required")
+c=json.load(open(os.path.expanduser("~/Library/Application Support/Scintilla/config.json")))
+b=json.dumps({"p_token":c["token"],"p_title":o["title"],"p_body":o["body"],"p_url":o["url"],"p_kind":o["kind"],"p_level":int(o["level"]),"p_key":o["key"],"p_ticker":o["ticker"],"p_source":o["source"]}).encode()
+r=urllib.request.Request(c["url"]+"/rest/v1/rpc/notify_post",data=b,headers={"apikey":c["anon"],"Authorization":"Bearer "+c["anon"],"Content-Type":"application/json"})
+try:
+    print("scintilla-notify: accepted", urllib.request.urlopen(r,timeout=15).read().decode()[:40])
+except Exception as e:
+    sys.exit("scintilla-notify: failed "+str(e)[:160])
+PY
