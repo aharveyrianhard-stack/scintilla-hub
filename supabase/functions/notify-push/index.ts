@@ -113,6 +113,8 @@ async function phoneFanOut() {
     sent += res.sent; failed += res.failed; errors.push(...res.errors);
     await done([r.id], res.sent, res.errors[0] || null);
   }
+  /* the phone route failing must not be silent: one card on the Macs an hour (level 1: it does not try the failing route again) */
+  if (errors.length) { const hour = new Date().toISOString().slice(0, 13); await pg("notify_stream?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify([{ level: 1, kind: "ops", title: "Phone alerts are failing", body: errors[0], source: "SCINTILLA", key: "ops|phone-route|" + hour }]) }).catch(() => {}); }
   return { pending: rows.length - go.length, single: single.length, rolled: rest.length, sent, failed, errors: errors.slice(0, 6), via: { webPush: (subs || []).length, ntfy: useNtfy && !!NTFY_TOPIC } };
 }
 
