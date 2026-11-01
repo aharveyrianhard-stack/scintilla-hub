@@ -278,6 +278,9 @@ func renderSamples(_ path: String) {
   let samples: [Item] = [
     Item(id: 1, age_s: 20, level: 2, kind: "news", ticker: "MU", title: "Micron prices $3 billion of senior notes as memory contract prices keep rising", body: nil, source: "Reuters", url: nil, pct: -3.4),
     Item(id: 2, age_s: 50, level: 3, kind: "actual", ticker: "NVDA", title: "NVDA reported: EPS 1.24 vs 1.11 expected", body: "Beat by 11.7% · revenue 71.20B", source: "SCINTILLA", url: nil, pct: 4.2),
+    Item(id: 5, age_s: 30, level: 2, kind: "urth", ticker: nil, title: "Rain Tuesday from 2 PM in Coral Gables: move the afternoon crews to morning", body: "0.6 in expected, wind 18 mph", source: "Urth weather", url: nil, pct: nil),
+    Item(id: 6, age_s: 40, level: 2, kind: "news", ticker: "SNDK", title: "Sandisk downgraded to Hold from Buy at Rosenblatt", body: nil, source: "Ratings", url: nil, pct: nil),
+    Item(id: 7, age_s: 45, level: 2, kind: "news", ticker: "AI READ", title: "Chips and AI infrastructure broke hard Friday while money rotated into energy, staples and utilities", body: nil, source: "Weekly", url: nil, pct: nil),
     Item(id: 3, age_s: 70, level: 1, kind: "macro", ticker: nil, title: "OPEC, Allies Keep Output Steady While Gulf Shipping Remains Under Threat", body: nil, source: "WSJ", url: nil, pct: nil),
     Item(id: 4, age_s: 95, level: 3, kind: "research", ticker: nil, title: "Catch-down gauge: stage 1 to 2", body: "S&P 3.3% off its closing high: the index is starting to follow.", source: "Research", url: nil, pct: nil),
   ]

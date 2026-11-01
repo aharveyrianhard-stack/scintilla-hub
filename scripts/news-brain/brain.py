@@ -268,11 +268,21 @@ def light_lines(limit=12):
         put("line", {"video_id": j["id"], "takeaway": None if bad else line, "worker": "qwen"})
     log("lines", len(job))
 
+def backup_check():   # once a day: is the last worker in the chain still signed in? Its sign-in expires, and only Alan can renew it, so say so before it is needed
+    mark = WORK + "/backup-check-" + datetime.datetime.now(NY).strftime("%Y%m%d")
+    if os.path.exists(mark): return
+    open(mark, "w").write("1")
+    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR")}
+    r = subprocess.run([claude_bin(), "auth", "status", "--json"], env=env, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+    if not json.loads(r.stdout or "{}").get("loggedIn"): notify(title="The Claude backup worker is signed out: double-click SIGN_IN_GMAIL_WORKER on the Desktop", kind="ops", level=1, key="ops|claude-signin|" + os.path.basename(mark), source="News brain")
+
 def tick():
     lock = WORK + "/tick.lock"
     try:
         if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 3000: return
         open(lock, "w").write(str(os.getpid()))
+        try: backup_check()
+        except Exception as e: log("backup check error", str(e)[:160])
         try: light_lines()
         except Exception as e: log("lines error", str(e)[:160])
         reads_due(); kept(); videos()
