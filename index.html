@@ -1514,6 +1514,10 @@ body.senti .sc-cohsearch{ display:none; }
    previously-always-empty NEWS AI READ slot. .live replaces the dim "coming"
    badge once there's an actual computed theme in scope. */
 .sc-airead__tag.live{ color:var(--crk); border-color:rgba(0,212,255,.4); }
+.sc-airead__read{ display:block; margin-top:7px; color:var(--ink); text-decoration:none; font-size:11.5px; line-height:1.38; }
+.sc-airead__read b{ display:block; font-size:13px; font-weight:700; line-height:1.3; margin-bottom:5px; }
+.sc-airead__read ul{ margin:0; padding-left:14px; } .sc-airead__read li{ margin:3px 0; color:var(--ink2); }
+.sc-airead__when{ display:block; margin-top:5px; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3); }
 .sc-airead__body.tags{ display:flex; flex-wrap:wrap; gap:5px 8px; margin-top:6px; }
 .sc-aitag{ font-size:8.5px; letter-spacing:.06em; color:var(--ink2); border:.6px solid var(--hair); border-radius:3px; padding:2px 6px; white-space:nowrap; }
 .sc-aitag b{ color:var(--crk); font-weight:700; margin-left:3px; }
@@ -11934,15 +11938,35 @@ function extractNewsTags(items) {
   return Object.entries(freq).filter(([, c]) => c >= 2)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 6);
 }
+/* 1 Nov — the read itself lands here. Alan: "there's this like space for this AI read ... a daily report would be pretty nice ... a few intraday ones, a market closing one ... I want to start now".
+   news_reads is written by the news brain on the MacBook: pre-market, midday, close and a Sunday weekly, from the real headlines and prices. The newest one, the point first; the whole thing one click away. */
+let NEWS_READ = null, NEWS_READ_TRIED = 0, NEWS_READ_ARGS = null;
+function loadNewsRead() {
+  if (Date.now() - NEWS_READ_TRIED < 120000) return;
+  NEWS_READ_TRIED = Date.now();
+  pg("news_reads?select=id,kind,takeaway,points,created_at&order=id.desc&limit=1").then((rows) => {
+    const r = Array.isArray(rows) && rows[0]; if (!r || (NEWS_READ && NEWS_READ.id === r.id)) return;
+    NEWS_READ = r;
+    const box = document.querySelector("#newsRail .sc-airead");
+    if (box && NEWS_READ_ARGS) box.outerHTML = newsAiReadHTML(NEWS_READ_ARGS[0], NEWS_READ_ARGS[1]);
+  }).catch(() => {});
+}
+function newsReadHTML() {
+  const r = NEWS_READ; if (!r) return "";
+  const at = new Date(r.created_at).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit" });
+  return '<a class="sc-airead__read" href="https://station.scintillahub.ai/notify/read.html?r=' + esc(r.id) + '" target="_blank" rel="noopener"><b>' + esc(r.takeaway || "") + "</b><ul>" +
+    (Array.isArray(r.points) ? r.points : []).map((p) => "<li>" + esc(p) + "</li>").join("") + '</ul><span class="sc-airead__when">' + esc(r.kind === "test" ? "market" : r.kind) + " · " + esc(at) + "</span></a>";
+}
 function newsAiReadHTML(shown, scopeLbl) {
+  NEWS_READ_ARGS = [shown, scopeLbl]; loadNewsRead();
   const tags = extractNewsTags(dedupeNews(shown || []));
-  const tagBadge = tags.length ? '<span class="sc-airead__tag live">live</span>' : '<span class="sc-airead__tag">coming</span>';
+  const tagBadge = tags.length || NEWS_READ ? '<span class="sc-airead__tag live">live</span>' : '<span class="sc-airead__tag">coming</span>';
   const body = tags.length
     ? '<div class="sc-airead__body tags">' + tags.map(([w, c]) => '<span class="sc-aitag">#' + esc(w) + "<b>" + c + "</b></span>").join("") + "</div>"
     : '<div class="sc-airead__body">Agent summary reserved' + (scopeLbl ? " · <b>" + esc(scopeLbl) + "</b>" : "") + " — no repeating theme in this scope's headlines yet.</div>";
   return '<div class="sc-airead" role="note" aria-label="AI read — news flags">' +
     '<div class="sc-airead__hd"><span class="sc-airead__gly">◆</span><span class="sc-airead__ttl">AI READ</span>' + tagBadge + "</div>" +
-    body + "</div>";
+    newsReadHTML() + (NEWS_READ && !tags.length ? "" : body) + "</div>";
 }
 function AIREAD_SLOT(scopeLbl) {
   return '<div class="sc-airead" role="note" aria-label="AI read placeholder">' +
@@ -27521,9 +27545,9 @@ loadSentiment(); setInterval(loadSentiment, 300000);
   var SEEN_KEY = "sc_alert_seen";      // { TICKER: newest_published_ts_ISO }
   var ALERTS_KEY = "sc_alerts";        // [ {ticker,title,url,ts,seenAt,read} ]  newest first
   var UNREAD_KEY = "sc_alert_unread";  // integer badge count, persisted
-  var ALERT_CAP = 50;
+  var ALERT_CAP = 400, TWO_DAYS_MS = 2 * 86400000;
   var CHUNK = 35;                      // DB 500s on huge in.() lists
-  var POLL_MS = 240000;               // 4 min
+  var POLL_MS = 60000;                // every minute (1 Nov: one small read of the switchboard)
   var lastChimeAt = 0;
 
   function jget(k, d){ try{ var v=lsGet(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
@@ -27548,27 +27572,6 @@ loadSentiment(); setInterval(loadSentiment, 300000);
   function chunkArr(a,n){ var out=[]; for(var i=0;i<a.length;i+=n) out.push(a.slice(i,i+n)); return out; }
 
   /* fetch newest news for the fav tickers, chunked. resolves to a map {TICKER:{title,url,ts}} of the newest item per ticker */
-  function fetchFavNews(favs){
-    var chunks = chunkArr(favs, CHUNK);
-    return Promise.all(chunks.map(function(ck){
-      var list = ck.map(function(t){ return String(t).toUpperCase(); }).join(",");
-      return pg("news?ticker=in.("+list+")&select=ticker,title,url,published_ts&order=published_ts.desc.nullslast&limit="+(ck.length*3))
-        .catch(function(){ return []; });
-    })).then(function(parts){
-      var newest = {};
-      parts.forEach(function(rows){
-        (Array.isArray(rows)?rows:[]).forEach(function(r){
-          var tk = String(r.ticker||"").toUpperCase(); if(!tk || !r.published_ts) return;
-          var cur = newest[tk];
-          if(!cur || tsMs(r.published_ts) > tsMs(cur.ts)){
-            newest[tk] = { title:r.title||"", url:r.url||"", ts:r.published_ts };
-          }
-        });
-      });
-      return newest;
-    });
-  }
-
   function chime(){
     var now = Date.now();
     if(now - lastChimeAt < 60000) return;   // debounce: at most one chime / minute
@@ -27603,8 +27606,8 @@ loadSentiment(); setInterval(loadSentiment, 300000);
      exactly what the dashboard strip says of the newest one. */
   function renderList(){
     var wrap = document.getElementById("alertList"); if(!wrap) return;
-    var alerts = jget(ALERTS_KEY, []);
-    if(!alerts.length){ wrap.innerHTML = '<div class="sc-alerts__empty">No notifications yet.<br>Favourite-ticker news and today’s scintillas appear here.</div>'; return; }
+    var alerts = jget(ALERTS_KEY, []).filter(function(a){ return (tsMs(a.ts)||0) > Date.now() - TWO_DAYS_MS; });   /* the last two days */
+    if(!alerts.length){ wrap.innerHTML = '<div class="sc-alerts__empty">No notifications yet.<br>News on your names, alerts and today’s scintillas appear here.</div>'; return; }
     /* M55 — the measure is explained ONCE, here, where the list of scintillas is */
     var note = "";
     if(alerts.some(function(a){ return !!a.kind; }) && typeof scintUsualNote === "function"){
@@ -27664,25 +27667,22 @@ loadSentiment(); setInterval(loadSentiment, 300000);
     return added;
   }
 
+  /* 1 Nov — the bell reads the switchboard, not the raw news table: real desks and press releases on his names, earnings prints, the research session's alerts, the AI reads. No lawyers, no filler.
+     Alan: "I thought the notifications for news were in the notification bell ... keeping a scrollable thing of the last 2 days or something, but I don't want spam and filler."
+     The first read on a browser fills the list without ringing. Scintillas still arrive through scAlertsAdd. */
+  var STREAM_SEEN_KEY = "scintilla.alerts.streamSeen";
   function poll(){
-    var favs = (typeof favList==="function") ? favList() : ((S && S.fav) ? S.fav.slice() : []);
-    if(!favs || !favs.length) return;   // no favorites → no-op
-    fetchFavNews(favs).then(function(newest){
-      var seen = jget(SEEN_KEY, null);
-      var firstRun = !seen;             // never polled before → SEED, do not alert
-      if(firstRun) seen = {};
-      var fresh = [];
-      Object.keys(newest).forEach(function(tk){
-        var item = newest[tk], last = seen[tk];
-        var isNewer = !last || !isFinite(tsMs(last)) || tsMs(item.ts) > tsMs(last);
-        if(isNewer){
-          if(!firstRun) fresh.push({ ticker:tk, title:item.title, url:item.url, ts:item.ts });
-          seen[tk] = item.ts;           // advance last-seen either way
-        }
-      });
-      jset(SEEN_KEY, seen);             // first run persists the seed (no alerts fired)
-      if(fresh.length) pushAlerts(fresh);
-    }).catch(function(){});             // all fetches guarded
+    var since = new Date(Date.now() - TWO_DAYS_MS).toISOString(), last = +jget(STREAM_SEEN_KEY, 0) || 0, firstRun = !last;
+    return pg("notify_stream?select=id,at,ticker,title,url&level=gte.2&at=gte."+encodeURIComponent(since)+"&order=id.desc&limit=300").then(function(rows){
+      rows = Array.isArray(rows) ? rows : [];
+      var fresh = rows.filter(function(r){ return r.id > last; }).map(function(r){ return { ticker:r.ticker||"MARKET", title:r.title||"", url:r.url||"", ts:r.at }; });
+      if(rows.length) jset(STREAM_SEEN_KEY, Math.max(last, rows[0].id));
+      if(!fresh.length) return;
+      var unreadBefore = +jget(UNREAD_KEY,0)||0;
+      if(firstRun) lastChimeAt = Date.now();
+      pushAlerts(fresh);
+      if(firstRun){ jset(UNREAD_KEY, unreadBefore); paintBadge(); }
+    }).catch(function(){});
   }
 
   /* ---- panel open/close/position + mark-read ---- */
