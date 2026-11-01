@@ -6,6 +6,9 @@
 //   POST ?mode=events                → asks the database for push_events_pending(), sends the NEWEST one (one a minute
 //                                      is the rule, so one per call), logs it; { event, sent, … } or { event: null }
 //   POST ?mode=test                  → "SCINTILLA · test" to every device, kind 'test', not de-duplicated
+//   POST ?mode=stream                → 1 Nov: THE PHONE'S END OF THE SWITCHBOARD (public.notify_stream). Every minute: level 3 goes at once, level 2 goes outside the quiet window, at most
+//                                      MAX_PER_RUN singly and the rest as one line; what waited overnight arrives as one line in the morning. Goes to every device that allowed Web Push (logo)
+//                                      and, while the iPhone has not, to the ntfy app it already has (NTFY_TOPIC in this function's secrets, never printed).
 //
 // THE RULES (enforced here AND readable in SQL: push_can_send_now()):
 //   · never more than one push a minute (push_log: a sent row in the last 60 s declines this one, logged as 'rate limit')
@@ -53,6 +56,66 @@ async function authorized(req: Request) {
 
 type Msg = { kind: string; key: string; title: string; body?: string; url?: string; at?: string };
 
+/* ---- 1 Nov: the phone's end of the switchboard ---- */
+const NTFY_TOPIC = Deno.env.get("NTFY_TOPIC") || "";
+const MAX_PER_RUN = 8, STALE_H = 14;
+type Row = { id: number; level: number; kind: string; ticker: string | null; title: string; body: string | null; source: string | null; url: string | null; pct: number | null; key: string };
+const pctText = (v: number | null) => v == null ? "" : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
+/* the phone reads two lines: who and how much, then what */
+function phoneLines(r: Row) {
+  if (r.level >= 3 || !r.ticker && r.kind !== "macro" && r.kind !== "news" && r.kind !== "press") return { title: r.title, body: r.body || "" };
+  const who = [r.ticker, pctText(r.pct), r.source].filter(Boolean).join(" · ");
+  return { title: who || "SCINTILLA", body: r.title };
+}
+async function sendOne(subs: Array<{ endpoint: string; p256dh: string; auth: string; device: string | null; ua: string | null }>, useNtfy: boolean, m: { title: string; body: string; url: string; tag: string; level: number }) {
+  let sent = 0, failed = 0; const errors: string[] = [];
+  const payload = JSON.stringify({ title: m.title.slice(0, 120), body: m.body.slice(0, 300), url: m.url, tag: m.tag, at: new Date().toISOString() });
+  for (const s of subs) {
+    try {
+      const r = await sendPush(s, payload, VAPID, { ttl: 3600, urgency: m.level >= 3 ? "high" : "normal", topic: null });
+      const ep = "push_subscriptions?endpoint=eq." + encodeURIComponent(s.endpoint);
+      if (r.status >= 200 && r.status < 300) { sent++; await pg(ep, { method: "PATCH", body: JSON.stringify({ last_ok_at: new Date().toISOString(), failures: 0, last_error: null }) }); }
+      else if (r.status === 404 || r.status === 410) { await pg(ep, { method: "DELETE" }); }
+      else { failed++; errors.push((s.device || "?") + " " + r.status); await pg(ep, { method: "PATCH", body: JSON.stringify({ last_error: r.status + " " + r.text.slice(0, 120), failures: 1 }) }); }
+    } catch (e) { failed++; errors.push(String(e).slice(0, 60)); }
+  }
+  if (useNtfy && NTFY_TOPIC) {
+    const r = await fetch("https://ntfy.sh/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ topic: NTFY_TOPIC, title: m.title.slice(0, 120), message: m.body.slice(0, 300) || " ", click: m.url || undefined, priority: m.level >= 3 ? 4 : 3, icon: "https://scintillahub.ai/icon-192.png" }), signal: AbortSignal.timeout(8000) }).catch((e) => ({ ok: false, status: String(e).slice(0, 50), text: async () => "" }));
+    if (r.ok) sent++; else { failed++; errors.push("ntfy " + r.status); }
+  }
+  return { sent, failed, errors };
+}
+async function phoneFanOut() {
+  const quiet = await rpc("push_quiet_now");
+  const stale = new Date(Date.now() - STALE_H * 3600000).toISOString();
+  await pg("notify_stream?phone_at=is.null&level=gte.2&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
+  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&level=gte.2&order=id.asc&limit=200");
+  const go = quiet ? rows.filter((r) => r.level >= 3) : rows;
+  if (!go.length) return { pending: rows.length, sent: 0, quiet };
+  const subs = await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua");
+  const iphoneOnWebPush = (subs || []).some((s: { ua: string | null; device: string | null }) => /iphone/i.test(String(s.ua || "") + String(s.device || "")));
+  const useNtfy = !iphoneOnWebPush;
+  // alerts first, then the newest headlines singly; the surplus rides one line
+  const alerts = go.filter((r) => r.level >= 3), news = go.filter((r) => r.level < 3);
+  const single = alerts.concat(news.slice(-Math.max(0, MAX_PER_RUN - alerts.length))), rest = news.filter((r) => !single.includes(r));
+  let sent = 0, failed = 0; const errors: string[] = [];
+  const done = async (ids: number[], n: number, note: string | null) => { if (ids.length) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: n, phone_note: note }) }); };
+  if (rest.length) {
+    const tally = new Map<string, number>(); for (const r of rest) { const t = String(r.ticker || "market").split(" · ")[0]; tally.set(t, (tally.get(t) || 0) + 1); }
+    const top = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t, n]) => n > 1 ? t + " " + n : t).join(" · ");
+    const res = await sendOne(subs || [], useNtfy, { title: rest.length + " more headlines", body: top, url: "https://station.scintillahub.ai/notify/", tag: "digest|" + rest[rest.length - 1].id, level: 2 });
+    sent += res.sent; failed += res.failed; errors.push(...res.errors);
+    await done(rest.map((r) => r.id), res.sent, "in one line");
+  }
+  for (const r of single) {
+    const { title, body } = phoneLines(r);
+    const res = await sendOne(subs || [], useNtfy, { title, body, url: r.url || "https://station.scintillahub.ai/notify/", tag: r.key.slice(0, 60), level: r.level });
+    sent += res.sent; failed += res.failed; errors.push(...res.errors);
+    await done([r.id], res.sent, res.errors[0] || null);
+  }
+  return { pending: rows.length - go.length, single: single.length, rolled: rest.length, sent, failed, errors: errors.slice(0, 6), via: { webPush: (subs || []).length, ntfy: useNtfy && !!NTFY_TOPIC } };
+}
+
 /* one message to every subscription, with the log row written whatever happens */
 async function deliver(m: Msg, { dedupe = true } = {}) {
   if (!VAPID.publicKey || !VAPID.privateKey) return { error: "VAPID keys are not set in this function's secrets" };
@@ -89,11 +152,14 @@ Deno.serve(async (req) => {
   if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
   if (!SB || !SERVICE) return J({ error: "function environment incomplete" }, 500);
   try {
+    if (mode === "stream") return J(await phoneFanOut());
     if (mode === "events") {
+      /* 1 Nov: earnings prints and transcripts enter the switchboard, which carries them to every device */
       const pending = await rpc("push_events_pending");
       if (!Array.isArray(pending) || !pending.length) return J({ event: null, pending: 0 });
-      const m = pending[0] as Msg;
-      return J({ event: m, pending: pending.length, ...(await deliver(m)) });
+      const rows = (pending as Msg[]).map((m) => ({ level: m.kind === "actual" ? 3 : 2, kind: m.kind, ticker: (m.title.match(/^([A-Z.\-]{1,8}) reported/) || m.title.match(/for ([A-Z.\-]{1,8})$/) || [])[1] || null, title: m.title, body: m.body || null, source: "SCINTILLA", url: m.url || null, key: m.key, event_at: m.at || null }));
+      const ins = await pg("notify_stream?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(rows) });
+      return J({ pending: pending.length, entered: Array.isArray(ins) ? ins.length : 0 });
     }
     if (mode === "test") {
       const body = await req.json().catch(() => ({}));
