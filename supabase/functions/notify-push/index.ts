@@ -89,7 +89,12 @@ async function phoneFanOut() {
   const quiet = await rpc("push_quiet_now");
   const stale = new Date(Date.now() - STALE_H * 3600000).toISOString();
   await pg("notify_stream?phone_at=is.null&level=gte.2&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
-  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&level=gte.2&order=id.asc&limit=200");
+  /* 1 Nov. Alan: "the weather alerts ... volume ... all of those things are going to go to the scintilla? Because that's not the idea." Weather, the Macs' restart warning and volume alerts stay off this phone route. */
+  const offPhone = (r: Row) => r.kind === "urth" || r.kind === "system" || r.source === "Volume Pulse" || /^(scintilla\s*·\s*)?volume\b/i.test(r.title);
+  const raw: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&level=gte.2&order=id.asc&limit=200");
+  const skip = raw.filter(offPhone).map((r) => r.id);
+  if (skip.length) await pg("notify_stream?id=in.(" + skip.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "not a phone alert" }) });
+  const rows = raw.filter((r) => !offPhone(r));
   const go = quiet ? rows.filter((r) => r.level >= 3) : rows;
   if (!go.length) return { pending: rows.length, sent: 0, quiet };
   const subs = await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua");
