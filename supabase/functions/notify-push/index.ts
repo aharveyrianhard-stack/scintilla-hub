@@ -63,6 +63,9 @@ type Row = { id: number; level: number; kind: string; ticker: string | null; tit
 const pctText = (v: number | null) => v == null ? "" : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
 /* the phone reads two lines: who and how much, then what */
 function phoneLines(r: Row) {
+  /* 1 Nov. Alan: "everything going to my phone would be great as long as it's cleanly separated, branded". One phone app, so the first word says whose it is */
+  const brand = r.kind === "urth" ? "URTH" : r.kind === "system" ? "THIS MAC" : (r.source === "Volume Pulse" || /^(scintilla\s*·\s*)?volume\b/i.test(r.title)) ? "VOLUME" : r.source === "Ratings" ? "RATINGS" : r.source === "Situation" ? "SITUATION" : "";
+  if (brand) return { title: brand + " · " + r.title.replace(/^scintilla\s*·\s*/i, ""), body: r.body || "" };
   if (r.level >= 3 || !r.ticker && r.kind !== "macro" && r.kind !== "news" && r.kind !== "press") return { title: r.title, body: r.body || "" };
   const who = [r.ticker, pctText(r.pct), r.source].filter(Boolean).join(" · ");
   return { title: who || "SCINTILLA", body: r.title };
@@ -89,12 +92,7 @@ async function phoneFanOut() {
   const quiet = await rpc("push_quiet_now");
   const stale = new Date(Date.now() - STALE_H * 3600000).toISOString();
   await pg("notify_stream?phone_at=is.null&level=gte.2&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
-  /* 1 Nov. Alan: "the weather alerts ... volume ... all of those things are going to go to the scintilla? Because that's not the idea." Weather, the Macs' restart warning and volume alerts stay off this phone route. */
-  const offPhone = (r: Row) => r.kind === "urth" || r.kind === "system" || r.source === "Volume Pulse" || /^(scintilla\s*·\s*)?volume\b/i.test(r.title);
-  const raw: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&level=gte.2&order=id.asc&limit=200");
-  const skip = raw.filter(offPhone).map((r) => r.id);
-  if (skip.length) await pg("notify_stream?id=in.(" + skip.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "not a phone alert" }) });
-  const rows = raw.filter((r) => !offPhone(r));
+  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&level=gte.2&order=id.asc&limit=200");
   const go = quiet ? rows.filter((r) => r.level >= 3) : rows;
   if (!go.length) return { pending: rows.length, sent: 0, quiet };
   const subs = await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua");

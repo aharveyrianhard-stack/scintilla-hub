@@ -9,7 +9,15 @@ warnings.filterwarnings("ignore")
 HOME = os.path.expanduser("~"); SUP = HOME + "/Library/Application Support/Scintilla"; WORK = SUP + "/brain"; os.makedirs(WORK, exist_ok=True)
 CFG = json.load(open(SUP + "/config.json")); URL, ANON, TOKEN = CFG["url"], CFG["anon"], CFG["token"]
 KIMI = "/Users/alanharvey/AlanOS/Operating System/system/tools/kimi-code/executor/launch_kimi.py"; CODEX = "/Users/alanharvey/AlanOS/Operating System/system/tools/codex-executor/run.py"
-VAULT = "/Users/alanharvey/AlanOS/Operating System/knowledge/AlanOS Front Door/10 Scintilla/News Brain"; NOTIFY = HOME + "/.local/bin/scintilla-notify"; PAGE = "https://station.scintillahub.ai/notify/read.html"
+CODEX_DIR = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin"
+def claude_bin():   # the desktop app keeps its command-line tool in a versioned folder; the newest one
+    import glob
+    c = glob.glob(HOME + "/Library/Application Support/Claude/claude-code/*/*/claude.app/Contents/MacOS/claude") + glob.glob(HOME + "/Library/Application Support/Claude/claude-code/*/claude.app/Contents/MacOS/claude")
+    return max(c, key=os.path.getmtime) if c else "claude"
+WORKERS = os.environ.get("BRAIN_WORKERS", "kimi,codex,claude").split(",")   # Alan: "if Kimmy is blocked, the job goes to ChatGPT. And if that fails too, it goes to you ... I don't want this to fail."
+REPORT_URL = "https://volume-pulse-pied.vercel.app/story.html"
+# Alan, 1 Nov: "No, I don't want the Newsbrain and Obsidian vault that I already have. It would be a completely separate thing ... Let's think about it first." Notes wait in a private folder until he decides.
+VAULT = SUP + "/brain-notes"; NOTIFY = HOME + "/.local/bin/scintilla-notify"; PAGE = "https://station.scintillahub.ai/notify/read.html"
 NY = zoneinfo.ZoneInfo("America/New_York"); MAX_VIDEOS_PER_TICK = 3; MIN_VIDEO_MIN = 5
 DESK = {"reuters.com","cnbc.com","wsj.com","barrons.com","marketwatch.com","benzinga.com","businessinsider.com","techcrunch.com","investors.com","nytimes.com","foxbusiness.com","ft.com","bloomberg.com","theguardian.com","news.sky.com","apnews.com","axios.com","theinformation.com","businesswire.com","globenewswire.com","prnewswire.com","newsfilecorp.com"}
 LAWYERS = re.compile(r"(class action|lead plaintiff|securities (fraud|litigation|investigation|class)|shareholder (alert|investigation|rights|class)|investor (alert|deadline|notice)|investors? (have|has|face|should|are encouraged|who (lost|suffered|purchased|bought))|law (firm|offices)|\bLLP\b|encourages? .{0,80}(investors|shareholders)|on behalf of (investors|shareholders)|fraud investigation|deadline (alert|reminder))", re.I)
@@ -34,24 +42,37 @@ def links(tickers): return " ".join("[[" + re.sub(r"[^A-Za-z0-9.\-^]", "", t) + 
 
 # ---- the worker: Kimi first; if he is blocked or fails, Codex on the ChatGPT login; nothing is lost either way ----
 def run_worker(job_id, folder, task, out_name, timeout=720):
-    brief = folder + "/TASK.md"; open(brief, "w").write(task); out = folder + "/" + out_name; runs = WORK + "/runs"; os.makedirs(runs, exist_ok=True)
-    good = lambda: _json_ok(out)
-    kim = {"id": re.sub(r"[^A-Za-z0-9_-]", "-", job_id)[:60], "domain": "scintilla", "cwd": folder, "brief": brief, "result_root": runs, "timeout_seconds": timeout, "authorized": True, "source_issue": "alan-20261101-news-brain"}
-    jf = folder + "/kimi-job.json"; json.dump(kim, open(jf, "w"))
-    r = subprocess.run(["/usr/bin/python3", KIMI, "--job", jf], capture_output=True, text=True, timeout=timeout + 60)
-    if good(): return "kimi"
-    log("kimi did not finish", job_id, (r.stdout + r.stderr)[-240:].replace("\n", " "))
-    cod = {"id": kim["id"] + "-codex", "owner": "scintilla", "authorized": True, "cwd": folder, "brief": brief, "result_root": runs, "model": "gpt-6-sol", "effort": "low", "sandbox": "workspace-write", "timeout_seconds": timeout}
-    try:
-        jf2 = folder + "/codex-job.json"; json.dump(cod, open(jf2, "w"))
-        r = subprocess.run(["/usr/bin/python3", CODEX, jf2], capture_output=True, text=True, timeout=timeout + 60)
-        if good(): return "codex"
-        log("codex did not finish", job_id, (r.stdout + r.stderr)[-240:].replace("\n", " "))
-    except Exception as e: log("codex error", str(e)[:160])
+    brief = folder + "/TASK.md"; open(brief, "w").write(task); out = folder + "/" + out_name; runs = WORK + "/runs"; os.makedirs(runs, exist_ok=True); safe_id = re.sub(r"[^A-Za-z0-9_-]", "-", job_id)[:60]
+    for w in WORKERS:
+        try:
+            if w == "kimi":
+                jf = folder + "/kimi-job.json"; json.dump({"id": safe_id, "domain": "scintilla", "cwd": folder, "brief": brief, "result_root": runs, "timeout_seconds": timeout, "authorized": True, "source_issue": "alan-20261101-news-brain"}, open(jf, "w"))
+                r = subprocess.run(["/usr/bin/python3", KIMI, "--job", jf], capture_output=True, text=True, timeout=timeout + 60)
+            elif w == "codex":
+                jf = folder + "/codex-job.json"; json.dump({"id": safe_id + "-codex", "owner": "scintilla", "authorized": True, "cwd": folder, "brief": brief, "result_root": runs, "model": "gpt-6-sol", "effort": "low", "sandbox": "workspace-write", "timeout_seconds": timeout}, open(jf, "w"))
+                r = subprocess.run(["/usr/bin/python3", CODEX, jf], env={**os.environ, "PATH": CODEX_DIR + ":" + os.environ.get("PATH", "/usr/bin:/bin")}, capture_output=True, text=True, timeout=timeout + 60)
+            elif w == "claude":
+                env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR")}
+                r = subprocess.run([claude_bin(), "-p", "Follow the instructions in TASK.md in this folder exactly. Read only files in this folder and write only the one output file it names.", "--model", "sonnet", "--allowedTools", "Read,Write", "--permission-mode", "acceptEdits"], cwd=folder, env=env, capture_output=True, text=True, timeout=timeout + 60, stdin=subprocess.DEVNULL)
+            else: continue
+            if _json_ok(out): return w
+            log(w, "did not finish", job_id, (r.stdout + r.stderr)[-200:].replace("\n", " "))
+        except Exception as e: log(w, "error", job_id, str(e)[:160])
+    notify(title="A read could not run: every worker failed", body=job_id, kind="ops", level=1, key="ops|workers|" + datetime.datetime.now().strftime("%Y%m%d%H"), source="News brain")
     return None
 def _json_ok(p):
     try: json.load(open(p)); return True
     except Exception: return False
+
+# ---- the house report, read only. Alan: "you've seen the .com analysis that we've hosted ... the tone of that is important to track ... the tracking of things that support certain scenarios"; "Kimmy should be aware of the .com analysis too". The markets session owns it; we only read it. ----
+def report_context(limit=9000):
+    try:
+        h = http(REPORT_URL, timeout=20).decode("utf-8", "replace"); parts = re.split(r"(?=<h2[ >])", h); keep = []
+        for part in parts:
+            m = re.match(r"<h2[^>]*>(.*?)</h2>", part, re.S); name = re.sub(r"<[^>]+>", " ", m.group(1)).strip() if m else ""
+            if re.search(r"whole story|four paths|how we will know", name, re.I): keep.append("## " + name + "\n" + strip_html(part)[:limit // 2])
+        return "\n\n".join(keep)[:limit]
+    except Exception as e: log("no report context", str(e)[:120]); return ""
 
 # ---- videos ----
 def chapters_of(desc):
@@ -70,14 +91,15 @@ def secs(at):
     return n
 VIDEO_TASK = """You are reading one YouTube video for a professional trader. Do not browse the web, do not run anything except reading these files and writing the one output file.
 
-Files in this folder: transcript.txt (auto captions with [mm:ss] times; words may be misheard), description.txt (the video's description; it may list chapters).
-Video: "{title}" by {channel}, {duration}.
+Files in this folder: transcript.txt (auto captions with [mm:ss] times; words may be misheard), description.txt (the video's description; it may list chapters), report.txt (our own research report on the AI trade, for context only).
+Video: "{title}" by {channel}, {duration}.{note}
 
 Write read.json, valid JSON, with exactly these keys:
 - "takeaway": one sentence, under 25 words: what this person is actually saying the market or the stock will do and why.
 - "sections": a list, one per topic in the order spoken. {chapters} At most 10. Each item: {{"at":"mm:ss","title":"short title","points":["2 or 3 short plain sentences with the specifics: tickers, price levels, dates, numbers"]}}.
 - "tickers": every stock, ETF or index discussed with a real view, each {{"t":"MU","view":"bullish|bearish|neutral","why":"under 15 words","levels":"price levels named, or empty"}}.
 - "calls": the specific calls with a level or a date, each one short sentence.
+- "vs_report": one sentence: does this video support or go against the paths in report.txt, and on what? Empty if it has nothing to do with them.
 Fix obviously misheard names (for example "micron" is MU, "nvidia" is NVDA). Say what they said; do not add your own opinion, no disclaimers, no adjectives like "notable". If something is unclear, leave it out.
 When read.json is written and parses as JSON, stop.
 """
@@ -104,7 +126,7 @@ def videos(limit=MAX_VIDEOS_PER_TICK, hours=48):
         channel = (deep["ids"].get(r["channel_id"]) or r.get("channel") or "").strip()
         if read_one(r, channel) == "blocked": break
         time.sleep(4)
-def read_one(r, channel):
+def read_one(r, channel, note=None):
     from youtube_transcript_api import YouTubeTranscriptApi
     v = r["video_id"]; folder = tempfile.mkdtemp(prefix=v + "-", dir=WORK)
     try:
@@ -116,13 +138,13 @@ def read_one(r, channel):
     desc = ""
     try: desc = description(v)
     except Exception as e: log("no description", v, str(e)[:120])
-    open(folder + "/transcript.txt", "w").write(text); open(folder + "/description.txt", "w").write(desc)
+    open(folder + "/transcript.txt", "w").write(text); open(folder + "/description.txt", "w").write(desc); open(folder + "/report.txt", "w").write(report_context(5000))
     ch = chapters_of(desc)
-    task = VIDEO_TASK.format(title=r["title"], channel=channel, duration=r.get("duration") or "", chapters="Use exactly the description's chapters as the sections." if ch else "The description has no chapters: cut by topic yourself.")
+    task = VIDEO_TASK.format(title=r["title"], channel=channel, duration=r.get("duration") or "", note="\nHe sent this video himself with this note, so answer it in the takeaway or the first section: " + note if note else "", chapters="Use exactly the description's chapters as the sections." if ch else "The description has no chapters: cut by topic yourself.")
     worker = run_worker("yt-" + v, folder, task, "read.json")
     if not worker: log("left pending", v); return "blocked"
     d = json.load(open(folder + "/read.json"))
-    put("read", {"video_id": v, "channel": channel, "channel_id": r.get("channel_id"), "title": r["title"], "published_at": r.get("published_at"), "duration": r.get("duration"), "tier": "deep", "takeaway": d.get("takeaway"), "sections": d.get("sections"), "tickers": d.get("tickers"), "calls": d.get("calls"), "chapters": ch, "worker": worker})
+    put("read", {"video_id": v, "channel": channel, "channel_id": r.get("channel_id"), "title": r["title"], "published_at": r.get("published_at"), "duration": r.get("duration"), "tier": "deep", "takeaway": d.get("takeaway"), "sections": d.get("sections"), "tickers": d.get("tickers"), "calls": d.get("calls"), "chapters": ch, "worker": worker, "vs_report": d.get("vs_report") or None, "note": note})
     notify(title=d.get("takeaway") or r["title"], url=PAGE + "?v=" + v, kind="video", level=2, key="video|" + v, ticker=channel, source="YouTube · " + str(r.get("duration") or ""))
     note_video(r, channel, d, ch); log("read", channel, v, worker)
     return "ok"
@@ -138,12 +160,13 @@ def note_video(r, channel, d, ch):
 # ---- the reads ----
 READ_TASK = """You write the {label} read for a professional trader who has no time. Do not browse the web and do not run anything except reading these files and writing the one output file.
 
-Files here: prices.txt (index, macro and his names with today's % move), headlines.txt (real headlines, newest first, each with time, name, source), his_names.txt (the names he follows).
+Files here: prices.txt (index, sectors, macro and his names with today's % move), headlines.txt (real headlines, newest first, each with time, name, source), his_names.txt (the names he follows), report.txt (our own research report on the AI trade: its story, its four paths and the signs it tracks).
 
 Write read.json, valid JSON, with exactly these keys:
 - "title": at most 8 words, what this {label} is about.
 - "takeaway": one sentence, at most 25 words: the single thing that matters most.
-- "points": 4 to 6 short lines, each at most 25 words, the most important first: what moved, why, with the real numbers from prices.txt. Name the tickers.
+- "points": 4 to 6 short lines, each at most 25 words, the most important first: what moved, why, with the real numbers from prices.txt. Name the tickers. One line must say where money went, not only what fell: the sectors and areas that were up, from prices.txt (do not claim fund flows you cannot see).
+- "scenario": one or two sentences in the tone of report.txt: which of its paths this supports or weakens and which of its signs moved, naming them as the report names them. Empty if nothing relevant moved.
 - "names": up to 8 of his names that actually had news or a big move: {{"t":"MU","pct":-3.4,"why":"under 15 words"}}. Use the % from prices.txt.
 - "watch": up to 3 short lines: what is next (a report, a release, a level), only if the headlines or the files say so.
 Write like a desk note: plain, direct, no hype, no disclaimers, no advice wording, no adjectives like "notable". Do not invent numbers or events that are not in the files. If little happened, say so in fewer points.
@@ -155,7 +178,7 @@ def make_read(kind, hours, stamp=None):
     if kind != "test" and rest("news_reads?select=id&read_key=eq." + urllib.parse.quote(key)): return
     k = fmp_key(); since = time.time() - hours * 3600
     mine = [r["ticker"] for r in rest("station_lists?select=ticker,list&list=in.(mine,radar)&order=position.asc")]; mine = list(dict.fromkeys(mine))
-    macro = ["SPY", "QQQ", "DIA", "IWM", "SMH", "XLF", "XLE", "XLK", "RSP", "TLT", "HYG", "^VIX", "ESUSD", "NQUSD", "CLUSD", "GCUSD", "BTCUSD", "DX-Y.NYB"]
+    macro = ["SPY", "QQQ", "DIA", "IWM", "RSP", "SMH", "XLK", "XLC", "XLY", "XLF", "XLI", "XLE", "XLV", "XLP", "XLU", "XLB", "XLRE", "VTV", "VUG", "TLT", "HYG", "GLD", "SLV", "^VIX", "ESUSD", "NQUSD", "CLUSD", "GCUSD", "BTCUSD", "DX-Y.NYB"]
     quotes = fmp("batch-quote?symbols=" + urllib.parse.quote(",".join(dict.fromkeys(macro + mine))), k); qmap = {q["symbol"]: q for q in quotes}
     p = ["MARKET"] + [f"{s}: {qmap[s]['price']} ({qmap[s].get('changePercentage', 0):+.2f}%)" for s in macro if s in qmap] + ["", "HIS NAMES"] + [f"{s}: {qmap[s]['price']} ({qmap[s].get('changePercentage', 0):+.2f}%)" for s in mine if s in qmap]
     rows = rest("news?select=ticker,title,site,published_ts&feed=eq.fmp&published_ts=gte." + str(int(since)) + "&order=published_ts.desc&limit=800")
@@ -171,11 +194,11 @@ def make_read(kind, hours, stamp=None):
         seen.add(nt); keep.append(r)
     head = [datetime.datetime.fromtimestamp(r["published_ts"], NY).strftime("%a %H:%M") + " | " + str(r.get("ticker")) + " | " + str(r.get("site")) + " | " + str(r.get("title")) for r in keep[:220]]
     folder = tempfile.mkdtemp(prefix="read-" + kind + "-", dir=WORK)
-    open(folder + "/prices.txt", "w").write("\n".join(p)); open(folder + "/headlines.txt", "w").write("\n".join(head)); open(folder + "/his_names.txt", "w").write(" ".join(mine))
+    open(folder + "/prices.txt", "w").write("\n".join(p)); open(folder + "/headlines.txt", "w").write("\n".join(head)); open(folder + "/his_names.txt", "w").write(" ".join(mine)); open(folder + "/report.txt", "w").write(report_context())
     worker = run_worker("read-" + kind + "-" + now.strftime("%H%M"), folder, READ_TASK.format(label=LABELS[kind]), "read.json", timeout=420)
     if not worker: log("read left pending", kind); return
     d = json.load(open(folder + "/read.json"))
-    rid = put("news_read", {"kind": kind, "read_key": key, "title": d.get("title"), "takeaway": d.get("takeaway"), "points": d.get("points"), "names": d.get("names"), "watch": d.get("watch"), "sources": len(head), "worker": worker})
+    rid = put("news_read", {"kind": kind, "read_key": key, "title": d.get("title"), "takeaway": d.get("takeaway"), "points": d.get("points"), "names": d.get("names"), "watch": d.get("watch"), "sources": len(head), "worker": worker, "scenario": d.get("scenario") or None})
     notify(title=d.get("takeaway") or d.get("title"), url=PAGE + "?r=" + str(rid), kind="read", level=2, key="read|" + key, ticker="AI READ", source=LABELS[kind].capitalize())
     folder2 = VAULT + "/Reads"; os.makedirs(folder2, exist_ok=True); names = [n.get("t") for n in d.get("names") or []]
     out = ["---", "type: read", "kind: " + kind, "date: " + now.strftime("%Y-%m-%d"), "tickers: " + json.dumps(names), "---", "", "# " + str(d.get("title")), "", "**" + str(d.get("takeaway")) + "**", ""] + ["- " + str(x) for x in d.get("points") or []] + ["", "## Names", ""] + ["- [[" + str(n.get("t")) + "]] " + str(n.get("pct")) + "%: " + str(n.get("why")) for n in d.get("names") or []] + ["", "## Next", ""] + ["- " + str(x) for x in d.get("watch") or []] + [""]
@@ -210,7 +233,7 @@ def kept():
                 v = m.group(1); rows = rest("youtube_feed?select=video_id,title,channel,channel_id,duration,published_at&video_id=eq." + v); r = rows[0] if rows else None
                 if not r:
                     o = json.loads(http("https://www.youtube.com/oembed?format=json&url=" + urllib.parse.quote("https://youtu.be/" + v))); r = {"video_id": v, "title": o.get("title"), "channel": o.get("author_name"), "channel_id": None, "duration": None, "published_at": None}
-                res = read_one(r, (r.get("channel") or "").strip())
+                res = read_one(r, (r.get("channel") or "").strip(), k.get("note"))
                 if res == "blocked": return
                 rpc("brain_kept_done", {"p_token": TOKEN, "p_id": k["id"], "p_state": "done" if res == "ok" else "failed", "p_result": res}); continue
             folder = tempfile.mkdtemp(prefix="kept-", dir=WORK); page = ""
@@ -224,14 +247,34 @@ def kept():
             if k.get("note"): out += ["His note: " + str(k["note"]), ""]
             open(f2 + "/" + day + " " + safe(d.get("title") or u) + ".md", "w").write("\n".join(out))
             rpc("brain_kept_done", {"p_token": TOKEN, "p_id": k["id"], "p_state": "done", "p_result": d.get("takeaway") or ""}); log("kept", u[:80], worker)
+            notify(title=d.get("takeaway") or d.get("title") or k.get("title") or u, url=u, kind="read", level=2, key="kept|" + str(k["id"]), source="Your push", ticker=(tick_[0] if tick_ else None))   # what he sent comes back as a card, like everything else
         except Exception as e:
             log("kept failed", u[:80], str(e)[:160]); rpc("brain_kept_done", {"p_token": TOKEN, "p_id": k["id"], "p_state": "failed", "p_result": str(e)[:200]})
+
+# ---- the light reads: one line from the free local model on what a chapter list says. Alan: "it seemed like ... just a raw extraction of the chapters"; "put in open source models into these processes" ----
+def light_lines(limit=12):
+    llm = SUP + "/llm/venv/bin/python"
+    if not os.path.exists(llm): return
+    rows = rest("youtube_reads?select=video_id,title,chapters&tier=eq.light&takeaway=is.null&worker=eq.none&order=published_at.desc&limit=80")
+    job = [{"id": r["video_id"], "title": r["title"], "chapters": [c.get("title", "") for c in r["chapters"]][:14]} for r in rows if r.get("chapters")][:limit]
+    if not job: return
+    try:
+        p = subprocess.run([llm, SUP + "/lines.py"], input=json.dumps(job), capture_output=True, text=True, timeout=240)
+        got = json.loads(p.stdout.strip().splitlines()[-1])
+    except Exception as e: log("lines failed", str(e)[:160]); return
+    for j in job:
+        line = re.sub(r"^(the|this) (video|episode|podcast) \w+( that)?\s+", "", str(got.get(j["id"]) or "").strip().strip('"'), flags=re.I); line = line[:1].upper() + line[1:]; src = j["title"] + " " + " ".join(j["chapters"])
+        bad = not line or len(line.split()) > 34 or any(t not in src for t in re.findall(r"\b[A-Z]{2,5}\b", line))   # the model once invented a ticker; a line that names one the video does not is dropped
+        put("line", {"video_id": j["id"], "takeaway": None if bad else line, "worker": "qwen"})
+    log("lines", len(job))
 
 def tick():
     lock = WORK + "/tick.lock"
     try:
         if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 3000: return
         open(lock, "w").write(str(os.getpid()))
+        try: light_lines()
+        except Exception as e: log("lines error", str(e)[:160])
         reads_due(); kept(); videos()
     finally:
         try: os.remove(lock)
@@ -242,3 +285,6 @@ if __name__ == "__main__":
     elif a[0] == "videos": videos(limit=int(a[1]) if len(a) > 1 else MAX_VIDEOS_PER_TICK, hours=int(a[2]) if len(a) > 2 else 48)
     elif a[0] == "read": make_read(a[1], int(a[2]) if len(a) > 2 else 24, stamp=a[3] if len(a) > 3 else None)
     elif a[0] == "kept": kept()
+    elif a[0] == "lines": light_lines(int(a[1]) if len(a) > 1 else 12)
+    elif a[0] == "testworker":   # BRAIN_WORKERS=codex brain.py testworker <folder with TASK.md inputs>: does this worker finish a real job?
+        f = a[1]; print(run_worker("test-" + WORKERS[0], f, open(f + "/TASK.md").read(), "read.json", timeout=600))

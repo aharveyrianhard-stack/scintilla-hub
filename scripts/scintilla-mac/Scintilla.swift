@@ -10,7 +10,7 @@
 import AppKit
 import WebKit
 
-let VERSION = "1.4"
+let VERSION = "1.5"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -62,11 +62,15 @@ final class CardView: NSView {
     let pad: CGFloat = 10, logoSize: CGFloat = 30
     // no coloured stripe down the left edge. Alan, 1 Nov: "I have never liked these things where you put the cyan thing on the left side ... I fucking hate it". The name's colour says the level.
     // 1 Nov. Alan: "the weather alerts ... all of those things are going to go to the scintilla? Because that's not the idea." Weather and the Macs' restart warning are not Scintilla: no logo, their own mark and name.
-    let notScintilla = item.kind == "urth" || item.kind == "system"
-    let logo = NSImageView(image: notScintilla ? (NSImage(systemSymbolName: item.kind == "urth" ? "cloud.sun.fill" : "desktopcomputer", accessibilityDescription: nil) ?? NSImage()) : trefoil(logoSize, color: CYAN, tile: false)); logo.contentTintColor = DIM; logo.symbolConfiguration = .init(pointSize: 22, weight: .regular); addSubview(logo)
+    // 1 Nov: "those Urth ones should be Urth branded". Each family has its own mark and name.
+    let isVolume = item.source == "Volume Pulse" || (item.title.range(of: #"^(scintilla\s*·\s*)?volume\b"#, options: [.regularExpression, .caseInsensitive]) != nil)
+    let isUrth = item.kind == "urth", notScintilla = isUrth || item.kind == "system" || isVolume
+    let urthImage = Bundle.main.image(forResource: "urth")
+    let logo = NSImageView(image: isUrth ? (urthImage ?? NSImage()) : notScintilla ? (NSImage(systemSymbolName: isVolume ? "waveform.path.ecg" : "desktopcomputer", accessibilityDescription: nil) ?? NSImage()) : trefoil(logoSize, color: CYAN, tile: false)); logo.imageScaling = .scaleProportionallyUpOrDown; logo.contentTintColor = isVolume ? CYAN : DIM; logo.symbolConfiguration = .init(pointSize: 22, weight: .regular); logo.wantsLayer = true; if isUrth { logo.layer?.cornerRadius = 7; logo.layer?.masksToBounds = true }; addSubview(logo)
     let textX = pad + logoSize + 9, textW = width - textX - pad
     // the top line: name, the day's move, then where it came from and how old
-    let who = label((item.ticker ?? (item.kind == "urth" ? "URTH" : item.kind == "system" ? "THIS MAC" : item.level >= 3 ? "SCINTILLA" : "MARKET")), .monospacedSystemFont(ofSize: 12, weight: .bold), notScintilla ? DIM : accent == EDGE ? CYAN : accent)
+    let urthGreen = NSColor(srgbRed: 0.55, green: 0.80, blue: 0.62, alpha: 1)
+    let who = label((isUrth ? "URTH" : item.kind == "system" ? "THIS MAC" : isVolume ? "VOLUME" : item.ticker ?? (item.level >= 3 ? "SCINTILLA" : "MARKET")), .monospacedSystemFont(ofSize: 12, weight: .bold), isUrth ? urthGreen : isVolume ? CYAN : notScintilla ? DIM : accent == EDGE ? CYAN : accent)
     who.sizeToFit(); addSubview(who)
     var pctLabel: ClearLabel? = nil
     if let p = item.pct { let t = (p >= 0 ? "+" : "") + String(format: "%.1f%%", p); let l = label(t, .monospacedSystemFont(ofSize: 11.5, weight: .semibold), p >= 0 ? BULL : BEAR); l.sizeToFit(); addSubview(l); pctLabel = l }
@@ -213,8 +217,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   // ---- the cards ----
   func nightNow() -> Bool { var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "America/New_York")!; let c = cal.dateComponents([.hour, .minute], from: Date()); let m = (c.hour ?? 12) * 60 + (c.minute ?? 0); return m >= 22 * 60 || m < 6 * 60 + 30 }
   func show(_ it: Item) {
-    let volumeAlert = it.source == "Volume Pulse" || (it.title.range(of: #"^(scintilla\s*·\s*)?volume\b"#, options: [.regularExpression, .caseInsensitive]) != nil)   // on the Macs, silent: the Station's volume panel is its home
-    if !nightNow() && !volumeAlert { if it.level >= 3 { NSSound(named: "Glass")?.play() } else if it.level == 2 { let s = NSSound(named: "Tink"); s?.volume = 0.5; s?.play() } }
+    if !nightNow() { if it.level >= 3 { NSSound(named: "Glass")?.play() } else if it.level == 2 { let s = NSSound(named: "Tink"); s?.volume = 0.5; s?.play() } }
     let card = Card(item: it); cards.insert(card, at: 0); build(card)
     while cards.count > maxOnScreen { drop(cards.last!) }
     layout(animated: true); arm(card)
