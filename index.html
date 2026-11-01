@@ -2981,6 +2981,17 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
 .sc-tape--ern .sc-tape__lbl{ letter-spacing:.05em; }   /* EARNINGS is a longer word: the 84px seam still lines up with MACRO / ALL / ECON */
 .sc-tape--ern .ern-it{ cursor:pointer; }               /* tap a ticker → its company page */
 .sc-tape--ern .ern-it:hover .ern-tk{ color:var(--crk); }
+/* 1 Nov — the NEWS tapes, the same part as the EARNINGS and ECON bands. Alan: "move the most mentioned to something more like the earnings and events tape at the top",
+   "is this a buy? Maybe separate it", "let's just make some clean space for things". */
+.sc-art .edge{ display:none; }   /* a neutral stripe down every headline said nothing (Alan, 1 Nov, of left stripes: "I have never liked these things") */
+.sc-newstapes{ display:flex; flex-direction:column; gap:6px; margin:0 0 10px; flex:0 0 auto; min-width:0; }
+.sc-tape--news .sc-tape__lbl{ flex:0 0 132px; width:132px; letter-spacing:.08em; }
+.sc-tape--news .nt-it{ cursor:pointer; }
+.sc-tape--news .nt-tk{ color:var(--ink); font-weight:700; }
+.sc-tape--news .nt-it:hover .nt-tk{ color:var(--crk); }
+.sc-tape--news .nt-n{ color:var(--dim); padding-left:5px; font-variant-numeric:tabular-nums; }
+.sc-airead__path{ display:block; margin-top:8px; color:var(--ink2); line-height:1.45; }
+.sc-airead__path b{ color:var(--crk); font-weight:600; }
 .ern-wk{ color:var(--crk); letter-spacing:.16em; }
 .ern-when{ color:var(--dim); padding-right:6px; }
 .ern-when.is-today{ color:var(--crk); }
@@ -11724,9 +11735,9 @@ function scopeItems(items, cohort, tq, fav, cohsets) {   // pure: ALL/FAV rules 
     return !!(set && set.has(t));
   });
 }
-/* FIX 8 / R19 — rail: ONE card — real most-mentioned counts from the SAME scoped
-   items. (Dead sentiment placeholder deleted — Alan: not wired, not shown.) */
-function newsRailHTML(shown, scopeLbl) {
+/* FIX 8 / R19 — real most-mentioned counts from the SAME scoped items. (Dead sentiment placeholder deleted — Alan: not wired, not shown.)
+   1 Nov: no longer a card in the rail; a tape on top of NEWS (paintNewsTapes). */
+function newsMentions(shown) {
   /* R43 — count headlines per ticker from the SAME deduped scope the list shows.
      De-dupe the input first so wire-service echoes don't inflate a ticker's count. */
   const counts = {};
@@ -11735,24 +11746,9 @@ function newsRailHTML(shown, scopeLbl) {
     if (!t || t === "_MARKET") continue;
     counts[t] = (counts[t] || 0) + 1;
   }
-  const top = Object.entries(counts)
+  return Object.entries(counts)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))   // count desc, then alpha (stable, no dup/jitter)
-    .slice(0, 8);
-  const max = top.length ? top[0][1] : 1;
-  const mm = top.length ? top.map(([t, c]) => {
-    const w = Math.max(6, Math.round(c / max * 100));           // bar proportional to the busiest ticker
-    return '<div class="mmrow" data-act="row" data-t="' + esc(t) + '" role="button" tabindex="0" ' +
-      'title="' + c + ' headline' + (c === 1 ? "" : "s") + ' in scope — open $' + esc(t) + '">' +
-      '<span class="mmtk">$' + esc(t) + '</span>' +
-      '<span class="mmbar sc-clip"><i style="width:' + w + '%"></i></span>' +
-      '<span class="mmn">' + c + "</span>" +
-      '<span class="mmsen">' + (senChip(t) || '<span class="mmdash">·</span>') + "</span></div>";
-  }).join("")
-    : '<div class="sc-senttxt">no ticker-tagged headlines in scope.</div>';
-  const legend = top.length
-    ? '<div class="mmleg">bar &amp; count = headlines · chip = 4-day sentiment</div>'
-    : "";
-  return '<div class="card"><h4>Most-mentioned · news · ' + esc(scopeLbl) + "</h4>" + mm + legend + "</div>";
+    .slice(0, 30);
 }
 /* === FIX1-TESTABLE-END === */
 /* FIX A3 + NEWS-COHORT — PER-COHORT SERVER PULL via the populated news.cohort
@@ -11816,6 +11812,34 @@ function dedupeNews(items) {
   }
   return out;
 }
+/* 1 Nov — the NEWS tapes. MOST MENTIONED: this scope's headlines. IS THIS A BUY: the "is X a buy" pieces of the last two days across every name, kept apart from real news
+   (public.news_chatter_now, refreshed every 15 minutes). Sentiment stays in its own section. A tap opens the company. */
+let NEWS_CHATTER = null, NEWS_CHATTER_TRIED = 0, NEWS_TAPE_ARGS = null;
+function loadNewsChatter() {
+  if (Date.now() - NEWS_CHATTER_TRIED < 300000) return;
+  NEWS_CHATTER_TRIED = Date.now();
+  pg("news_chatter_now?select=ticker,pieces,sample&order=pieces.desc,ticker.asc&limit=40").then((rows) => {
+    if (!Array.isArray(rows)) return;
+    NEWS_CHATTER = rows;
+    if (NEWS_TAPE_ARGS) paintNewsTapes(NEWS_TAPE_ARGS);
+  }).catch(() => {});
+}
+function newsTapeHTML(lbl, items, empty) {
+  const sep = '<span class="sc-tape__dot">·</span>';
+  const seg = items.length ? items.map(([t, n, title]) => '<span class="sc-tape__item nt-it" data-act="row" data-t="' + esc(t) + '" title="' + esc(title) + '"><span class="nt-tk">$' + esc(t) + '</span><span class="nt-n">' + n + "</span></span>" + sep).join("")
+    : '<span class="sc-tape__item ecb-note">' + esc(empty) + "</span>" + sep;
+  return '<div class="sc-tape sc-tape--news"><b class="sc-tape__lbl">' + esc(lbl) + ' →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+}
+function paintNewsTapes(shown) {
+  NEWS_TAPE_ARGS = shown; loadNewsChatter();
+  const box = el("newsTapes"); if (!box) return;
+  const mm = newsMentions(shown).map(([t, c]) => [t, c, c + " headline" + (c === 1 ? "" : "s") + " in this scope. Open $" + t]);
+  const buy = (NEWS_CHATTER || []).map((r) => [r.ticker, r.pieces, r.pieces + " in two days, such as: " + (r.sample || "")]);
+  const html = newsTapeHTML("MOST MENTIONED", mm, "no ticker-tagged headlines in this scope") + newsTapeHTML("IS THIS A BUY", buy, NEWS_CHATTER ? "none in the last two days" : "reading…");
+  if (box._html === html) return;                        // unchanged: leave the marquee running where it is
+  box._html = html; box.innerHTML = html;
+  box.querySelectorAll(".sc-tape__track").forEach((tr) => tapeSpeed(tr));
+}
 function renderNews(cohort) {                            // paints from the per-scope cache — scope filter re-run on EVERY call
   const list = el("newsList");
   if (!list) return;                                     // NEWS-COHORT — no COHSETS gate: the cohort column scopes the pull itself
@@ -11825,7 +11849,8 @@ function renderNews(cohort) {                            // paints from the per-
   list.innerHTML = shown.length ? shown.map((n) => newsArtHTML(n)).join("")
     : '<div class="soon">No headlines for <b>' + esc(S.tq || cohort) + "</b> yet.</div>";
   const rail = el("newsRail");                           // PULSE RAIL — recomputed from the SAME per-cohort result on every paint
-  if (rail) rail.innerHTML = newsAiReadHTML(shown, S.tq || cohort) + newsRailHTML(shown, S.tq || cohort);   // R48 — real hashtag/flag read, was a static placeholder
+  if (rail) rail.innerHTML = newsAiReadHTML(shown, S.tq || cohort);   // R48 — real hashtag/flag read, was a static placeholder
+  paintNewsTapes(shown);                                 // 1 Nov — most mentioned moved from this rail to the tape on top
   const sl = el("newsScopeLbl");
   if (sl) sl.textContent = S.tq || cohort;
 }
@@ -11848,6 +11873,7 @@ function newsRoomHTML() {
      uses; changing cohort here remounts NEWS for the new scope (viewKey keys on
      S.tq||S.coh). Full-width row above the two news panels. */
   return '<div class="sc-newscohrow sc-ihead cohtabs"><div class="cohtabstrip">' + cohStripHTML() + "</div></div>" +
+    '<div class="sc-newstapes" id="newsTapes"></div>' +
     '<div class="body2">' +
     '<div class="panel">' +
       '<div class="sc-plabel sc-plabel--row"><span>headlines · live from <b>news</b> (DB)</span>' + SECFS_BTN + "</div>" +
@@ -11855,7 +11881,7 @@ function newsRoomHTML() {
     "</div>" +
     '<div class="panel">' +
       '<div class="sc-plabel sc-plabel--row"><span>news pulse · <b id="newsScopeLbl">' + esc(S.tq || S.coh) + "</b></span>" + SECFS_BTN + "</div>" +
-      '<div class="rail" id="newsRail">' + AIREAD_SLOT("news · " + esc(S.tq || S.coh)) + newsRailHTML([], S.tq || S.coh) + "</div>" +
+      '<div class="rail" id="newsRail">' + AIREAD_SLOT("news · " + esc(S.tq || S.coh)) + "</div>" +
     "</div></div>";
 }
 async function fillNews() {
@@ -11925,7 +11951,7 @@ async function fillNews() {
    SAME deduped headlines the list/rail already show, drop stopwords/short/pure-
    numeric tokens, count each surviving word once per headline (so one very
    wordy headline can't dominate), keep anything mentioned in 2+ headlines. */
-const NEWS_STOP = new Set(["this","that","with","from","have","will","been","were","their","about","after","over","into","more","than","said","says","which","what","when","where","also","some","such","only","even","just","could","would","should","there","these","those","while","during","among","across","amid","being","still","other","first","second","third","before","between","under","above","again","further","once","here","both","most","much","many","very","were","does","doing","having","because","until","against","through","itself","yourself","company","companies","stock","stocks","shares","share","market","markets","today","week","year","years","month","new","inc","corp","ltd","llc"]);
+const NEWS_STOP = new Set(["yahoo","finance","price","news","history","quote","stock","stocks","shares","barchart","benzinga","this","that","with","from","have","will","been","were","their","about","after","over","into","more","than","said","says","which","what","when","where","also","some","such","only","even","just","could","would","should","there","these","those","while","during","among","across","amid","being","still","other","first","second","third","before","between","under","above","again","further","once","here","both","most","much","many","very","were","does","doing","having","because","until","against","through","itself","yourself","company","companies","stock","stocks","shares","share","market","markets","today","week","year","years","month","new","inc","corp","ltd","llc"]);
 function extractNewsTags(items) {
   const freq = {};
   for (const n of (items || [])) {
@@ -11944,7 +11970,7 @@ let NEWS_READ = null, NEWS_READ_TRIED = 0, NEWS_READ_ARGS = null;
 function loadNewsRead() {
   if (Date.now() - NEWS_READ_TRIED < 120000) return;
   NEWS_READ_TRIED = Date.now();
-  pg("news_reads?select=id,kind,takeaway,points,created_at&order=id.desc&limit=1").then((rows) => {
+  pg("news_reads?select=id,kind,takeaway,points,scenario,created_at&order=id.desc&limit=1").then((rows) => {
     const r = Array.isArray(rows) && rows[0]; if (!r || (NEWS_READ && NEWS_READ.id === r.id)) return;
     NEWS_READ = r;
     const box = document.querySelector("#newsRail .sc-airead");
@@ -11955,7 +11981,8 @@ function newsReadHTML() {
   const r = NEWS_READ; if (!r) return "";
   const at = new Date(r.created_at).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit" });
   return '<a class="sc-airead__read" href="https://station.scintillahub.ai/notify/read.html?r=' + esc(r.id) + '" target="_blank" rel="noopener"><b>' + esc(r.takeaway || "") + "</b><ul>" +
-    (Array.isArray(r.points) ? r.points : []).map((p) => "<li>" + esc(p) + "</li>").join("") + '</ul><span class="sc-airead__when">' + esc(r.kind === "test" ? "market" : r.kind) + " · " + esc(at) + "</span></a>";
+    (Array.isArray(r.points) ? r.points : []).map((p) => "<li>" + esc(p) + "</li>").join("") + "</ul>" +
+    (r.scenario ? '<span class="sc-airead__path"><b>The report\'s paths:</b> ' + esc(r.scenario) + "</span>" : "") + '<span class="sc-airead__when">' + esc(r.kind === "test" ? "market" : r.kind) + " · " + esc(at) + "</span></a>";
 }
 function newsAiReadHTML(shown, scopeLbl) {
   NEWS_READ_ARGS = [shown, scopeLbl]; loadNewsRead();
