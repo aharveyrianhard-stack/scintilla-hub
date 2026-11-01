@@ -17,6 +17,9 @@ const MAX_AGE_S = 45 * 60, THROTTLE_MIN = 10;
 export const DESK = new Set(["reuters.com", "cnbc.com", "wsj.com", "barrons.com", "marketwatch.com", "benzinga.com", "businessinsider.com", "techcrunch.com", "investors.com", "nytimes.com", "foxbusiness.com", "ft.com", "bloomberg.com", "theguardian.com", "news.sky.com", "apnews.com", "axios.com", "theinformation.com"]);
 export const WIRE = new Set(["businesswire.com", "globenewswire.com", "prnewswire.com", "newsfilecorp.com", "feeds.newsfilecorp.com", "thenewswire.com", "accesswire.com", "accessnewswire.com"]);
 const VIDEO_DESKS = /bloomberg|cnbc|yahoo finance/i;
+// Alan, 1 Nov: "why do I have to sign into Wall Street Journal? I don't have Wall Street Journal." FMP gives the headline and a short summary, not the article. These sites wall it, so the card opens that summary.
+export const WALLED = new Set(["wsj.com", "barrons.com", "marketwatch.com", "ft.com", "bloomberg.com", "nytimes.com", "theinformation.com", "investors.com", "businessinsider.com"]);
+const READ_PAGE = "https://station.scintillahub.ai/notify/read.html";
 export const LAWYERS = /(class action|lead plaintiff|securities (fraud|litigation|investigation|class)|shareholder (alert|investigation|rights|class)|investor (alert|deadline|notice)|investors? (have|has|face|should|are encouraged|who (lost|suffered|purchased|bought))|law (firm|offices)|\bLLP\b|encourages? .{0,80}(investors|shareholders)|on behalf of (investors|shareholders)|fraud investigation|deadline (alert|reminder)|\b(rosen|pomerantz|levi & korsinsky|faruqi|bragar|hagens berman|schall|kessler topaz|robbins geller|bernstein liebhard|gross law|glancy|howard g\. smith|kirby mcinerney|sbs law|bronstein|portnoy|block & leviton|holzer|johnson fistel|berger montague|edelson|kaskela|halper sadeh|ademi|monteverde)\b)/i;
 export const BIG_MACRO = /\b(Fed|FOMC|Powell|Warsh|Hassett|CPI|PCE|payrolls?|jobs report|GDP|tariffs?|Treasury yields?|OPEC|Hormuz|recession|rate (cut|hike)s?|inflation)\b/;
 // a column, not news: it stays in the Mac stream and does not ping the phone. Alan's first real phone ping was "Stock of the Day: Is Palantir Breaking Support?"
@@ -48,7 +51,7 @@ Deno.serve(async (req) => {
     if (!C.FMP_KEY || C.fmp_enabled !== "1") return J({ skipped: "fmp off" });
     const [fol, uni] = await Promise.all([rpc("push_followed"), pg("fmp_full_universe?select=ticker")]);
     const followed = new Set((fol || []).map((r: { ticker: string }) => r.ticker)), universe = new Set((uni || []).map((r: { ticker: string }) => r.ticker));
-    const counts: Record<string, unknown> = {}; const groups = new Map<string, { source: string; title: string; url: string; t: number; cls: string; lane: string; tickers: Set<string> }>();
+    const counts: Record<string, unknown> = {}; const groups = new Map<string, { source: string; title: string; url: string; site: string; text: string; t: number; cls: string; lane: string; tickers: Set<string> }>();
     await Promise.all(SOURCES.map(async ([lane, path]) => {
       const r = await fetch(FMP + path + "&apikey=" + encodeURIComponent(C.FMP_KEY), { signal: AbortSignal.timeout(12000) });
       if (!r.ok) { counts[lane] = "http " + r.status; return; }
@@ -57,7 +60,7 @@ Deno.serve(async (req) => {
         const cls = classOf(a); if (!cls) continue;
         const t = fmpEpoch(a.publishedDate); if (!t || t > now + 300 || now - t > MAX_AGE_S) continue;
         const nt = normTitle(a.title); let g = groups.get(nt);
-        if (!g) { g = { source: a.publisher || a.site || "", title: String(a.title), url: a.url || "", t, cls, lane, tickers: new Set() }; groups.set(nt, g); kept++; }
+        if (!g) { g = { source: a.publisher || a.site || "", title: String(a.title), url: a.url || "", site: String(a.site || "").toLowerCase().replace(/^www\./, ""), text: String(a.text || ""), t, cls, lane, tickers: new Set() }; groups.set(nt, g); kept++; }
         if (a.symbol) g.tickers.add(String(a.symbol));
       }
       counts[lane] = { read: Array.isArray(rows) ? rows.length : 0, kept };
@@ -72,7 +75,8 @@ Deno.serve(async (req) => {
       if (level === 2 && COLUMN.test(g.title)) level = 1;
       if (!level) continue;
       const shown = (mine.length ? mine : known).slice(0, 3);
-      out.push({ key: "news|" + (await sha(nt)), level, kind: g.lane === "market" ? "macro" : g.cls === "wire" || g.lane === "press" ? "press" : "news", ticker: shown.join(" · ") || null, title: g.title.slice(0, 300), source: String(g.source).slice(0, 60), url: g.url, event_at: new Date(g.t * 1000).toISOString() });
+      const key = "news|" + (await sha(nt)), walled = WALLED.has(g.site) && !!g.text;
+      out.push({ key, summary: g.text.slice(0, 700) || null, source_url: g.url || null, level, kind: g.lane === "market" ? "macro" : g.cls === "wire" || g.lane === "press" ? "press" : "news", ticker: shown.join(" · ") || null, title: g.title.slice(0, 300), source: String(g.source).slice(0, 60), url: walled ? READ_PAGE + "?k=" + encodeURIComponent(key) : g.url, event_at: new Date(g.t * 1000).toISOString() });
     }
     if (!out.length) return J({ counts, new: 0 });
     const have = await pg("notify_stream?select=key&key=in.(" + out.map((o) => encodeURIComponent(String(o.key))).join(",") + ")"); const seen = new Set((have || []).map((r: { key: string }) => r.key));

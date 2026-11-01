@@ -10,7 +10,7 @@
 import AppKit
 import WebKit
 
-let VERSION = "1.2"
+let VERSION = "1.3"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -106,7 +106,7 @@ final class ReaderPanel: NSPanel {
 final class ReaderHeader: NSView { override var mouseDownCanMoveWindow: Bool { true } }
 final class Reader: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate {
   static let shared = Reader()
-  var panel: ReaderPanel?; var web: WKWebView?; var titleL: ClearLabel?; var current: URL?
+  var panel: ReaderPanel?; var web: WKWebView?; var titleL: ClearLabel?; var current: URL?; var keepB: NSButton?
   var onLoaded: (() -> Void)?
   private var keys: Any?
   func open(_ url: URL, title: String, offscreen: Bool = false) {
@@ -127,9 +127,11 @@ final class Reader: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelega
     let headH: CGFloat = 36
     let head = ReaderHeader(frame: NSRect(x: 0, y: rect.height - headH, width: rect.width, height: headH)); head.autoresizingMask = [.width, .minYMargin]; head.wantsLayer = true; head.layer?.backgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor; root.addSubview(head)
     let logo = NSImageView(image: trefoil(22, color: CYAN, tile: false)); logo.frame = NSRect(x: 76, y: 7, width: 22, height: 22); head.addSubview(logo)
-    let t = label("", .systemFont(ofSize: 12.5, weight: .medium), DIM); t.frame = NSRect(x: 104, y: 9, width: rect.width - 104 - 190, height: 18); t.autoresizingMask = [.width]; head.addSubview(t); titleL = t
+    let t = label("", .systemFont(ofSize: 12.5, weight: .medium), DIM); t.frame = NSRect(x: 104, y: 9, width: rect.width - 104 - 262, height: 18); t.autoresizingMask = [.width]; head.addSubview(t); titleL = t
     let closeB = NSButton(title: "Close  esc", target: self, action: #selector(closeTapped)); closeB.bezelStyle = .rounded; closeB.frame = NSRect(x: rect.width - 88, y: 5, width: 82, height: 26); closeB.autoresizingMask = [.minXMargin]; head.addSubview(closeB)
     let out = NSButton(title: "Browser ↗", target: self, action: #selector(toBrowser)); out.bezelStyle = .rounded; out.frame = NSRect(x: rect.width - 178, y: 5, width: 86, height: 26); out.autoresizingMask = [.minXMargin]; head.addSubview(out)
+    // Alan: "a method by which I have ... I see a story and I push it to you guys or the system, and it's ingested"
+    let keep = NSButton(title: "★ Keep", target: self, action: #selector(keepTapped)); keep.bezelStyle = .rounded; keep.frame = NSRect(x: rect.width - 252, y: 5, width: 70, height: 26); keep.autoresizingMask = [.minXMargin]; head.addSubview(keep); keepB = keep
     let cfg = WKWebViewConfiguration(); cfg.websiteDataStore = .default()   // a site he signs in to here stays signed in
     let v = WKWebView(frame: NSRect(x: 0, y: 0, width: rect.width, height: rect.height - headH), configuration: cfg); v.autoresizingMask = [.width, .height]; v.navigationDelegate = self; v.uiDelegate = self; v.allowsBackForwardNavigationGestures = true
     v.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"; root.addSubview(v)
@@ -137,11 +139,21 @@ final class Reader: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelega
     keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in if e.keyCode == 53 { self?.close(); return nil }; return e }
   }
   @objc func closeTapped() { close() }
+  @objc func keepTapped() { if let u = web?.url ?? current { keepLink(u.absoluteString, title: web?.title); keepB?.title = "★ Kept"; keepB?.isEnabled = false } }
   @objc func toBrowser() { if let u = web?.url ?? current { NSWorkspace.shared.open(u) }; close() }
   func close() { panel?.close() }
   func windowWillClose(_ n: Notification) { web?.stopLoading(); web?.navigationDelegate = nil; web?.uiDelegate = nil; web?.removeFromSuperview(); web = nil; panel = nil; titleL = nil; if let k = keys { NSEvent.removeMonitor(k); keys = nil } }   // nothing stays in memory after a story
   func webView(_ w: WKWebView, createWebViewWith c: WKWebViewConfiguration, for a: WKNavigationAction, windowFeatures f: WKWindowFeatures) -> WKWebView? { if a.targetFrame == nil { w.load(a.request) }; return nil }   // a link that wants a new window stays in this one
   func webView(_ w: WKWebView, didFinish n: WKNavigation!) { onLoaded?(); onLoaded = nil }
+}
+
+// a link into the brain: the worker reads it on its next pass (a video gets a full read, a story a note)
+func keepLink(_ url: String, title: String?) {
+  let path = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Scintilla/config.json")
+  guard let c = (try? Data(contentsOf: path)).flatMap({ try? JSONDecoder().decode(Config.self, from: $0) }), let u = URL(string: c.url + "/rest/v1/rpc/brain_keep") else { return }
+  var r = URLRequest(url: u, timeoutInterval: 20); r.httpMethod = "POST"; r.setValue(c.anon, forHTTPHeaderField: "apikey"); r.setValue("Bearer " + c.anon, forHTTPHeaderField: "Authorization"); r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+  r.httpBody = try? JSONSerialization.data(withJSONObject: ["p_url": url, "p_title": title ?? "", "p_device": Host.current().localizedName ?? "Mac"])
+  URLSession.shared.dataTask(with: r).resume()
 }
 
 // One notification, on every screen
@@ -242,11 +254,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     menu.addItem(.separator())
     for (t, lv) in [("Show everything", 1), ("Show my names and alerts", 2), ("Show alerts only", 3)] { let mi = NSMenuItem(title: t, action: #selector(setLevel(_:)), keyEquivalent: ""); mi.target = self; mi.tag = lv; mi.state = minLevel == lv ? .on : .off; menu.addItem(mi) }
     menu.addItem(.separator())
+    let keep = NSMenuItem(title: "Keep the link I copied", action: #selector(keepCopied), keyEquivalent: ""); keep.target = self; menu.addItem(keep)
+    let all = NSMenuItem(title: "See the last two days", action: #selector(seeAll), keyEquivalent: ""); all.target = self; menu.addItem(all)
     let pause = NSMenuItem(title: paused ? "Resume now" : "Pause for an hour", action: #selector(togglePause), keyEquivalent: ""); pause.target = self; menu.addItem(pause)
     let quit = NSMenuItem(title: "Quit until the next login", action: #selector(quit), keyEquivalent: ""); quit.target = self; menu.addItem(quit)
   }
   @objc func openRecent(_ s: NSMenuItem) { if let t = s.representedObject as? String, let u = URL(string: t) { Reader.shared.open(u, title: s.title) } }
   @objc func setLevel(_ s: NSMenuItem) { minLevel = s.tag }
+  @objc func keepCopied() { if let t = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), t.lowercased().hasPrefix("http") { keepLink(t, title: nil) } }
+  @objc func seeAll() { if let u = URL(string: "https://station.scintillahub.ai/notify/") { Reader.shared.open(u, title: "The last two days") } }
   @objc func togglePause() { pausedUntil = (pausedUntil.map { $0 > Date() } ?? false) ? nil : Date().addingTimeInterval(3600) }
   @objc func quit() { NSApp.terminate(nil) }
 }
