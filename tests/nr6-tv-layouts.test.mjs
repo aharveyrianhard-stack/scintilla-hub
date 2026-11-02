@@ -173,3 +173,36 @@ test("NR6 · the command when it cannot look: no list written down, no debug por
   const port = await run(["check", s.snap, "1"]);
   assert.equal(port.code, 2); assert.match(port.out, /TradingView's debug port 1 did not answer, so its windows are not checked/);
 });
+
+/* NR7, 2 Nov 2026: Alan, "Yes, close the combined diagonals". Taken off TradingView's own list while it is closed; closing them live did not hold. */
+import { dropTabs as nr7Drop, layoutsDue as nr7Due } from "../deliverables/20261008/nr2-night-restart/kit/tv-layouts.mjs";
+const nr7Tab = (id, layout, active = false) => ({ persistentId: id, active, pinned: false, title: id, url: "https://www.tradingview.com/chart/" + layout + "/", fullscreen: false });
+const nr7Settings = () => ({ app: { chartWindows: [{ persistentId: "w1", tabs: [nr7Tab("a", "vXFNJ5tr", true), nr7Tab("b", "JHHbXcC5"), nr7Tab("c", "vXFNJ5tr"), nr7Tab("d", "D0N4w0QG")] }] },
+  tabs: { default: { w1: { tabs: [nr7Tab("a", "vXFNJ5tr", true), nr7Tab("b", "JHHbXcC5"), nr7Tab("c", "vXFNJ5tr"), nr7Tab("d", "D0N4w0QG")] }, old: { tabs: [nr7Tab("z", "vXFNJ5tr", true), nr7Tab("y", "F4rlNFAT")] } } }, globals: { undo: [{ command: "x", data: { url: "https://www.tradingview.com/chart/vXFNJ5tr/" } }] } });
+test("NR7: the listed layout leaves both of TradingView's lists; another tab becomes active; closed windows and the undo history stay", () => {
+  const s = nr7Settings(), r = nr7Drop(s, new Set(["vXFNJ5tr"]));
+  assert.deepEqual(r.removed.map((x) => x.tab), ["a", "c"]); assert.deepEqual(r.kept, ["JHHbXcC5", "D0N4w0QG"]);
+  assert.deepEqual(s.app.chartWindows[0].tabs.map((t) => t.persistentId), ["b", "d"]); assert.deepEqual(s.tabs.default.w1.tabs.map((t) => t.persistentId), ["b", "d"]);
+  assert.equal(s.app.chartWindows[0].tabs[0].active, true); assert.equal(s.tabs.default.w1.tabs[0].active, true);
+  assert.equal(s.tabs.default.old.tabs.length, 2); assert.equal(s.globals.undo.length, 1);
+});
+test("NR7: the active tab stays active when it is not the one leaving", () => {
+  const s = nr7Settings(); s.app.chartWindows[0].tabs[0].active = false; s.app.chartWindows[0].tabs[3].active = true; s.tabs.default.w1.tabs[0].active = false; s.tabs.default.w1.tabs[3].active = true;
+  nr7Drop(s, new Set(["vXFNJ5tr"]));
+  assert.deepEqual(s.app.chartWindows[0].tabs.map((t) => t.active), [false, true]);
+});
+test("NR7: a window holding only listed tabs is never emptied", () => {
+  const s = { app: { chartWindows: [{ persistentId: "w", tabs: [nr7Tab("a", "vXFNJ5tr", true)] }] }, tabs: { default: {} } }, r = nr7Drop(s, new Set(["vXFNJ5tr"]));
+  assert.equal(r.removed.length, 0); assert.equal(r.left.length, 1); assert.equal(s.app.chartWindows[0].tabs.length, 1);
+});
+test("NR7: a layout not on the list is untouched, and the list ends on its date", () => {
+  const s = nr7Settings(), r = nr7Drop(s, new Set(["ZZZZZZZZ"]));
+  assert.equal(r.removed.length, 0); assert.equal(s.app.chartWindows[0].tabs.length, 4);
+  assert.deepEqual([...nr7Due("vXFNJ5tr 2026-11-16 Alan: close\n# a note\n", "2026-11-16")], ["vXFNJ5tr"]);
+  assert.deepEqual([...nr7Due("vXFNJ5tr 2026-11-16 Alan: close\n", "2026-11-17")], []);
+});
+test("NR7: the night job edits the list before the snapshot, and only with TradingView closed", () => {
+  const sh = readFileSync(new URL("../deliverables/20261008/nr2-night-restart/kit/night-reload.sh", import.meta.url), "utf8");
+  assert.match(sh, /may_change \|\| return 1\n  tv_drop\n  tv_snapshot\n/);
+  assert.match(sh, /pgrep -qx TradingView; then say/);
+});

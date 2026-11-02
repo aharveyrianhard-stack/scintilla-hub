@@ -6,8 +6,11 @@
 // play/pause. TradingView still gives the moved tab the boxes it had (its symbols), so that tab can be told from the real one.
 //   node tv-layouts.mjs snapshot <TradingView support folder> <out.json>   - right after TradingView closed: what it will open again
 //   node tv-layouts.mjs check <snapshot.json> <port> [fix]                  - after it opened again: every tab on its own layout?
+//   node tv-layouts.mjs drop <TradingView support folder> <list file> <backup folder>  - while it is closed: take listed layouts off what it will open
 // Reads through TradingView's local debug port only (127.0.0.1). "fix" moves back a tab TradingView moved, and nothing else.
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
+// NR7 (2 Nov 2026): Alan, to the Dot-com session: "Yes, close the combined diagonals". Closing those tabs live does not hold: at 07:15 on 2 Nov both were closed and 2 seconds later TradingView moved
+// FOCUS onto that layout, then the overnight tab when FOCUS was loaded back. Why is unknown. So they come off the list it reads, in the gap after it has written the list and before it opens again.
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, renameSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -61,6 +64,57 @@ export function plan(saved, open) {
     else out.fix.push({ ...s, page: p.id, from: p.layout, fromName: p.name });
   }
   return out;
+}
+
+const layoutOf = (t) => { const m = LAYOUT.exec((t && t.url) || ""); return m ? m[1] : null; };
+// layouts: a Set. Changes settings in place, in both places TradingView keeps a window's tabs: app.chartWindows and, under the same window id, tabs.default.
+// A window never ends up empty: one holding only listed tabs stays as it is and is reported. If the active tab went, the first one left becomes active.
+// Windows that are not open (older entries under tabs.default) and the undo history are not touched.
+export function dropTabs(settings, layouts) {
+  const out = { removed: [], kept: [], left: [] };
+  const trim = (list, gone) => {
+    const keep = list.filter((t) => !gone.has(t.persistentId));
+    if (keep.length && !keep.some((t) => t.active)) keep[0].active = true;
+    return keep;
+  };
+  for (const w of (settings && settings.app && settings.app.chartWindows) || []) {
+    const tabs = w.tabs || [], gone = new Set(tabs.filter((t) => layouts.has(layoutOf(t))).map((t) => t.persistentId));
+    if (!gone.size) continue;
+    if (gone.size === tabs.length) { out.left.push({ win: w.persistentId, tabs: tabs.length }); continue; }
+    for (const t of tabs) if (gone.has(t.persistentId)) out.removed.push({ win: w.persistentId, tab: t.persistentId, layout: layoutOf(t), title: t.title || "" });
+    w.tabs = trim(tabs, gone);
+    const mirror = settings.tabs && settings.tabs.default && settings.tabs.default[w.persistentId];
+    if (mirror && Array.isArray(mirror.tabs)) mirror.tabs = trim(mirror.tabs, gone);
+    out.kept.push(...w.tabs.map(layoutOf).filter(Boolean));
+  }
+  return out;
+}
+// the list file: one line per layout, "<layout id> <last date it applies, YYYY-MM-DD> <anything after is a note>". A date, so a layout he opens on purpose later is not closed on him for ever.
+export function layoutsDue(text, today) {
+  const due = new Set();
+  for (const line of String(text).split("\n")) { const m = /^\s*([A-Za-z0-9]{8})\s+(\d{4}-\d{2}-\d{2})\b/.exec(line); if (m && m[2] >= today) due.add(m[1]); }
+  return due;
+}
+function drop(support, listFile, backupDir, today = new Date().toLocaleDateString("en-CA")) {
+  if (!existsSync(listFile)) return 0;
+  const layouts = layoutsDue(readFileSync(listFile, "utf8"), today);
+  if (!layouts.size) return 0;
+  const file = newestSettings(support);
+  if (!file) { say("TradingView's list of windows was not found, so nothing was taken off it"); return 2; }
+  const raw = readFileSync(file, "utf8"); let settings;
+  try { settings = JSON.parse(raw); } catch (e) { say("TradingView's list of windows could not be read, so nothing was taken off it"); return 2; }
+  const r = dropTabs(settings, layouts);
+  for (const l of r.left) say(`TradingView: a window holds only tabs on the list (${l.tabs}), so it was left as it is`);
+  if (!r.removed.length) return 0;
+  const backup = join(backupDir, `tv-settings-before-drop-${today}.json`), tmp = file + ".nr7";
+  copyFileSync(file, backup);
+  try {
+    writeFileSync(tmp, JSON.stringify(settings, null, (/^\{\r?\n(\s+)"/.exec(raw) || [])[1])); renameSync(tmp, file);   // written the way TradingView wrote it
+    const again = JSON.parse(readFileSync(file, "utf8"));
+    if (savedTabs(again).some((t) => layouts.has(t.layout) && r.removed.some((x) => x.tab === t.tab))) throw new Error("still listed");
+  } catch (e) { copyFileSync(backup, file); say(`TradingView's list of windows was put back as it was: ${e.message}`); return 2; }
+  say(`TradingView: ${r.removed.length} tab(s) taken off what it opens (${[...new Set(r.removed.map((x) => x.layout))].join(" ")}); it will open ${r.kept.join(" ")}. Backup: ${backup}`);
+  return 0;
 }
 
 const READ = `(() => { try { const a = window.TradingViewApi; if (!a || !a.chartsCount || a.chartsCount() < 1) return null;
@@ -119,13 +173,17 @@ async function check(snapFile, port, fix) {
   return p.left.length || unconfirmed || (!fix && p.fix.length) ? 1 : 0;
 }
 
-function snapshot(support, out) {
+function newestSettings(support) {
   const base = join(support, "TVUserStorage");
   let best = null;
   for (const d of existsSync(base) ? readdirSync(base) : []) {
     const f = join(base, d, "settings.json");
     if (/^id-/.test(d) && existsSync(f) && (!best || statSync(f).mtimeMs > statSync(best).mtimeMs)) best = f;
   }
+  return best;
+}
+function snapshot(support, out) {
+  const best = newestSettings(support);
   if (!best) { say("TradingView's list of windows was not found"); return 2; }
   const tabs = savedTabs(JSON.parse(readFileSync(best, "utf8")));
   writeFileSync(out, JSON.stringify({ from: best, at: new Date().toISOString(), tabs }, null, 1));
@@ -136,6 +194,7 @@ function snapshot(support, out) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [cmd, a, b, c] = process.argv.slice(2);
   if (cmd === "snapshot") process.exit(snapshot(a, b));
+  else if (cmd === "drop") process.exit(drop(a, b, c));
   else if (cmd === "check") process.exit(await check(a, b || "9222", c === "fix"));
-  else { say("usage: tv-layouts.mjs snapshot <TradingView support folder> <out.json> | check <snapshot.json> <port> [fix]"); process.exit(2); }
+  else { say("usage: tv-layouts.mjs snapshot <TradingView support folder> <out.json> | check <snapshot.json> <port> [fix] | drop <TradingView support folder> <list file> <backup folder>"); process.exit(2); }
 }

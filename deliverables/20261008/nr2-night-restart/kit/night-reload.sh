@@ -863,6 +863,15 @@ $(tvl snapshot "$TV_SUPPORT" "$f" 2>&1)
 EOF
   [ -s "$f" ] && TV_SNAP="$f"; return 0
 }
+tv_drop() {         # NR7: while it is closed, take the layouts on the list off what it will open. Before the snapshot, so the check does not look for them. Alan, 2 Nov: "Yes, close the combined diagonals"
+  [ "$TV_LAYOUTS" = yes ] && [ -s "$STATE_DIR/tv-close-these-layouts.txt" ] || return 0
+  if /usr/bin/pgrep -qx TradingView; then say "  TradingView is still running, so its list of windows was not edited"; return 0; fi
+  local line
+  while IFS= read -r line; do [ -n "$line" ] && say "  $line"; done <<EOF
+$(tvl drop "$TV_SUPPORT" "$STATE_DIR/tv-close-these-layouts.txt" "$STATE_DIR" 2>&1)
+EOF
+  return 0
+}
 tv_layouts_back() { # after the restarts, whoever is at the Mac: it only undoes a move TradingView made itself while it was opening
   case ", $RESTARTED," in *", TradingView,"*) ;; *) return 0 ;; esac
   [ "$TV_LAYOUTS" = yes ] || return 0
@@ -881,6 +890,7 @@ EOF
 }
 open_tradingview() { # with the same start-up options it was running with
   may_change || return 1
+  tv_drop
   tv_snapshot
   local a=() s="$TV_ARGS0"
   if [ -n "$s" ]; then
