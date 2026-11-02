@@ -1,8 +1,9 @@
-// Scintilla.app (1 Nov 2026, coordinator). The cards on each Mac. Alan: "I get so many, and then I feel like I don't see like a stream of notifications coming in on the
+// Scintilla.app (1 Nov 2026, coordinator). The alerts on each Mac. Alan: "I get so many, and then I feel like I don't see like a stream of notifications coming in on the
 // computers. I need the notifications coming everywhere ... if we can make that have the Scintilla logo or something like that, because it's ugly as shit."
-// It reads the switchboard (public.notify_since) every ten seconds and shows each new row as a card, bottom right on every screen, over everything including full screen.
-// Its own window, not macOS Notification Center: nothing to allow, big enough to read from across the room, stays until it has been seen, always this logo.
-// Level 1 = 20 s, silent · level 2 = 40 s, a soft sound · level 3 = 90 s, the louder sound, counted only while someone is at this Mac. The pointer on a card holds it. A click opens the story in the reader. The menu bar logo keeps the last ones.
+// It reads the switchboard (public.notify_since) every ten seconds and turns each new row into a macOS notification with this logo.
+// 2.0, 2 Nov. Alan: "these things, they take up too much screen. I think they have to disappear ... The phone ones are where they kind of like stay unless I clear them ... And they hide in the notification center. I think it's better."
+// So a Mac alert is the phone's alert: the same words, a banner for a few seconds, then it waits in Notification Center until he clears it. A click opens the story in the reader. At night only level 3 goes there, as on the phone. The menu bar logo keeps the last ones.
+// Level 2 keeps its soft sound and level 3 the louder one. Our own card below is only for a Mac that has not allowed notifications (macOS asks once): short, gone by itself, so an alert is never lost.
 // 1.6, 1 Nov. Alan: "I haven't been receiving notifications even on the computer for a while. I've not seen anything." They had shown, measured on both Macs: eight silent seconds and gone, whoever was or was not looking.
 // So the clock runs only while someone is at this Mac; with nobody touching it a card waits a little longer (1, 2 or 5 minutes by level).
 // 1.9, 2 Nov. Alan: "I think we need to move our notifications ... they stay on top of what the notification center is. Or we move them somewhere else". Bottom right of every screen now, newest at the bottom, the stack growing up; macOS keeps the top right.
@@ -14,8 +15,9 @@
 import AppKit
 import WebKit
 import CoreGraphics
+import UserNotifications
 
-let VERSION = "1.9"
+let VERSION = "2.0"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -282,10 +284,56 @@ func keepLink(_ url: String, title: String?) {
   URLSession.shared.dataTask(with: r).resume()
 }
 
-// One notification, on every screen
+func note(_ s: String) {
+  let p = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/scintilla-app.log"), line = Data((ISO8601DateFormatter().string(from: Date()) + " " + s + "\n").utf8)
+  if let h = try? FileHandle(forWritingTo: p) { h.seekToEndOfFile(); h.write(line); try? h.close() } else { try? line.write(to: p) }
+}
+// the same two lines as the phone (notify-push, phoneLines): the name, the day's move and where it came from, then the headline and its second line
+func alertLines(_ it: Item) -> (String, String) {
+  let isVolume = it.source == "Volume Pulse" || (it.title.range(of: #"^(scintilla\s*·\s*)?volume\b"#, options: [.regularExpression, .caseInsensitive]) != nil)
+  let who = it.kind == "urth" ? "URTH" : it.kind == "system" ? "THIS MAC" : isVolume ? "VOLUME" : it.ticker ?? (it.level >= 3 ? "SCINTILLA" : "MARKET")
+  let pct = it.pct.map { ($0 >= 0 ? "+" : "") + String(format: "%.1f%%", $0) }, src = it.source ?? ""
+  return ([who, pct].compactMap { $0 }.joined(separator: " ") + (src.isEmpty ? "" : " · " + src), (it.body ?? "").isEmpty ? it.title : it.title + "\n" + it.body!)
+}
+
+// ---- real macOS notifications: a banner, then Notification Center until he clears it ----
+final class Banners: NSObject, UNUserNotificationCenterDelegate {
+  static let shared = Banners()
+  private(set) var allowed = false; private var delivered = 0; private var said = ""
+  var state: String { allowed ? "nc \(delivered)" : "cards" }   // goes up with the version, so both Macs can be read from the database
+  func start() {
+    let c = UNUserNotificationCenter.current(); c.delegate = self
+    c.requestAuthorization(options: [.alert]) { [weak self] _, err in if let err = err { note("allow: " + err.localizedDescription) }; self?.refresh() }
+    Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.refresh() }
+  }
+  func refresh() {
+    let c = UNUserNotificationCenter.current()
+    c.getNotificationSettings { s in c.getDeliveredNotifications { d in DispatchQueue.main.async {
+      self.allowed = s.authorizationStatus == .authorized || s.authorizationStatus == .provisional; self.delivered = d.count
+      let now = "status \(s.authorizationStatus.rawValue) banners \(s.alertStyle.rawValue)"; if now != self.said { self.said = now; note(now) }
+    } } }
+  }
+  func post(_ it: Item) {
+    let n = UNMutableNotificationContent(); (n.title, n.body) = alertLines(it)
+    n.userInfo = ["url": it.url ?? "", "reader": [it.ticker, it.source].compactMap { $0 }.joined(separator: " · ")]
+    // 1 Nov: "those Urth ones should be Urth branded". Their mark comes along; macOS moves the file it is given, so it gets a copy.
+    if it.kind == "urth", let p = Bundle.main.url(forResource: "urth", withExtension: "png") {
+      let t = FileManager.default.temporaryDirectory.appendingPathComponent("urth-\(it.id).png"); try? FileManager.default.copyItem(at: p, to: t)
+      if let a = try? UNNotificationAttachment(identifier: "urth", url: t, options: nil) { n.attachments = [a] }
+    }
+    UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "card-\(it.id)", content: n, trigger: nil)) { if let e = $0 { note("post \(it.id): " + e.localizedDescription) } }
+  }
+  func userNotificationCenter(_ c: UNUserNotificationCenter, willPresent n: UNNotification, withCompletionHandler h: @escaping (UNNotificationPresentationOptions) -> Void) { h([.banner, .list]) }
+  func userNotificationCenter(_ c: UNUserNotificationCenter, didReceive r: UNNotificationResponse, withCompletionHandler h: @escaping () -> Void) {
+    let i = r.notification.request.content.userInfo; note("clicked " + r.notification.request.identifier)
+    DispatchQueue.main.async { if let s = i["url"] as? String, let u = URL(string: s) { Reader.shared.open(u, title: i["reader"] as? String ?? "") }; h() }
+  }
+}
+
+// One card, on every screen: only on a Mac that has not allowed notifications
 final class Card {
-  let item: Item; var panels: [(NSScreen, CardPanel, CardView)] = []; var left: Int; var waited = 0; let maxWait: Int
-  init(item: Item) { self.item = item; left = item.level >= 3 ? 90 : item.level == 2 ? 40 : 20; maxWait = item.level >= 3 ? 300 : item.level == 2 ? 120 : 60 }
+  let item: Item; var panels: [(NSScreen, CardPanel, CardView)] = []; var left: Int
+  init(item: Item) { self.item = item; left = item.level >= 3 ? 20 : item.level == 2 ? 12 : 8 }
 }
 
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -295,6 +343,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   let maxOnScreen = 4, showIfYoungerThan = 900
   var lastOK = Date()
 
+  func applicationWillFinishLaunching(_ n: Notification) { Banners.shared.start() }   // macOS wants its listener in place before launch ends, or the click that started the app is lost
   func applicationDidFinishLaunching(_ n: Notification) {
     status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     status.button?.image = trefoil(18, color: .black, tile: false, template: true); status.button?.toolTip = "SCINTILLA notifications"
@@ -315,7 +364,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     busy = true
     var r = URLRequest(url: u, timeoutInterval: 20); r.httpMethod = "POST"
     r.setValue(c.anon, forHTTPHeaderField: "apikey"); r.setValue("Bearer " + c.anon, forHTTPHeaderField: "Authorization"); r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    r.httpBody = try? JSONSerialization.data(withJSONObject: ["p_token": c.token, "p_after": lastId, "p_limit": lastId == 0 ? 20 : 60, "p_version": VERSION])
+    r.httpBody = try? JSONSerialization.data(withJSONObject: ["p_token": c.token, "p_after": lastId, "p_limit": lastId == 0 ? 20 : 60, "p_version": VERSION + " " + Banners.shared.state])
     URLSession.shared.dataTask(with: r) { [weak self] data, resp, err in
       let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
       let items = code == 200 ? data.flatMap { try? JSONDecoder().decode([Item].self, from: $0) } : nil
@@ -340,19 +389,17 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func nightNow() -> Bool { var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "America/New_York")!; let c = cal.dateComponents([.hour, .minute], from: Date()); let m = (c.hour ?? 12) * 60 + (c.minute ?? 0); return m >= 22 * 60 || m < 6 * 60 + 30 }
   func show(_ it: Item) {
     if !nightNow() { if it.level >= 3 { NSSound(named: "Glass")?.play() } else if it.level == 2 { let s = NSSound(named: "Tink"); s?.volume = 0.5; s?.play() } }
+    if Banners.shared.allowed { if !nightNow() || it.level >= 3 { Banners.shared.post(it) }; return }   // at night the phone gets level 3 only, and the rest stay in the list: the same here
     let card = Card(item: it); cards.insert(card, at: 0); build(card)
     while cards.count > maxOnScreen { drop(cards.last!) }
     layout(animated: true)
   }
-  // the cards' clock: it runs while someone is at this Mac, and a card waits while nobody is
-  func awayFromThisMac() -> Bool { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) > 45 }
   func tickCards() {
     if cards.isEmpty { return }
-    let away = awayFromThisMac(), mouse = NSEvent.mouseLocation; var changed = false
+    let mouse = NSEvent.mouseLocation; var changed = false
     for card in cards {
       if card.panels.contains(where: { $0.1.frame.contains(mouse) }) { continue }   // the pointer really is on it, read from the screen: a card that moved away from a still pointer never hears it left
-      if away { card.waited += 1; if card.waited >= card.maxWait { drop(card); changed = true } }
-      else { card.left -= 1; if card.left <= 0 { drop(card); changed = true } }
+      card.left -= 1; if card.left <= 0 { drop(card); changed = true }
     }
     if changed { layout(animated: true) }
   }
@@ -386,6 +433,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     menu.removeAllItems()
     let paused = pausedUntil.map { $0 > Date() } ?? false
     let head = NSMenuItem(title: paused ? "SCINTILLA · paused" : "SCINTILLA · on", action: nil, keyEquivalent: ""); head.isEnabled = false; menu.addItem(head)
+    if !Banners.shared.allowed { let mi = NSMenuItem(title: "Turn on Mac notifications…", action: #selector(openNotifications), keyEquivalent: ""); mi.target = self; menu.addItem(mi) }
     for it in recent.prefix(12) {
       let name = it.ticker.map { $0 + " · " } ?? ""; var t = name + it.title; if t.count > 76 { t = String(t.prefix(75)) + "…" }
       let mi = NSMenuItem(title: t, action: #selector(openRecent(_:)), keyEquivalent: ""); mi.target = self; mi.representedObject = it.url; mi.isEnabled = it.url != nil; menu.addItem(mi)
@@ -400,6 +448,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let quit = NSMenuItem(title: "Quit until the next login", action: #selector(quit), keyEquivalent: ""); quit.target = self; menu.addItem(quit)
   }
   @objc func openRecent(_ s: NSMenuItem) { if let t = s.representedObject as? String, let u = URL(string: t) { Reader.shared.open(u, title: s.title) } }
+  @objc func openNotifications() { if let u = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.scintilla.notify") { NSWorkspace.shared.open(u) } }
   @objc func setLevel(_ s: NSMenuItem) { minLevel = s.tag }
   @objc func keepCopied() { if let t = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), t.lowercased().hasPrefix("http") { keepLink(t, title: nil) } }
   @objc func seeAll() { if let u = URL(string: "https://station.scintillahub.ai/notify/") { Reader.shared.open(u, title: "The last two days") } }
