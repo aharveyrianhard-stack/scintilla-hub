@@ -4,7 +4,8 @@
 // Its own window, not macOS Notification Center: nothing to allow, big enough to read from across the room, stays until it has been seen, always this logo.
 // Level 1 = 20 s, silent · level 2 = 40 s, a soft sound · level 3 = 90 s, the louder sound, counted only while someone is at this Mac. The pointer on a card holds it. A click opens the story in the reader. The menu bar logo keeps the last ones.
 // 1.6, 1 Nov. Alan: "I haven't been receiving notifications even on the computer for a while. I've not seen anything." They had shown, measured on both Macs: eight silent seconds and gone, whoever was or was not looking.
-// So the clock now runs only while someone is at this Mac. Away, a card waits (3 minutes, 15, an hour by level) so a stack cannot sit on a screen for ever.
+// So the clock runs only while someone is at this Mac; with nobody touching it a card waits a little longer (1, 2 or 5 minutes by level).
+// 1.8, 2 Nov. Alan: "I don't think these notification cards kind of like go away. I have to close them." Watching a screen is not touching it, so the 3, 15 and 60 minute waits looked like cards that never leave. And a card that slid out from under a still pointer stayed marked as held.
 // No Dock icon, never takes focus. Secrets live in ~/Library/Application Support/Scintilla/config.json (600), never in this file.
 // 1.1, same day. Alan: "it is like pretty big. Can you kind of keep things sized to about what the notification center looks like?" The card is now the size of a macOS banner, on every screen.
 // "I clicked on a news story. It takes me to the article in Google Chrome. Is there any way for it to happen inside of the app? ... that I can close easily ... I'm going to leave a scatter of links":
@@ -13,7 +14,7 @@ import AppKit
 import WebKit
 import CoreGraphics
 
-let VERSION = "1.7"
+let VERSION = "1.8"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -282,8 +283,8 @@ func keepLink(_ url: String, title: String?) {
 
 // One notification, on every screen
 final class Card {
-  let item: Item; var panels: [(NSScreen, CardPanel, CardView)] = []; var left: Int; var waited = 0; let maxWait: Int; var hovered = false
-  init(item: Item) { self.item = item; left = item.level >= 3 ? 90 : item.level == 2 ? 40 : 20; maxWait = item.level >= 3 ? 3600 : item.level == 2 ? 900 : 180 }
+  let item: Item; var panels: [(NSScreen, CardPanel, CardView)] = []; var left: Int; var waited = 0; let maxWait: Int
+  init(item: Item) { self.item = item; left = item.level >= 3 ? 90 : item.level == 2 ? 40 : 20; maxWait = item.level >= 3 ? 300 : item.level == 2 ? 120 : 60 }
 }
 
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -346,8 +347,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func awayFromThisMac() -> Bool { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) > 45 }
   func tickCards() {
     if cards.isEmpty { return }
-    let away = awayFromThisMac(); var changed = false
-    for card in cards where !card.hovered {
+    let away = awayFromThisMac(), mouse = NSEvent.mouseLocation; var changed = false
+    for card in cards {
+      if card.panels.contains(where: { $0.1.frame.contains(mouse) }) { continue }   // the pointer really is on it, read from the screen: a card that moved away from a still pointer never hears it left
       if away { card.waited += 1; if card.waited >= card.maxWait { drop(card); changed = true } }
       else { card.left -= 1; if card.left <= 0 { drop(card); changed = true } }
     }
@@ -361,7 +363,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
       p.level = .statusBar; p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]; p.hidesOnDeactivate = false; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true; p.isMovable = false; p.animationBehavior = .none; p.contentView = v
       v.onClick = { [weak self, weak card] in guard let self = self, let card = card else { return }; if let s = card.item.url, let u = URL(string: s) { Reader.shared.open(u, title: [card.item.ticker, card.item.source].compactMap { $0 }.joined(separator: " · ")) }; self.drop(card); self.layout(animated: true) }
       v.onClose = { [weak self, weak card] in guard let self = self, let card = card else { return }; self.drop(card); self.layout(animated: true) }
-      v.onHover = { [weak card] on in guard let card = card else { return }; card.hovered = on; if !on { card.left = max(card.left, 5) } }
+      v.onHover = { [weak card] on in guard let card = card else { return }; if !on { card.left = max(card.left, 5) } }
       p.orderFrontRegardless(); card.panels.append((sc, p, v))
     }
   }
