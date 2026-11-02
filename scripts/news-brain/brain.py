@@ -309,7 +309,8 @@ def backup_check():   # once a day: is the last worker in the chain still signed
     open(mark, "w").write("1")
     env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR")}
     r = subprocess.run([claude_bin(), "auth", "status", "--json"], env=env, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
-    if not json.loads(r.stdout or "{}").get("loggedIn"): notify(title="The Claude backup worker is signed out: double-click SIGN_IN_GMAIL_WORKER on the Desktop", kind="ops", level=1, key="ops|claude-signin|" + os.path.basename(mark), source="News brain")
+    # the log only, no card. 2 Nov: "I got something about a Gmail worker signed out on the iMac ... It said to click to sign in. I clicked it, it left, and nothing happened." That card had no link and named a file on the MacBook's Desktop. Kimi and ChatGPT carry the reads; if all three fail, run_worker posts its own card.
+    if not json.loads(r.stdout or "{}").get("loggedIn"): log("the Claude backup worker is signed out; SIGN_IN_GMAIL_WORKER on the MacBook's Desktop")
 
 # ---- the vault's map. Alan: "a vault with my pushes and full reads. I like it. But we should have a way of visualizing tickers and classifications of things."
 # One note per name, one per class (the Hub's cohorts), each listing what the reads said, newest first. Obsidian's graph is the tree; the same data draws as bars at station.scintillahub.ai/notify/map.html on every device. Written fresh on each pass from the database; the notes under YouTube, Reads and Pushed stay as they were written. ----
