@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 9d11a48) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from ee754e3) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -2987,11 +2987,17 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
    "is this a buy? Maybe separate it", "let's just make some clean space for things". */
 .sc-art .edge{ visibility:hidden; }   /* keeps its grid column: display:none collapsed the headline column (1 Nov) */ /* a neutral stripe down every headline said nothing (Alan, 1 Nov, of left stripes: "I have never liked these things") */
 .sc-newstapes{ display:flex; flex-direction:column; gap:6px; margin:0 0 10px; flex:0 0 auto; min-width:0; }
-.sc-tape--news .sc-tape__lbl{ flex:0 0 132px; width:132px; letter-spacing:.08em; }
-.sc-tape--news .nt-it{ cursor:pointer; }
-.sc-tape--news .nt-tk{ color:var(--ink); font-weight:700; }
-.sc-tape--news .nt-it:hover .nt-tk{ color:var(--crk); }
-.sc-tape--news .nt-n{ color:var(--dim); padding-left:5px; font-variant-numeric:tabular-nums; }
+.sc-mmband{ display:flex; align-items:stretch; background:var(--panel2); border:.8px solid var(--hair); font-family:var(--mono); font-size:9px; letter-spacing:.04em; min-width:0; }
+.sc-mmband__lbl{ flex:0 0 112px; width:112px; display:flex; align-items:center; color:var(--crk); letter-spacing:.08em; padding:0 0 0 12px; border-right:1px solid var(--hair); white-space:nowrap; }
+.sc-mmband__grid{ flex:1 1 0; min-width:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(136px,1fr)); grid-auto-rows:18px; column-gap:16px; padding:4px 12px; overflow:hidden; }
+.sc-mmband--two .sc-mmband__grid{ height:36px; }
+.sc-mmband--one .sc-mmband__grid{ height:18px; }
+.sc-mmband .mmrow{ grid-template-columns:42px 1fr 16px; gap:6px; padding:0 2px; min-width:0; }
+.sc-mmband--chat .sc-mmband__lbl{ color:var(--coin); }
+.sc-mmband--chat .mmbar i{ background:var(--coin); box-shadow:0 0 5px var(--coin); }
+.sc-mmband--chat .mmrow:hover{ background:rgba(139,92,246,.10); }
+.sc-mmband--chat .mmrow:hover .mmtk{ color:var(--coin); }
+.sc-mmband .ecb-note{ grid-column:1 / -1; align-self:center; color:var(--dim); }
 .sc-airead__path{ display:block; margin-top:8px; color:var(--ink2); line-height:1.45; }
 .sc-airead__path b{ color:var(--crk); font-weight:600; }
 .ern-wk{ color:var(--crk); letter-spacing:.16em; }
@@ -11738,7 +11744,7 @@ function scopeItems(items, cohort, tq, fav, cohsets) {   // pure: ALL/FAV rules 
   });
 }
 /* FIX 8 / R19 — real most-mentioned counts from the SAME scoped items. (Dead sentiment placeholder deleted — Alan: not wired, not shown.)
-   1 Nov: no longer a card in the rail; a tape on top of NEWS (paintNewsTapes). */
+   1 Nov: no longer a card in the rail; a band of bars on top of NEWS (paintNewsTapes). */
 function newsMentions(shown) {
   /* R43 — count headlines per ticker from the SAME deduped scope the list shows.
      De-dupe the input first so wire-service echoes don't inflate a ticker's count. */
@@ -11814,8 +11820,9 @@ function dedupeNews(items) {
   }
   return out;
 }
-/* 1 Nov — the NEWS tapes. MOST MENTIONED: this scope's headlines. IS THIS A BUY: the "is X a buy" pieces of the last two days across every name, kept apart from real news
-   (public.news_chatter_now, refreshed every 15 minutes). Sentiment stays in its own section. A tap opens the company. */
+/* 1 Nov — the NEWS bands, on top of the headlines. MOST MENTIONED: this scope's headlines. RETAIL CHATTER: the "is X a buy" pieces of the last two days across every name, kept apart from real news
+   (public.news_chatter_now, refreshed every 15 minutes). Sentiment stays in its own section. A tap opens the company.
+   Bars, not scrolling numbers. Alan: "Most mentioned, it doesn't have a visual. I really like those cyan bars ... Visuals, why make me read so much?"; of the is-this-a-buy pieces, "I like it as retail chatter ... another good gauge". */
 let NEWS_CHATTER = null, NEWS_CHATTER_TRIED = 0, NEWS_TAPE_ARGS = null;
 function loadNewsChatter() {
   if (Date.now() - NEWS_CHATTER_TRIED < 300000) return;
@@ -11826,33 +11833,59 @@ function loadNewsChatter() {
     if (NEWS_TAPE_ARGS) paintNewsTapes(NEWS_TAPE_ARGS);
   }).catch(() => {});
 }
-function newsTapeHTML(lbl, items, empty) {
-  const sep = '<span class="sc-tape__dot">·</span>';
-  const seg = items.length ? items.map(([t, n, title]) => '<span class="sc-tape__item nt-it" data-act="row" data-t="' + esc(t) + '" title="' + esc(title) + '"><span class="nt-tk">$' + esc(t) + '</span><span class="nt-n">' + n + "</span></span>" + sep).join("")
-    : '<span class="sc-tape__item ecb-note">' + esc(empty) + "</span>" + sep;
-  return '<div class="sc-tape sc-tape--news"><b class="sc-tape__lbl">' + esc(lbl) + ' →</b><div class="sc-tape__win"><span class="sc-tape__track">' + seg + seg + "</span></div></div>";
+/* 1 Nov. Alan: "I don't want spam and filler". Yahoo's option-quote pages reached us through the Google feed, about a thousand a day (MEASURED 30 Oct - 1 Nov): 37 of the FAVORITES headlines were one name's contracts. The database door now refuses them (news_drop_quote_pages); this hides the ones already stored, and the law-firm wires, the same rule as the alerts (news-scout LAWYERS). */
+const NEWS_JUNK = /\b[A-Z.]{1,8}\d{6}[CP]\d{8}\b|stock price, news, quote|interactive stock chart|class action|lead plaintiff|securities (fraud|litigation|investigation|class)|shareholder (alert|investigation|rights|class)|investor (alert|deadline|notice)|investors? (have|has|face|should|are encouraged|who (lost|suffered|purchased|bought))|law (firm|offices)|\bLLP\b|encourages? .{0,80}(investors|shareholders)|on behalf of (investors|shareholders)|fraud investigation|deadline (alert|reminder)|\b(rosen|pomerantz|levi & korsinsky|faruqi|bragar|hagens berman|schall|kessler topaz|robbins geller|bernstein liebhard|gross law|glancy|howard g\. smith|kirby mcinerney|sbs law|bronstein|portnoy|block & leviton|holzer|johnson fistel|berger montague|edelson|kaskela|halper sadeh|ademi|monteverde)\b/i;
+/* 1 Nov. The Google feed tags a headline by the search that found it, not by its subject: "First Bancorp ... net interest margin" arrived as $NET, "Should You Buy PayPal" as $SHOP.
+   A Google row counts for a company only when the headline names the ticker or the company. Funds have no company name to look for and stay. Until the names load, nothing is hidden. */
+let NEWS_NAMES = null, NEWS_NAMES_TRIED = false;
+function loadNewsNames() {
+  if (NEWS_NAMES_TRIED) return;
+  NEWS_NAMES_TRIED = true;
+  pg("company_profile?select=ticker,name,is_etf&limit=2000").then((rows) => {
+    if (!Array.isArray(rows)) return;
+    const also = { GOOGL: "google", GOOG: "google", TSM: "tsmc|taiwan semi", SMCI: "super ?micro", META: "facebook|instagram" }, m = new Map();
+    for (const r of rows) {
+      if (r.is_etf || /\b(ETF|Fund|Trust)\b/.test(r.name || "")) continue;
+      const short = String(r.name || "").replace(/(?:,\s*|\s+)(?:Inc\.?|Corp\.?|Corporation|Incorporated|plc|Ltd\.?|Limited|Holdings|Company|Co\.?|N\.V\.|S\.A\.|Technologies|Technology|Platforms|Group)(?:\s.*|,.*|$)/i, "").trim();
+      if (short.length < 3) continue;
+      m.set(r.ticker, { tk: new RegExp("(^|[^A-Za-z0-9])" + r.ticker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b"), nm: new RegExp("\\b(" + short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + (also[r.ticker] ? "|" + also[r.ticker] : "") + ")", "i") });
+    }
+    NEWS_NAMES = m;
+    if (S.sec === "NEWS") renderNews(S.coh);
+  }).catch(() => {});
+}
+function newsNamesIt(n) {
+  if (!NEWS_NAMES || !n || n.feed !== "google") return true;
+  const e = NEWS_NAMES.get(String(n.ticker || "").toUpperCase()), t = n.title || "";
+  return !e || e.tk.test(t) || e.nm.test(t);
+}
+function newsBandHTML(lbl, cls, items, empty) {
+  const max = items.length ? Math.max(...items.map((x) => x[1])) : 1;   // bar proportional to the busiest name in the band
+  const cells = items.length ? items.map(([t, n, title]) => '<div class="mmrow" data-act="row" data-t="' + esc(t) + '" role="button" tabindex="0" title="' + esc(title) + '"><span class="mmtk">' + esc(t) + '</span><span class="mmbar sc-clip"><i style="width:' + Math.max(6, Math.round(n / max * 100)) + '%"></i></span><span class="mmn">' + n + "</span></div>").join("")
+    : '<span class="ecb-note">' + esc(empty) + "</span>";
+  return '<div class="sc-mmband ' + cls + '"><b class="sc-mmband__lbl">' + esc(lbl) + '</b><div class="sc-mmband__grid">' + cells + "</div></div>";
 }
 function paintNewsTapes(shown) {
   NEWS_TAPE_ARGS = shown; loadNewsChatter();
   const box = el("newsTapes"); if (!box) return;
-  const mm = newsMentions(shown).map(([t, c]) => [t, c, c + " headline" + (c === 1 ? "" : "s") + " in this scope. Open $" + t]);
-  const buy = (NEWS_CHATTER || []).map((r) => [r.ticker, r.pieces, r.pieces + " in two days, such as: " + (r.sample || "")]);
-  const html = newsTapeHTML("MOST MENTIONED", mm, "no ticker-tagged headlines in this scope") + newsTapeHTML("IS THIS A BUY", buy, NEWS_CHATTER ? "none in the last two days" : "reading…");
-  if (box._html === html) return;                        // unchanged: leave the marquee running where it is
+  const mm = newsMentions(shown).map(([t, c]) => [t, c, c + " headline" + (c === 1 ? "" : "s") + " in this scope. Open " + t]);
+  const chat = (NEWS_CHATTER || []).map((r) => [r.ticker, r.pieces, r.pieces + " in two days, such as: " + (r.sample || "")]);
+  const html = newsBandHTML("MOST MENTIONED", "sc-mmband--two", mm, "no ticker-tagged headlines in this scope") + newsBandHTML("RETAIL CHATTER", "sc-mmband--one sc-mmband--chat", chat, NEWS_CHATTER ? "none in the last two days" : "reading…");
+  if (box._html === html) return;                        // unchanged: leave it as it is
   box._html = html; box.innerHTML = html;
-  box.querySelectorAll(".sc-tape__track").forEach((tr) => tapeSpeed(tr));
 }
 function renderNews(cohort) {                            // paints from the per-scope cache — scope filter re-run on EVERY call
   const list = el("newsList");
   if (!list) return;                                     // NEWS-COHORT — no COHSETS gate: the cohort column scopes the pull itself
   const hit = NEWS_CACHE.get(S.tq ? "TQ|" + S.tq : cohort);
   if (!hit) { list.innerHTML = '<div class="soon">loading headlines…</div>'; return; }   // fillNews is pulling this scope
-  const shown = dedupeNews(scopeItems(hit.items, cohort, S.tq, S.fav, COHSETS));   // R21 FIX 5 — dedupe just before paint
+  const shown = dedupeNews(scopeItems(hit.items, cohort, S.tq, S.fav, COHSETS).filter((n) => !NEWS_JUNK.test((n && n.title) || "") && newsNamesIt(n)));   // R21 FIX 5 — dedupe just before paint; 1 Nov — no quote pages, no lawyers, no mis-tagged Google rows
+  loadNewsNames();
   list.innerHTML = shown.length ? shown.map((n) => newsArtHTML(n)).join("")
     : '<div class="soon">No headlines for <b>' + esc(S.tq || cohort) + "</b> yet.</div>";
   const rail = el("newsRail");                           // PULSE RAIL — recomputed from the SAME per-cohort result on every paint
   if (rail) rail.innerHTML = newsAiReadHTML(shown, S.tq || cohort);   // R48 — real hashtag/flag read, was a static placeholder
-  paintNewsTapes(shown);                                 // 1 Nov — most mentioned moved from this rail to the tape on top
+  paintNewsTapes(shown);                                 // 1 Nov — most mentioned moved from this rail to the band on top
   const sl = el("newsScopeLbl");
   if (sl) sl.textContent = S.tq || cohort;
 }
