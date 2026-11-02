@@ -84,10 +84,13 @@ def _json_ok(p):
     except Exception: return False
 
 # ---- the house report, read only. Alan: "you've seen the .com analysis that we've hosted ... the tone of that is important to track ... the tracking of things that support certain scenarios"; "Kimmy should be aware of the .com analysis too". The markets session owns it; we only read it. ----
-SCOREBOARD_URL = "https://volume-pulse-pied.vercel.app/data/lab/story/scoreboard.json"   # the markets session's own record of each test, its reading and its points. We only quote it. Until it is published this answers nothing and the reads say "No test fired" or give an opinion.
-def scoreboard():
-    try: return "\n\n## SCOREBOARD (the markets session's own record; quote it, never change it)\n" + json.dumps(json.loads(http(SCOREBOARD_URL, timeout=15).decode("utf-8", "replace")))[:6000]
-    except Exception: return ""
+SCOREBOARD_URL = "https://volume-pulse-pied.vercel.app/data/lab/story/scoreboard.json"   # the markets session's own record of each test, live since 1 Nov, refreshed at 6:50 AM and 4:35 PM on weekdays and 9:05 AM on Saturday. We only quote it, never decide a test.
+def scoreboard():   # the whole file is 80 KB; the reads need each test's id, date, question, state and what would move the odds
+    try:
+        d = json.loads(http(SCOREBOARD_URL, timeout=15).decode("utf-8", "replace")); c = d.get("counts") or {}
+        tests = [{"id": t.get("id"), "date": t.get("date"), "question": t.get("question"), "state": t.get("state"), "would_move": t.get("threshold_wording")} for t in d.get("tests") or []]
+        return "\n\n## SCOREBOARD (the markets session's own record; quote it, never change it)\n" + json.dumps({"as_of": d.get("as_of"), "tests_fired": c.get("fired"), "tests_in_all": c.get("tests"), "published_odds": (d.get("published_odds") or {}).get("odds"), "implied_odds": (d.get("implied_odds") or {}).get("odds"), "odds_differ": d.get("odds_differ_in_words"), "judgment": d.get("judgment"), "fired_events": d.get("events"), "tests": tests}, ensure_ascii=False)[:14000]
+    except Exception as e: log("no scoreboard", str(e)[:120]); return ""
 def report_context(limit=9000):
     try: return _report_context(limit) + scoreboard()
     except Exception as e: log("no report context", str(e)[:120]); return ""
@@ -126,7 +129,7 @@ Write read.json, valid JSON, with exactly these keys:
 - "sections": a list, one per topic in the order spoken. {chapters} At most 10. Each item: {{"at":"mm:ss","title":"short title","points":["2 or 3 short plain sentences with the specifics: tickers, price levels, dates, numbers"]}}.
 - "tickers": every stock, ETF or index discussed with a real view, each {{"t":"MU","view":"bullish|bearish|neutral","why":"under 15 words","levels":"price levels named, or empty"}}.
 - "calls": the specific calls with a level or a date, each one short sentence.
-- "vs_report": one sentence on the paths in report.txt. Its "four paths" chapter lists dated tests with thresholds, and only those count as support: if this video reports that one has fired, name the test and the path it moves. Otherwise begin "No test fired." and say in a few words which way the video leans, as an opinion, naming the path as the report names it. Empty if it has nothing to do with them.
+- "vs_report": one sentence on the paths in report.txt. Its "four paths" chapter lists dated tests with thresholds, and only those count as support: the SCOREBOARD section says which have fired, and you never decide one yourself. If this video speaks to one that has fired, name its id and the path it moves. Otherwise begin "No test fired." and say in a few words which way the video leans, as an opinion, naming the path as the report names it. Empty if it has nothing to do with them.
 Fix obviously misheard names (for example "micron" is MU, "nvidia" is NVDA). Say what they said; do not add your own opinion, no disclaimers, no adjectives like "notable". If something is unclear, leave it out.
 When read.json is written and parses as JSON, stop.
 """
@@ -193,7 +196,7 @@ Write read.json, valid JSON, with exactly these keys:
 - "title": at most 8 words, what this {label} is about.
 - "takeaway": one sentence, at most 25 words: the single thing that matters most.
 - "points": 4 to 6 short lines, each at most 25 words, the most important first: what moved, why, with the real numbers from prices.txt. Name the tickers. One line must say where money went, not only what fell: the sectors and areas that were up, from prices.txt (do not claim fund flows you cannot see).
-- "scenario": one or two sentences in the tone of report.txt. Its "four paths" chapter lists dated tests with thresholds, and only those count as support for a path. If report.txt has a SCOREBOARD section, quote it and name the test id; never decide a test's result yourself. If a test has fired, name it and the path it moves. Otherwise begin "No test fired." and say in a few words which way the news leans, as an opinion, naming the path as the report names it. Empty if nothing relevant moved.
+- "scenario": one or two sentences in the tone of report.txt. Its "four paths" chapter lists dated tests with thresholds, and only those count as support for a path. report.txt's SCOREBOARD section is the record: a test has fired only when its state says so, and you never decide one yourself. If one has fired, name its id (T01 to T20) and the path it moves. If none has, begin "No test fired." and say in a few words which way the news leans, as an opinion, naming the path as the report names it; you may name the next test due by id and date. If odds_differ says the odds differ, say so. Thresholds and points are judgment: never call them measured. Empty if nothing relevant moved.
 - "names": up to 8 of his names that actually had news or a big move: {{"t":"MU","pct":-3.4,"why":"under 15 words"}}. Use the % from prices.txt.
 - "watch": up to 3 short lines: what is next (a report, a release, a level), only if the headlines or the files say so.
 Write like a desk note: plain, direct, no hype, no disclaimers, no advice wording, no adjectives like "notable". Do not invent numbers or events that are not in the files. If little happened, say so in fewer points.
