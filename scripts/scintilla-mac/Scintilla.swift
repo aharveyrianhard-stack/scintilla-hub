@@ -2,15 +2,18 @@
 // computers. I need the notifications coming everywhere ... if we can make that have the Scintilla logo or something like that, because it's ugly as shit."
 // It reads the switchboard (public.notify_since) every ten seconds and shows each new row as a card, top right on every screen, over everything including full screen.
 // Its own window, not macOS Notification Center: nothing to allow, big enough to read from across the room, stays until it has been seen, always this logo.
-// Level 1 = 8 s, silent · level 2 = 16 s, a soft sound · level 3 = 40 s, the louder sound. The pointer on a card holds it. A click opens the story in the reader. The menu bar logo keeps the last ones.
+// Level 1 = 20 s, silent · level 2 = 40 s, a soft sound · level 3 = 90 s, the louder sound, counted only while someone is at this Mac. The pointer on a card holds it. A click opens the story in the reader. The menu bar logo keeps the last ones.
+// 1.6, 1 Nov. Alan: "I haven't been receiving notifications even on the computer for a while. I've not seen anything." They had shown, measured on both Macs: eight silent seconds and gone, whoever was or was not looking.
+// So the clock now runs only while someone is at this Mac. Away, a card waits (3 minutes, 15, an hour by level) so a stack cannot sit on a screen for ever.
 // No Dock icon, never takes focus. Secrets live in ~/Library/Application Support/Scintilla/config.json (600), never in this file.
 // 1.1, same day. Alan: "it is like pretty big. Can you kind of keep things sized to about what the notification center looks like?" The card is now the size of a macOS banner, on every screen.
 // "I clicked on a news story. It takes me to the article in Google Chrome. Is there any way for it to happen inside of the app? ... that I can close easily ... I'm going to leave a scatter of links":
 // a click opens the story in one reader window of our own, floating, closed by Esc or the X. It never takes the stage from what he is doing, and it holds one story at a time.
 import AppKit
 import WebKit
+import CoreGraphics
 
-let VERSION = "1.5"
+let VERSION = "1.6"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -153,6 +156,116 @@ final class Reader: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelega
   func webView(_ w: WKWebView, didFinish n: WKNavigation!) { onLoaded?(); onLoaded = nil }
 }
 
+// ---- real X on the Station's X column. Alan, 29 Oct: "manual scroll no extension ... reload, refresh and scroll and yes change between lists ... if we can put my For You and the lists I have, that would be great, just like my X basically in Station".
+// 1 Nov: "what ended up happening with that thing ... X-panel in the station instead of the one that auto-scrolled?" x.com refuses to load inside any web page (X-Frame-Options), so the Station cannot hold it. This app can: a window of its own, signed in once, sitting exactly on the column.
+// The Station says where the column is and whether it can be seen (a playing video or charts-only covers it), a broadcast on the realtime channel station-x, about a tenth of a second (deck/index.html, xColumnSignal). Twice a second this app looks at the window list: anything else in front of the column and the panel steps away. It never takes focus from the Station.
+let STATION_OWNER = "SCINTILLA Station"
+final class XPanel: NSPanel { override var canBecomeKey: Bool { true }; override var canBecomeMain: Bool { false } }
+final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
+  static let shared = XColumn()
+  var on: Bool { get { UserDefaults.standard.object(forKey: "xColumn") as? Bool ?? true } set { UserDefaults.standard.set(newValue, forKey: "xColumn"); tick() } }
+  private var textScale: Double { get { let v = UserDefaults.standard.double(forKey: "xScale"); return v > 0 ? v : 1 } set { UserDefaults.standard.set(newValue, forKey: "xScale") } }
+  private var cfg: Config?; private var socket: URLSessionWebSocketTask?; private var panel: XPanel?; private var web: WKWebView?; private var popup: NSPanel?; private var shown = false; private var lastW: CGFloat = 0
+  private struct Want { let show: Bool; let x, y, w, h, iw, ih: Double }
+  private var want: Want?
+  func start(_ c: Config) { cfg = c; connect(); Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }; Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in self?.send(["topic": "phoenix", "event": "heartbeat", "payload": [String: Any](), "ref": "h"]) } }
+  // the channel
+  private func connect() {
+    guard let c = cfg, let u = URL(string: c.url.replacingOccurrences(of: "https://", with: "wss://") + "/realtime/v1/websocket?apikey=" + c.anon + "&vsn=1.0.0") else { return }
+    let t = URLSession.shared.webSocketTask(with: u); socket = t; t.resume()
+    send(["topic": "realtime:station-x", "event": "phx_join", "payload": ["config": ["broadcast": ["self": false], "presence": ["key": ""], "postgres_changes": [Any](), "private": false] as [String: Any], "access_token": c.anon] as [String: Any], "ref": "1", "join_ref": "1"])
+    listen(t)
+  }
+  private func send(_ o: [String: Any]) { guard let t = socket, let d = try? JSONSerialization.data(withJSONObject: o), let s = String(data: d, encoding: .utf8) else { return }; t.send(.string(s)) { [weak self] e in if e != nil { DispatchQueue.main.async { self?.lost(t) } } } }
+  private func lost(_ t: URLSessionWebSocketTask) { guard socket === t else { return }; socket = nil; t.cancel(); DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.connect() } }
+  private func listen(_ t: URLSessionWebSocketTask) {
+    t.receive { [weak self] r in DispatchQueue.main.async {
+      guard let self = self, self.socket === t else { return }
+      switch r {
+      case .failure: self.lost(t)
+      case .success(let m):
+        if case .string(let s) = m, let d = s.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], o["event"] as? String == "broadcast", let p = o["payload"] as? [String: Any], let q = p["payload"] as? [String: Any] { self.heard(q) }
+        self.listen(t)
+      }
+    } }
+  }
+  // both Macs hear every Station; this one takes only what fits its own Station window
+  private func heard(_ q: [String: Any]) {
+    func n(_ k: String) -> Double { (q[k] as? NSNumber)?.doubleValue ?? 0 }
+    let w = Want(show: q["show"] as? Bool ?? false, x: n("x"), y: n("y"), w: n("w"), h: n("h"), iw: n("iw"), ih: n("ih"))
+    if stationWindow(iw: w.iw, ih: w.ih, onScreenOnly: false) != nil { want = w; tick() }
+  }
+  private func windows(onScreenOnly: Bool) -> [[String: Any]] { (CGWindowListCopyWindowInfo(onScreenOnly ? [.optionOnScreenOnly, .excludeDesktopElements] : [.optionAll], kCGNullWindowID) as? [[String: Any]]) ?? [] }
+  private func bounds(_ w: [String: Any]) -> CGRect { var r = CGRect.zero; if let b = w[kCGWindowBounds as String] { CGRectMakeWithDictionaryRepresentation(b as! CFDictionary, &r) }; return r }
+  private func stationWindow(iw: Double, ih: Double, onScreenOnly: Bool) -> CGRect? {
+    var best: CGRect? = nil
+    for w in windows(onScreenOnly: onScreenOnly) where (w[kCGWindowOwnerName as String] as? String) == STATION_OWNER && (w[kCGWindowLayer as String] as? Int) == 0 {
+      let b = bounds(w); if abs(b.width - CGFloat(iw)) <= 3, b.height - CGFloat(ih) >= -3, b.height - CGFloat(ih) <= 90, b.width * b.height > (best.map { $0.width * $0.height } ?? 0) { best = b }
+    }
+    return best
+  }
+  func tick() {
+    guard on, let r = want, r.show, let st = stationWindow(iw: r.iw, ih: r.ih, onScreenOnly: true) else { hide(); return }
+    let rect = CGRect(x: st.minX + CGFloat(r.x), y: st.minY + (st.height - CGFloat(r.ih)) + CGFloat(r.y), width: CGFloat(r.w), height: CGFloat(r.h)), me = Int(getpid())
+    for w in windows(onScreenOnly: true) {
+      guard (w[kCGWindowLayer as String] as? Int) == 0, (w[kCGWindowOwnerPID as String] as? Int) != me else { continue }
+      let owner = w[kCGWindowOwnerName as String] as? String ?? ""
+      if owner == "WindowManager" || owner == "Window Server" || owner == "Wallpaper" { continue }
+      guard bounds(w).intersects(rect.insetBy(dx: 2, dy: 2)) else { continue }
+      if owner == STATION_OWNER { show(rect) } else { hide() }
+      return
+    }
+    hide()
+  }
+  private func hide() { if shown { panel?.orderOut(nil); shown = false } }
+  private func show(_ rect: CGRect) {
+    if panel == nil { build() }
+    guard let p = panel else { return }
+    let H = NSScreen.screens[0].frame.height, f = NSRect(x: rect.minX, y: H - rect.maxY, width: rect.width, height: rect.height)
+    if p.frame != f { p.setFrame(f, display: true) }
+    if rect.width != lastW { lastW = rect.width; applyZoom() }
+    if !shown { p.orderFrontRegardless(); shown = true }
+  }
+  private func applyZoom() { web?.pageZoom = CGFloat(min(1, max(0.5, Double(lastW) / 380)) * textScale) }   // X's phone-width layout starts near 380 wide; the column is narrower than that on most screens
+  private func build() {
+    let p = XPanel(contentRect: NSRect(x: 0, y: 0, width: 240, height: 600), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    p.level = .floating; p.hidesOnDeactivate = false; p.isReleasedWhenClosed = false; p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]; p.backgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1); p.animationBehavior = .none; p.hasShadow = false
+    let root = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 600)); root.autoresizingMask = [.width, .height]; p.contentView = root
+    let headH: CGFloat = 20
+    let head = NSView(frame: NSRect(x: 0, y: 600 - headH, width: 240, height: headH)); head.autoresizingMask = [.width, .minYMargin]; head.wantsLayer = true; head.layer?.backgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor; root.addSubview(head)
+    var bx: CGFloat = 4
+    for (title, tip, sel) in [("⌂", "For You", #selector(goHome)), ("≡", "Your lists", #selector(goLists)), ("↻", "Refresh", #selector(refresh)), ("–", "Smaller", #selector(smaller)), ("+", "Bigger", #selector(bigger))] as [(String, String, Selector)] {
+      let b = NSButton(title: title, target: self, action: sel); b.isBordered = false; b.font = .systemFont(ofSize: 13); b.contentTintColor = DIM; b.toolTip = tip; b.frame = NSRect(x: bx, y: 1, width: 24, height: 18); head.addSubview(b); bx += 26
+    }
+    let c = WKWebViewConfiguration(); c.websiteDataStore = .default(); c.mediaTypesRequiringUserActionForPlayback = .all
+    let v = WKWebView(frame: NSRect(x: 0, y: 0, width: 240, height: 600 - headH), configuration: c); v.autoresizingMask = [.width, .height]; v.navigationDelegate = self; v.uiDelegate = self; v.allowsBackForwardNavigationGestures = true; v.underPageBackgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1)
+    v.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"; root.addSubview(v)
+    panel = p; web = v; v.load(URLRequest(url: URL(string: "https://x.com/home")!))
+  }
+  @objc private func goHome() { web?.load(URLRequest(url: URL(string: "https://x.com/home")!)) }
+  @objc private func goLists() { if let u = web?.url, let name = u.path.split(separator: "/").first, !["home", "i", "search", "explore", "notifications", "messages"].contains(String(name)) { web?.load(URLRequest(url: URL(string: "https://x.com/" + name + "/lists")!)) } else { web?.load(URLRequest(url: URL(string: "https://x.com/i/lists")!)) } }
+  @objc private func refresh() { web?.reload() }
+  @objc private func smaller() { textScale = max(0.6, textScale - 0.08); applyZoom() }
+  @objc private func bigger() { textScale = min(1.6, textScale + 0.08); applyZoom() }
+  private func isX(_ u: URL) -> Bool { let h = (u.host ?? "").lowercased(); return h == "x.com" || h.hasSuffix(".x.com") || h == "twitter.com" || h.hasSuffix(".twitter.com") }
+  private func isSignIn(_ u: URL) -> Bool { let h = (u.host ?? "").lowercased(); return h.hasSuffix("google.com") || h.hasSuffix("apple.com") || h.hasSuffix("gstatic.com") }
+  // a link out of X opens in the reader, so the column stays on X
+  func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+    if a.navigationType == .linkActivated, let u = a.request.url, !isX(u), !isSignIn(u) { Reader.shared.open(u, title: u.host ?? "X"); decisionHandler(.cancel); return }
+    decisionHandler(.allow)
+  }
+  func webView(_ w: WKWebView, createWebViewWith c: WKWebViewConfiguration, for a: WKNavigationAction, windowFeatures f: WKWindowFeatures) -> WKWebView? {
+    guard let u = a.request.url else { return nil }
+    if isSignIn(u) {   // "Sign in with Google" needs a real little window that can talk back
+      let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 660), styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false); p.level = .floating; p.center(); p.isReleasedWhenClosed = false
+      let v = WKWebView(frame: p.contentView!.bounds, configuration: c); v.autoresizingMask = [.width, .height]; v.uiDelegate = self; v.customUserAgent = w.customUserAgent; p.contentView!.addSubview(v); p.makeKeyAndOrderFront(nil); popup = p; return v
+    }
+    if isX(u) { w.load(a.request) } else { Reader.shared.open(u, title: u.host ?? "X") }
+    return nil
+  }
+  func webViewDidClose(_ w: WKWebView) { if w !== web { popup?.close(); popup = nil } }
+}
+
 // a link into the brain: the worker reads it on its next pass (a video gets a full read, a story a note)
 func keepLink(_ url: String, title: String?) {
   let path = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Scintilla/config.json")
@@ -164,15 +277,15 @@ func keepLink(_ url: String, title: String?) {
 
 // One notification, on every screen
 final class Card {
-  let item: Item; var panels: [(NSScreen, CardPanel, CardView)] = []; var timer: Timer?; var left: TimeInterval
-  init(item: Item) { self.item = item; left = item.level >= 3 ? 40 : item.level == 2 ? 16 : 8 }
+  let item: Item; var panels: [(NSScreen, CardPanel, CardView)] = []; var left: Int; var waited = 0; let maxWait: Int; var hovered = false
+  init(item: Item) { self.item = item; left = item.level >= 3 ? 90 : item.level == 2 ? 40 : 20; maxWait = item.level >= 3 ? 3600 : item.level == 2 ? 900 : 180 }
 }
 
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   var cfg: Config?; var status: NSStatusItem!; var lastId: Int64 = 0; var cards: [Card] = []; var recent: [Item] = []; var booted = false; var busy = false
   var pausedUntil: Date? { get { UserDefaults.standard.object(forKey: "pausedUntil") as? Date } set { UserDefaults.standard.set(newValue, forKey: "pausedUntil") } }
   var minLevel: Int { get { max(1, UserDefaults.standard.integer(forKey: "minLevel")) } set { UserDefaults.standard.set(newValue, forKey: "minLevel") } }
-  let maxOnScreen = 5, showIfYoungerThan = 900
+  let maxOnScreen = 4, showIfYoungerThan = 900
   var lastOK = Date()
 
   func applicationDidFinishLaunching(_ n: Notification) {
@@ -183,7 +296,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     cfg = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Config.self, from: $0) }
     lastId = Int64(UserDefaults.standard.integer(forKey: "lastId"))
     Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.poll() }
+    Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tickCards() }
     poll()
+    if let c = cfg { XColumn.shared.start(c) }
     NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.rebuildPanels() }
   }
 
@@ -220,7 +335,18 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     if !nightNow() { if it.level >= 3 { NSSound(named: "Glass")?.play() } else if it.level == 2 { let s = NSSound(named: "Tink"); s?.volume = 0.5; s?.play() } }
     let card = Card(item: it); cards.insert(card, at: 0); build(card)
     while cards.count > maxOnScreen { drop(cards.last!) }
-    layout(animated: true); arm(card)
+    layout(animated: true)
+  }
+  // the cards' clock: it runs while someone is at this Mac, and a card waits while nobody is
+  func awayFromThisMac() -> Bool { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) > 45 }
+  func tickCards() {
+    if cards.isEmpty { return }
+    let away = awayFromThisMac(); var changed = false
+    for card in cards where !card.hovered {
+      if away { card.waited += 1; if card.waited >= card.maxWait { drop(card); changed = true } }
+      else { card.left -= 1; if card.left <= 0 { drop(card); changed = true } }
+    }
+    if changed { layout(animated: true) }
   }
   func build(_ card: Card) {
     for sc in NSScreen.screens {
@@ -230,12 +356,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
       p.level = .statusBar; p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]; p.hidesOnDeactivate = false; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true; p.isMovable = false; p.animationBehavior = .none; p.contentView = v
       v.onClick = { [weak self, weak card] in guard let self = self, let card = card else { return }; if let s = card.item.url, let u = URL(string: s) { Reader.shared.open(u, title: [card.item.ticker, card.item.source].compactMap { $0 }.joined(separator: " · ")) }; self.drop(card); self.layout(animated: true) }
       v.onClose = { [weak self, weak card] in guard let self = self, let card = card else { return }; self.drop(card); self.layout(animated: true) }
-      v.onHover = { [weak self, weak card] on in guard let self = self, let card = card else { return }; if on { card.timer?.invalidate() } else { card.left = max(card.left, 5); self.arm(card) } }
+      v.onHover = { [weak card] on in guard let card = card else { return }; card.hovered = on; if !on { card.left = max(card.left, 5) } }
       p.orderFrontRegardless(); card.panels.append((sc, p, v))
     }
   }
-  func arm(_ card: Card) { card.timer?.invalidate(); card.timer = Timer.scheduledTimer(withTimeInterval: card.left, repeats: false) { [weak self, weak card] _ in guard let self = self, let card = card else { return }; self.drop(card); self.layout(animated: true) } }
-  func drop(_ card: Card) { card.timer?.invalidate(); for (_, p, _) in card.panels { p.orderOut(nil); p.close() }; card.panels = []; cards.removeAll { $0 === card } }
+  func drop(_ card: Card) { for (_, p, _) in card.panels { p.orderOut(nil); p.close() }; card.panels = []; cards.removeAll { $0 === card } }
   func layout(animated: Bool) {
     for sc in NSScreen.screens {
       let vf = sc.visibleFrame; var y = vf.maxY - 8
@@ -263,6 +388,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let keep = NSMenuItem(title: "Keep the link I copied", action: #selector(keepCopied), keyEquivalent: ""); keep.target = self; menu.addItem(keep)
     let all = NSMenuItem(title: "See the last two days", action: #selector(seeAll), keyEquivalent: ""); all.target = self; menu.addItem(all)
     let pause = NSMenuItem(title: paused ? "Resume now" : "Pause for an hour", action: #selector(togglePause), keyEquivalent: ""); pause.target = self; menu.addItem(pause)
+    let xc = NSMenuItem(title: "X on the Station's column", action: #selector(toggleX), keyEquivalent: ""); xc.target = self; xc.state = XColumn.shared.on ? .on : .off; menu.addItem(xc)
     let quit = NSMenuItem(title: "Quit until the next login", action: #selector(quit), keyEquivalent: ""); quit.target = self; menu.addItem(quit)
   }
   @objc func openRecent(_ s: NSMenuItem) { if let t = s.representedObject as? String, let u = URL(string: t) { Reader.shared.open(u, title: s.title) } }
@@ -270,6 +396,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   @objc func keepCopied() { if let t = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), t.lowercased().hasPrefix("http") { keepLink(t, title: nil) } }
   @objc func seeAll() { if let u = URL(string: "https://station.scintillahub.ai/notify/") { Reader.shared.open(u, title: "The last two days") } }
   @objc func togglePause() { pausedUntil = (pausedUntil.map { $0 > Date() } ?? false) ? nil : Date().addingTimeInterval(3600) }
+  @objc func toggleX() { XColumn.shared.on.toggle() }
   @objc func quit() { NSApp.terminate(nil) }
 }
 

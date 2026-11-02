@@ -41,13 +41,32 @@ def safe(s, n=80): return re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|#^\[\]]+', " "
 def links(tickers): return " ".join("[[" + re.sub(r"[^A-Za-z0-9.\-^]", "", t) + "]]" for t in tickers if t)
 
 # ---- the worker: Kimi first; if he is blocked or fails, Codex on the ChatGPT login; nothing is lost either way ----
+# ---- Kimi's meter. Alan: "what do you mean you can't see his meter? ... The codex bar ... showed it" and "we do need to consider the fucking 5-hour limits". CodexBar's own command tool reads it with no model call.
+# At KIMI_STOP_AT of the 5-hour window the job goes straight to ChatGPT, so he is never run into the wall. No answer from the meter never stops a job. Each job's before and after lands in brain/kimi-meter.jsonl: what a read really costs. ----
+CODEXBAR = "/Applications/CodexBar.app/Contents/Helpers/CodexBarCLI"; KIMI_STOP_AT = 80.0
+def kimi_meter():
+    try:
+        r = subprocess.run([CODEXBAR, "usage", "--provider", "kimi", "--format", "json"], capture_output=True, text=True, timeout=45)
+        u = json.loads(r.stdout)[0]["usage"]; w = u["secondary"]; m = (u.get("extraRateWindows") or [{}])[0].get("window") or {}
+        return {"used": float(w["usedPercent"]), "resets": w.get("resetsAt"), "month": m.get("usedPercent"), "month_resets": m.get("resetsAt")}
+    except Exception as e: log("no meter", str(e)[:120]); return None
 def run_worker(job_id, folder, task, out_name, timeout=720):
     brief = folder + "/TASK.md"; open(brief, "w").write(task); out = folder + "/" + out_name; runs = WORK + "/runs"; os.makedirs(runs, exist_ok=True); safe_id = re.sub(r"[^A-Za-z0-9_-]", "-", job_id)[:60]
     for w in WORKERS:
         try:
             if w == "kimi":
+                before = kimi_meter()
+                if before and before["used"] >= KIMI_STOP_AT:
+                    when = ""
+                    try: when = " until " + datetime.datetime.fromisoformat(before["resets"].replace("Z", "+00:00")).astimezone(NY).strftime("%-I:%M %p")
+                    except Exception: pass
+                    notify(title="Kimi is at %d%% of his 5-hour limit: reads go to ChatGPT%s" % (before["used"], when), kind="ops", level=1, key="ops|kimi-limit|" + str(before["resets"]), source="News brain")
+                    log("kimi at", before["used"], "so", job_id, "skips him"); continue
                 jf = folder + "/kimi-job.json"; json.dump({"id": safe_id, "domain": "scintilla", "cwd": folder, "brief": brief, "result_root": runs, "timeout_seconds": timeout, "authorized": True, "source_issue": "alan-20261101-news-brain"}, open(jf, "w"))
                 r = subprocess.run(["/usr/bin/python3", KIMI, "--job", jf], capture_output=True, text=True, timeout=timeout + 60)
+                after = kimi_meter()
+                try: open(WORK + "/kimi-meter.jsonl", "a").write(json.dumps({"at": datetime.datetime.now().isoformat(timespec="seconds"), "job": job_id, "before": before and before["used"], "after": after and after["used"], "month_before": before and before["month"], "month_after": after and after["month"]}) + "\n")
+                except OSError: pass
             elif w == "codex":
                 jf = folder + "/codex-job.json"; json.dump({"id": safe_id + "-codex", "owner": "scintilla", "authorized": True, "cwd": folder, "brief": brief, "result_root": runs, "model": "gpt-6-sol", "effort": "low", "sandbox": "workspace-write", "timeout_seconds": timeout}, open(jf, "w"))
                 r = subprocess.run(["/usr/bin/python3", CODEX, jf], env={**os.environ, "PATH": CODEX_DIR + ":" + os.environ.get("PATH", "/usr/bin:/bin")}, capture_output=True, text=True, timeout=timeout + 60)
@@ -254,18 +273,23 @@ def kept():
 
 # ---- the light reads: one line from the free local model on what a chapter list says. Alan: "it seemed like ... just a raw extraction of the chapters"; "put in open source models into these processes" ----
 def light_lines(limit=12):
+    # 1 Nov. Alan: "Qwen, one sentence seems a little bit, I don't know". Two or three sentences now, from the title, the chapters and the description, so a video with no chapters gets a read too.
     llm = SUP + "/llm/venv/bin/python"
     if not os.path.exists(llm): return
-    rows = rest("youtube_reads?select=video_id,title,chapters&tier=eq.light&takeaway=is.null&worker=eq.none&order=published_at.desc&limit=80")
-    job = [{"id": r["video_id"], "title": r["title"], "chapters": [c.get("title", "") for c in r["chapters"]][:14]} for r in rows if r.get("chapters")][:limit]
+    rows = rest("youtube_reads?select=video_id,title,chapters,description&tier=eq.light&takeaway=is.null&worker=eq.none&order=published_at.desc&limit=120")
+    job = []
+    for r in rows:
+        ch = [c.get("title", "") for c in (r.get("chapters") or [])][:16]; desc = str(r.get("description") or "")
+        if ch or len(desc) >= 80: job.append({"id": r["video_id"], "title": r["title"], "chapters": ch, "description": desc[:1200]})
+        if len(job) >= limit: break
     if not job: return
     try:
-        p = subprocess.run([llm, SUP + "/lines.py"], input=json.dumps(job), capture_output=True, text=True, timeout=240)
+        p = subprocess.run([llm, SUP + "/lines.py"], input=json.dumps(job), capture_output=True, text=True, timeout=420)
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except Exception as e: log("lines failed", str(e)[:160]); return
     for j in job:
-        line = re.sub(r"^(the|this) (video|episode|podcast) \w+( that)?\s+", "", str(got.get(j["id"]) or "").strip().strip('"'), flags=re.I); line = line[:1].upper() + line[1:]; src = j["title"] + " " + " ".join(j["chapters"])
-        bad = not line or len(line.split()) > 34 or any(t not in src for t in re.findall(r"\b[A-Z]{2,5}\b", line))   # the model once invented a ticker; a line that names one the video does not is dropped
+        line = re.sub(r"^(the|this) (video|episode|podcast) \w+( that)?\s+", "", str(got.get(j["id"]) or "").strip().strip('"'), flags=re.I); line = line[:1].upper() + line[1:]; src = j["title"] + " " + " ".join(j["chapters"]) + " " + j["description"]
+        bad = not line or len(line.split()) > 80 or any(t not in src for t in re.findall(r"\b[A-Z]{2,5}\b", line) if t not in ("AI", "US", "CEO", "IPO", "ETF", "GDP", "CPI", "FED", "EPS"))   # the model once invented a ticker; a read that names one the video does not is dropped
         put("line", {"video_id": j["id"], "takeaway": None if bad else line, "worker": "qwen"})
     log("lines", len(job))
 
