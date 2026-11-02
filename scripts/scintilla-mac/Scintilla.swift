@@ -1,10 +1,11 @@
 // Scintilla.app (1 Nov 2026, coordinator). The cards on each Mac. Alan: "I get so many, and then I feel like I don't see like a stream of notifications coming in on the
 // computers. I need the notifications coming everywhere ... if we can make that have the Scintilla logo or something like that, because it's ugly as shit."
-// It reads the switchboard (public.notify_since) every ten seconds and shows each new row as a card, top right on every screen, over everything including full screen.
+// It reads the switchboard (public.notify_since) every ten seconds and shows each new row as a card, bottom right on every screen, over everything including full screen.
 // Its own window, not macOS Notification Center: nothing to allow, big enough to read from across the room, stays until it has been seen, always this logo.
 // Level 1 = 20 s, silent · level 2 = 40 s, a soft sound · level 3 = 90 s, the louder sound, counted only while someone is at this Mac. The pointer on a card holds it. A click opens the story in the reader. The menu bar logo keeps the last ones.
 // 1.6, 1 Nov. Alan: "I haven't been receiving notifications even on the computer for a while. I've not seen anything." They had shown, measured on both Macs: eight silent seconds and gone, whoever was or was not looking.
 // So the clock runs only while someone is at this Mac; with nobody touching it a card waits a little longer (1, 2 or 5 minutes by level).
+// 1.9, 2 Nov. Alan: "I think we need to move our notifications ... they stay on top of what the notification center is. Or we move them somewhere else". Bottom right of every screen now, newest at the bottom, the stack growing up; macOS keeps the top right.
 // 1.8, 2 Nov. Alan: "I don't think these notification cards kind of like go away. I have to close them." Watching a screen is not touching it, so the 3, 15 and 60 minute waits looked like cards that never leave. And a card that slid out from under a still pointer stayed marked as held.
 // No Dock icon, never takes focus. Secrets live in ~/Library/Application Support/Scintilla/config.json (600), never in this file.
 // 1.1, same day. Alan: "it is like pretty big. Can you kind of keep things sized to about what the notification center looks like?" The card is now the size of a macOS banner, on every screen.
@@ -14,7 +15,7 @@ import AppKit
 import WebKit
 import CoreGraphics
 
-let VERSION = "1.8"
+let VERSION = "1.9"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -359,7 +360,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     for sc in NSScreen.screens {
       let width: CGFloat = 360
       let v = CardView(item: card.item, width: width, scale: 1)
-      let p = CardPanel(contentRect: NSRect(x: sc.visibleFrame.maxX + 10, y: sc.visibleFrame.maxY - v.wantedHeight, width: width, height: v.wantedHeight), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+      let p = CardPanel(contentRect: NSRect(x: sc.visibleFrame.maxX + 10, y: sc.visibleFrame.minY + 8, width: width, height: v.wantedHeight), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
       p.level = .statusBar; p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]; p.hidesOnDeactivate = false; p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true; p.isMovable = false; p.animationBehavior = .none; p.contentView = v
       v.onClick = { [weak self, weak card] in guard let self = self, let card = card else { return }; if let s = card.item.url, let u = URL(string: s) { Reader.shared.open(u, title: [card.item.ticker, card.item.source].compactMap { $0 }.joined(separator: " · ")) }; self.drop(card); self.layout(animated: true) }
       v.onClose = { [weak self, weak card] in guard let self = self, let card = card else { return }; self.drop(card); self.layout(animated: true) }
@@ -370,10 +371,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func drop(_ card: Card) { for (_, p, _) in card.panels { p.orderOut(nil); p.close() }; card.panels = []; cards.removeAll { $0 === card } }
   func layout(animated: Bool) {
     for sc in NSScreen.screens {
-      let vf = sc.visibleFrame; var y = vf.maxY - 8
+      let vf = sc.visibleFrame; var y = vf.minY + 8
       for card in cards { guard let e = card.panels.first(where: { $0.0 == sc }) else { continue }
-        let h = e.2.wantedHeight, w = e.2.frame.width; y -= h
-        let f = NSRect(x: vf.maxX - w - 8, y: y, width: w, height: h); y -= 6
+        let h = e.2.wantedHeight, w = e.2.frame.width
+        let f = NSRect(x: vf.maxX - w - 8, y: y, width: w, height: h); y += h + 6
         if animated { NSAnimationContext.runAnimationGroup { $0.duration = 0.16; e.1.animator().setFrame(f, display: true) } } else { e.1.setFrame(f, display: true) }
       }
     }
