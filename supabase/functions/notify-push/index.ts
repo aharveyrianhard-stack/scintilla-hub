@@ -103,7 +103,9 @@ async function phoneFanOut() {
   let sent = 0, failed = 0; const errors: string[] = [];
   for (const r of single) {
     const { title, body } = phoneLines(r);
-    const res = await sendOne(subs || [], useNtfy, { title, body, url: r.url || "https://station.scintillahub.ai/notify/", tag: "card-" + r.id, level: r.level });   // by card id: a shared tag makes the phone replace the last alert, and keys often share their first 60 characters
+    /* 2 Nov: a tap opens this card's own page, which goes on to the story. An iPhone Home Screen app will not reliably open another site directly from a notification (it brought back the feed). */
+    const k = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(r.key)))].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+    const res = await sendOne(subs || [], useNtfy, { title, body, url: "https://station.scintillahub.ai/notify/card.html?id=" + r.id + "&k=" + k, tag: "card-" + r.id, level: r.level });   // by card id: a shared tag makes the phone replace the last alert, and keys often share their first 60 characters
     sent += res.sent; failed += res.failed; errors.push(...res.errors);
     await done([r.id], res.sent, res.errors[0] || null);
   }
