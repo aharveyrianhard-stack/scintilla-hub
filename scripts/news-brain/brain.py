@@ -17,7 +17,7 @@ def claude_bin():   # the desktop app keeps its command-line tool in a versioned
 WORKERS = os.environ.get("BRAIN_WORKERS", "kimi,codex,claude").split(",")   # Alan: "if Kimmy is blocked, the job goes to ChatGPT. And if that fails too, it goes to you ... I don't want this to fail."
 REPORT_URL = "https://volume-pulse-pied.vercel.app/story.html"
 # Alan, 1 Nov: "No, I don't want the Newsbrain and Obsidian vault that I already have. It would be a completely separate thing ... Let's think about it first." Notes wait in a private folder until he decides.
-VAULT = SUP + "/brain-notes"; NOTIFY = HOME + "/.local/bin/scintilla-notify"; PAGE = "https://station.scintillahub.ai/notify/read.html"
+VAULT = HOME + "/News Brain"; NOTIFY = HOME + "/.local/bin/scintilla-notify"; PAGE = "https://station.scintillahub.ai/notify/read.html"
 NY = zoneinfo.ZoneInfo("America/New_York"); MAX_VIDEOS_PER_TICK = 3; MIN_VIDEO_MIN = 5
 DESK = {"reuters.com","cnbc.com","wsj.com","barrons.com","marketwatch.com","benzinga.com","businessinsider.com","techcrunch.com","investors.com","nytimes.com","foxbusiness.com","ft.com","bloomberg.com","theguardian.com","news.sky.com","apnews.com","axios.com","theinformation.com","businesswire.com","globenewswire.com","prnewswire.com","newsfilecorp.com"}
 LAWYERS = re.compile(r"(class action|lead plaintiff|securities (fraud|litigation|investigation|class)|shareholder (alert|investigation|rights|class)|investor (alert|deadline|notice)|investors? (have|has|face|should|are encouraged|who (lost|suffered|purchased|bought))|law (firm|offices)|\bLLP\b|encourages? .{0,80}(investors|shareholders)|on behalf of (investors|shareholders)|fraud investigation|deadline (alert|reminder))", re.I)
@@ -84,7 +84,14 @@ def _json_ok(p):
     except Exception: return False
 
 # ---- the house report, read only. Alan: "you've seen the .com analysis that we've hosted ... the tone of that is important to track ... the tracking of things that support certain scenarios"; "Kimmy should be aware of the .com analysis too". The markets session owns it; we only read it. ----
+SCOREBOARD_URL = "https://volume-pulse-pied.vercel.app/data/lab/story/scoreboard.json"   # the markets session's own record of each test, its reading and its points. We only quote it. Until it is published this answers nothing and the reads say "No test fired" or give an opinion.
+def scoreboard():
+    try: return "\n\n## SCOREBOARD (the markets session's own record; quote it, never change it)\n" + json.dumps(json.loads(http(SCOREBOARD_URL, timeout=15).decode("utf-8", "replace")))[:6000]
+    except Exception: return ""
 def report_context(limit=9000):
+    try: return _report_context(limit) + scoreboard()
+    except Exception as e: log("no report context", str(e)[:120]); return ""
+def _report_context(limit=9000):
     try:
         h = http(REPORT_URL, timeout=20).decode("utf-8", "replace"); parts = re.split(r"(?=<h2[ >])", h); keep = []
         for part in parts:
@@ -119,7 +126,7 @@ Write read.json, valid JSON, with exactly these keys:
 - "sections": a list, one per topic in the order spoken. {chapters} At most 10. Each item: {{"at":"mm:ss","title":"short title","points":["2 or 3 short plain sentences with the specifics: tickers, price levels, dates, numbers"]}}.
 - "tickers": every stock, ETF or index discussed with a real view, each {{"t":"MU","view":"bullish|bearish|neutral","why":"under 15 words","levels":"price levels named, or empty"}}.
 - "calls": the specific calls with a level or a date, each one short sentence.
-- "vs_report": one sentence: does this video support or go against the paths in report.txt, and on what? Empty if it has nothing to do with them.
+- "vs_report": one sentence on the paths in report.txt. Its "four paths" chapter lists dated tests with thresholds, and only those count as support: if this video reports that one has fired, name the test and the path it moves. Otherwise begin "No test fired." and say in a few words which way the video leans, as an opinion, naming the path as the report names it. Empty if it has nothing to do with them.
 Fix obviously misheard names (for example "micron" is MU, "nvidia" is NVDA). Say what they said; do not add your own opinion, no disclaimers, no adjectives like "notable". If something is unclear, leave it out.
 When read.json is written and parses as JSON, stop.
 """
@@ -186,7 +193,7 @@ Write read.json, valid JSON, with exactly these keys:
 - "title": at most 8 words, what this {label} is about.
 - "takeaway": one sentence, at most 25 words: the single thing that matters most.
 - "points": 4 to 6 short lines, each at most 25 words, the most important first: what moved, why, with the real numbers from prices.txt. Name the tickers. One line must say where money went, not only what fell: the sectors and areas that were up, from prices.txt (do not claim fund flows you cannot see).
-- "scenario": one or two sentences in the tone of report.txt: which of its paths this supports or weakens and which of its signs moved, naming them as the report names them. Empty if nothing relevant moved.
+- "scenario": one or two sentences in the tone of report.txt. Its "four paths" chapter lists dated tests with thresholds, and only those count as support for a path. If report.txt has a SCOREBOARD section, quote it and name the test id; never decide a test's result yourself. If a test has fired, name it and the path it moves. Otherwise begin "No test fired." and say in a few words which way the news leans, as an opinion, naming the path as the report names it. Empty if nothing relevant moved.
 - "names": up to 8 of his names that actually had news or a big move: {{"t":"MU","pct":-3.4,"why":"under 15 words"}}. Use the % from prices.txt.
 - "watch": up to 3 short lines: what is next (a report, a release, a level), only if the headlines or the files say so.
 Write like a desk note: plain, direct, no hype, no disclaimers, no advice wording, no adjectives like "notable". Do not invent numbers or events that are not in the files. If little happened, say so in fewer points.
@@ -288,7 +295,7 @@ def light_lines(limit=12):
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except Exception as e: log("lines failed", str(e)[:160]); return
     for j in job:
-        line = re.sub(r"^(the|this) (video|episode|podcast) \w+( that)?\s+", "", str(got.get(j["id"]) or "").strip().strip('"'), flags=re.I); line = line[:1].upper() + line[1:]; src = j["title"] + " " + " ".join(j["chapters"]) + " " + j["description"]
+        line = re.sub(r"^((the|this) (video|episode|podcast) \w+( that)?|the main (argument|point|news)( here)? is( that)?)\s+", "", str(got.get(j["id"]) or "").strip().strip('"'), flags=re.I); line = line[:1].upper() + line[1:]; src = j["title"] + " " + " ".join(j["chapters"]) + " " + j["description"]
         bad = not line or len(line.split()) > 80 or any(t not in src for t in re.findall(r"\b[A-Z]{2,5}\b", line) if t not in ("AI", "US", "CEO", "IPO", "ETF", "GDP", "CPI", "FED", "EPS"))   # the model once invented a ticker; a read that names one the video does not is dropped
         put("line", {"video_id": j["id"], "takeaway": None if bad else line, "worker": "qwen"})
     log("lines", len(job))
@@ -301,6 +308,47 @@ def backup_check():   # once a day: is the last worker in the chain still signed
     r = subprocess.run([claude_bin(), "auth", "status", "--json"], env=env, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
     if not json.loads(r.stdout or "{}").get("loggedIn"): notify(title="The Claude backup worker is signed out: double-click SIGN_IN_GMAIL_WORKER on the Desktop", kind="ops", level=1, key="ops|claude-signin|" + os.path.basename(mark), source="News brain")
 
+# ---- the vault's map. Alan: "a vault with my pushes and full reads. I like it. But we should have a way of visualizing tickers and classifications of things."
+# One note per name, one per class (the Hub's cohorts), each listing what the reads said, newest first. Obsidian's graph is the tree; the same data draws as bars at station.scintillahub.ai/notify/map.html on every device. Written fresh on each pass from the database; the notes under YouTube, Reads and Pushed stay as they were written. ----
+PLAIN_NAMES = {"SILVER": "METALS", "GOLD": "METALS", "OIL": "MACRO", "WTI": "MACRO", "BRENT": "MACRO", "SPX": "INDEXES", "S&P 500": "INDEXES", "NASDAQ": "INDEXES", "NDX": "INDEXES", "SOX": "INDEXES", "DOW": "INDEXES", "RUT": "INDEXES", "VIX": "INDEXES", "BITCOIN": "CRYPTO", "BTC": "CRYPTO", "ETH": "CRYPTO", "DXY": "MACRO", "TLT": "MACRO", "10Y": "MACRO", "OPENAI": "AI SOFTWARE", "ANTHROPIC": "AI SOFTWARE"}
+def bar(n, unit="▰"): return unit * min(n, 12)
+def vault_index():
+    reads = rest("youtube_reads?select=video_id,channel,title,published_at,takeaway,tickers,vs_report,note&tier=eq.deep&order=published_at.desc&limit=500")
+    cohort = {r["ticker"].upper(): r["cohort"] for r in rest("cohorts?select=ticker,cohort&limit=2000")}
+    company = {r["ticker"].upper(): r["name"] for r in rest("company_profile?select=ticker,name&limit=2000")}
+    by = {}
+    for r in reads:
+        day = str(r.get("published_at") or "")[:10]; ch = str(r.get("channel") or "").strip(); link = "YouTube/" + safe(ch) + "/" + day + " " + safe(r.get("title"))
+        for t in r.get("tickers") or []:
+            name = re.sub(r"[^A-Za-z0-9.\-^& ]", "", str(t.get("t") or "")).strip().upper()   # "Gold" and "GOLD" are one name, and one file
+            if name: by.setdefault(name, []).append({"day": day, "who": ch, "link": link, "view": str(t.get("view") or "neutral"), "why": t.get("why") or "", "levels": t.get("levels") or ""})
+    for sub in ("Tickers", "Classes"): os.makedirs(VAULT + "/" + sub, exist_ok=True)
+    classes = {}
+    for name, items in by.items():
+        c = (cohort.get(name) or PLAIN_NAMES.get(name) or "OTHER").replace(" ", "_"); classes.setdefault(c, []).append((name, items))
+        up = sum(1 for i in items if i["view"] == "bullish"); dn = sum(1 for i in items if i["view"] == "bearish"); title = name + (" · " + company[name.upper()] if name.upper() in company else "")
+        out = ["---", "type: name", "class: " + c, "bullish: " + str(up), "bearish: " + str(dn), "---", "", "# " + title, "", "Class: [[" + c.replace("_", " ") + "]]", "", "Bullish " + bar(up) + " " + str(up) + "   ·   Bearish " + bar(dn) + " " + str(dn), "", "## What the reads said", ""]
+        out += ["- " + i["day"] + " [[" + i["link"] + "|" + i["who"] + "]] **" + i["view"] + "**: " + str(i["why"]) + (" (" + i["levels"] + ")" if i["levels"] else "") for i in items]
+        open(VAULT + "/Tickers/" + safe(name) + ".md", "w").write("\n".join(out) + "\n")
+    for c, rows in classes.items():
+        rows.sort(key=lambda x: -len(x[1])); out = ["---", "type: class", "---", "", "# " + c.replace("_", " "), ""]
+        for name, items in rows:
+            up = sum(1 for i in items if i["view"] == "bullish"); dn = sum(1 for i in items if i["view"] == "bearish")
+            out.append("- [[" + safe(name) + "]] bullish " + bar(up) + " " + str(up) + " · bearish " + bar(dn) + " " + str(dn))
+        open(VAULT + "/Classes/" + c.replace("_", " ") + ".md", "w").write("\n".join(out) + "\n")
+    week = (datetime.datetime.now(NY) - datetime.timedelta(days=7)).strftime("%Y-%m-%d"); top = sorted(((sum(1 for i in v if i["day"] >= week), k) for k, v in by.items()), reverse=True)[:12]
+    home = ["# News Brain", "", "Your pushes and the full reads, nothing else. Written by the news brain.", "", "**The picture of it:** [the map, by class and by name](https://station.scintillahub.ai/notify/map.html). In Obsidian, the Graph view (the dots icon on the left) is the same tree.", "", "- **YouTube**: section-by-section reads of the channels you chose, and any video you pushed", "- **Pushed**: stories and videos you sent, with your notes", "- **Reads**: the pre-market, midday, close and weekly reads", "- **Tickers**: one page per name: what every read said about it", "- **Classes**: the same names by class", "", "## Most talked about, last 7 days", ""]
+    home += ["- [[" + safe(k) + "]] " + bar(n) + " " + str(n) for n, k in top if n] + [""]
+    open(VAULT + "/News Brain.md", "w").write("\n".join(home))
+    cfg = VAULT + "/.obsidian"; os.makedirs(cfg, exist_ok=True)
+    if not os.path.exists(cfg + "/graph.json"):
+        rgb = lambda h: {"a": 1, "rgb": int(h, 16)}
+        json.dump({"collapse-filter": True, "search": "", "showTags": False, "showAttachments": False, "hideUnresolved": True, "showOrphans": False, "collapse-color-groups": False, "colorGroups": [{"query": "path:Classes", "color": rgb("FFE500")}, {"query": "path:Tickers", "color": rgb("00D4FF")}, {"query": "path:Pushed", "color": rgb("FF4FD8")}, {"query": "path:YouTube", "color": rgb("00FFA3")}, {"query": "path:Reads", "color": rgb("8B5CF6")}], "collapse-display": True, "showArrow": False, "textFadeMultiplier": 0, "nodeSizeMultiplier": 1.3, "lineSizeMultiplier": 1, "collapse-forces": True, "centerStrength": 0.5, "repelStrength": 12, "linkStrength": 1, "linkDistance": 180, "scale": 0.7, "close": True}, open(cfg + "/graph.json", "w"))
+    log("vault index", len(by), "names", len(classes), "classes")
+    # the iMac gets a copy. iCloud would reach the phone too, but macOS refuses a background job there (measured 1 Nov: Operation not permitted); on the phone and iPad the map page is the same picture.
+    try: subprocess.run(["/usr/bin/rsync", "-a", "--delete", "--exclude", ".obsidian/workspace*", "-e", "ssh -i " + HOME + "/.ssh/id_imac -o BatchMode=yes -o ConnectTimeout=5", VAULT + "/", "alanharvey@192.168.0.204:News\\ Brain/"], capture_output=True, timeout=60)
+    except Exception as e: log("no copy to the iMac", str(e)[:120])
+
 def tick():
     lock = WORK + "/tick.lock"
     try:
@@ -311,6 +359,8 @@ def tick():
         try: light_lines()
         except Exception as e: log("lines error", str(e)[:160])
         reads_due(); kept(); videos()
+        try: vault_index()
+        except Exception as e: log("vault index error", str(e)[:200])
     finally:
         try: os.remove(lock)
         except OSError: pass
@@ -321,5 +371,6 @@ if __name__ == "__main__":
     elif a[0] == "read": make_read(a[1], int(a[2]) if len(a) > 2 else 24, stamp=a[3] if len(a) > 3 else None)
     elif a[0] == "kept": kept()
     elif a[0] == "lines": light_lines(int(a[1]) if len(a) > 1 else 12)
+    elif a[0] == "vault": vault_index()
     elif a[0] == "testworker":   # BRAIN_WORKERS=codex brain.py testworker <folder with TASK.md inputs>: does this worker finish a real job?
         f = a[1]; print(run_worker("test-" + WORKERS[0], f, open(f + "/TASK.md").read(), "read.json", timeout=600))
