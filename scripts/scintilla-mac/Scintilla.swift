@@ -13,7 +13,7 @@ import AppKit
 import WebKit
 import CoreGraphics
 
-let VERSION = "1.6"
+let VERSION = "1.7"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -166,7 +166,7 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
   var on: Bool { get { UserDefaults.standard.object(forKey: "xColumn") as? Bool ?? true } set { UserDefaults.standard.set(newValue, forKey: "xColumn"); tick() } }
   private var textScale: Double { get { let v = UserDefaults.standard.double(forKey: "xScale"); return v > 0 ? v : 1 } set { UserDefaults.standard.set(newValue, forKey: "xScale") } }
   private var cfg: Config?; private var socket: URLSessionWebSocketTask?; private var panel: XPanel?; private var web: WKWebView?; private var popup: NSPanel?; private var shown = false; private var lastW: CGFloat = 0
-  private struct Want { let show: Bool; let x, y, w, h, iw, ih: Double }
+  private struct Want { let show: Bool; let x, y, w, h, iw, ih, sw, sh: Double }
   private var want: Want?
   func start(_ c: Config) { cfg = c; connect(); Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }; Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in self?.send(["topic": "phoenix", "event": "heartbeat", "payload": [String: Any](), "ref": "h"]) } }
   // the channel
@@ -189,24 +189,29 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
       }
     } }
   }
-  // both Macs hear every Station; this one takes only what fits its own Station window
+  // both Macs hear every Station; this one takes only what fits its own Station window, on one of its own screens
   private func heard(_ q: [String: Any]) {
     func n(_ k: String) -> Double { (q[k] as? NSNumber)?.doubleValue ?? 0 }
-    let w = Want(show: q["show"] as? Bool ?? false, x: n("x"), y: n("y"), w: n("w"), h: n("h"), iw: n("iw"), ih: n("ih"))
-    if stationWindow(iw: w.iw, ih: w.ih, onScreenOnly: false) != nil { want = w; tick() }
+    let w = Want(show: q["show"] as? Bool ?? false, x: n("x"), y: n("y"), w: n("w"), h: n("h"), iw: n("iw"), ih: n("ih"), sw: n("sw"), sh: n("sh"))
+    guard let (_, k) = stationWindow(iw: w.iw, ih: w.ih, onScreenOnly: false) else { return }
+    let fits = NSScreen.screens.contains { sc in let f = sc.frame; let same = { (a: CGFloat, b: Double) in abs(a - CGFloat(b)) <= 3 }; return (same(f.width, w.sw) && same(f.height, w.sh)) || (same(f.width, w.sw * Double(k)) && same(f.height, w.sh * Double(k))) }
+    if fits { want = w; tick() }
   }
   private func windows(onScreenOnly: Bool) -> [[String: Any]] { (CGWindowListCopyWindowInfo(onScreenOnly ? [.optionOnScreenOnly, .excludeDesktopElements] : [.optionAll], kCGNullWindowID) as? [[String: Any]]) ?? [] }
   private func bounds(_ w: [String: Any]) -> CGRect { var r = CGRect.zero; if let b = w[kCGWindowBounds as String] { CGRectMakeWithDictionaryRepresentation(b as! CFDictionary, &r) }; return r }
-  private func stationWindow(iw: Double, ih: Double, onScreenOnly: Bool) -> CGRect? {
-    var best: CGRect? = nil
+  // the page counts in its own pixels; browser zoom (the iMac's Station runs at 75%) makes those bigger or smaller than screen points. The real window's width gives the scale.
+  private func stationWindow(iw: Double, ih: Double, onScreenOnly: Bool) -> (CGRect, CGFloat)? {
+    guard iw > 0 else { return nil }
+    var best: (CGRect, CGFloat)? = nil
     for w in windows(onScreenOnly: onScreenOnly) where (w[kCGWindowOwnerName as String] as? String) == STATION_OWNER && (w[kCGWindowLayer as String] as? Int) == 0 {
-      let b = bounds(w); if abs(b.width - CGFloat(iw)) <= 3, b.height - CGFloat(ih) >= -3, b.height - CGFloat(ih) <= 90, b.width * b.height > (best.map { $0.width * $0.height } ?? 0) { best = b }
+      let b = bounds(w), k = b.width / CGFloat(iw), chrome = b.height - CGFloat(ih) * k
+      if k > 0.3, k < 3, chrome >= -4, chrome <= 90, b.width * b.height > (best.map { $0.0.width * $0.0.height } ?? 0) { best = (b, k) }
     }
     return best
   }
   func tick() {
-    guard on, let r = want, r.show, let st = stationWindow(iw: r.iw, ih: r.ih, onScreenOnly: true) else { hide(); return }
-    let rect = CGRect(x: st.minX + CGFloat(r.x), y: st.minY + (st.height - CGFloat(r.ih)) + CGFloat(r.y), width: CGFloat(r.w), height: CGFloat(r.h)), me = Int(getpid())
+    guard on, let r = want, r.show, let (st, k) = stationWindow(iw: r.iw, ih: r.ih, onScreenOnly: true) else { hide(); return }
+    let rect = CGRect(x: st.minX + CGFloat(r.x) * k, y: st.minY + (st.height - CGFloat(r.ih) * k) + CGFloat(r.y) * k, width: CGFloat(r.w) * k, height: CGFloat(r.h) * k).integral, me = Int(getpid())
     for w in windows(onScreenOnly: true) {
       guard (w[kCGWindowLayer as String] as? Int) == 0, (w[kCGWindowOwnerPID as String] as? Int) != me else { continue }
       let owner = w[kCGWindowOwnerName as String] as? String ?? ""
