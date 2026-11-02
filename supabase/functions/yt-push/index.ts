@@ -9,7 +9,7 @@ const HUB = "https://pubsubhubbub.appspot.com/subscribe", CALLBACK = SB + "/func
 const ACCOUNTS = ["personal", "scintilla", "soundscapes", "golf", "ai_research", "fitness", "networks"], CHANNEL = /^UC[\w-]{22}$/;
 const H = { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "content-type": "application/json" };
 const J = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
-const topicOf = (id: string) => "https://www.youtube.com/feeds/videos.xml?channel_id=" + id;
+const topicOf = (id: string) => "https://www.youtube.com/xml/feeds/videos.xml?channel_id=" + id;   // the /xml/ address is the one YouTube announces on. The plain feed address verified fine and then never delivered anything (1 Nov: the hub said "Content received n/a" after real uploads).
 const unesc = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 async function pg(path: string, init: RequestInit = {}) { const r = await fetch(SB + "/rest/v1/" + path, { ...init, headers: { ...H, ...(init.headers || {}) } }); const t = await r.text(); if (!r.ok) throw new Error(path.split("?")[0] + " -> " + r.status + " " + t.slice(0, 200)); return t ? JSON.parse(t) : null; }
 const rpc = (fn: string, a: Record<string, unknown> = {}) => pg("rpc/" + fn, { method: "POST", body: JSON.stringify(a) });
@@ -61,6 +61,12 @@ Deno.serve(async (req) => {
       if (q.get("hub.mode") === "subscribe") await pg("yt_push_subs?channel_id=eq." + id, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ verified_at: new Date().toISOString(), lease_until: new Date(Date.now() + 1000 * Number(q.get("hub.lease_seconds") || LEASE_S)).toISOString() }) });
       return new Response(challenge, { status: 200, headers: { "content-type": "text/plain" } });
     }
+    // ?details=<channel id>: what the hub itself says about this subscription (it needs the secret, which only this function holds)
+    if (q.get("details")) {
+      if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
+      const r = await fetch("https://pubsubhubbub.appspot.com/subscription-details?" + new URLSearchParams({ "hub.callback": CALLBACK, "hub.topic": topicOf(q.get("details") || ""), "hub.secret": SECRET }), { signal: AbortSignal.timeout(15000) });
+      return new Response((await r.text()).replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 2500), { headers: { "content-type": "text/plain" } });
+    }
     if (q.get("renew")) {
       if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
       if (!SECRET) return J({ error: "no secret" }, 500);
@@ -77,7 +83,10 @@ Deno.serve(async (req) => {
     }
     // an upload
     const raw = await req.text();
-    if (!(await signatureOk(raw, req.headers.get("x-hub-signature") || ""))) return new Response("", { status: 202 });   // the hub is told fine; nothing is done
+    if (!(await signatureOk(raw, req.headers.get("x-hub-signature") || ""))) {   // the hub is told fine; nothing is taken, and it is written down so a broken secret cannot hide
+      await pg("yt_push_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ video_id: (raw.match(/<yt:videoId>([^<]+)/) || [])[1] || null, channel_id: (raw.match(/<yt:channelId>([^<]+)/) || [])[1] || null, wrote: false, already: false, note: "bad signature: " + (req.headers.get("x-hub-signature") ? "wrong" : "none") }) }).catch(() => {});
+      return new Response("", { status: 202 });
+    }
     for (const m of raw.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
       const x = m[1], video_id = (x.match(/<yt:videoId>([^<]+)/) || [])[1], channel_id = (x.match(/<yt:channelId>([^<]+)/) || [])[1];
       if (video_id && channel_id) await take({ video_id, channel_id, title: unesc((x.match(/<title>([^<]*)/) || [])[1] || ""), author: unesc((x.match(/<name>([^<]*)/) || [])[1] || ""), published: (x.match(/<published>([^<]+)/) || [])[1] || "" });
