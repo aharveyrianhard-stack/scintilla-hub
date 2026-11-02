@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       else if (!g.tickers.size) level = BIG_MACRO.test(g.title) ? 2 : 1;
       if (level === 2 && COLUMN.test(g.title)) level = 1;
       if (!level) continue;
+      if (g.lane === "press" && !g.tickers.size) continue;   // 2 Nov: a press release naming none of our companies is filler ("Crédit Agricole Brie Picardie : déclaration hebdomadaire"). Alan: "I don't want spam and filler"
       const shown = (mine.length ? mine : known).slice(0, 3);
       const key = "news|" + (await sha(nt)), walled = WALLED.has(g.site) && !!g.text;
       out.push({ key, summary: g.text.slice(0, 700) || null, source_url: g.url || null, level, kind: g.lane === "market" ? "macro" : g.cls === "wire" || g.lane === "press" ? "press" : "news", ticker: shown.join(" · ") || null, title: g.title.slice(0, 300), source: String(g.source).slice(0, 60), url: walled ? READ_PAGE + "?k=" + encodeURIComponent(key) : g.url, event_at: new Date(g.t * 1000).toISOString() });

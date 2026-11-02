@@ -58,17 +58,15 @@ type Msg = { kind: string; key: string; title: string; body?: string; url?: stri
 
 /* ---- 1 Nov: the phone's end of the switchboard ---- */
 const NTFY_TOPIC = Deno.env.get("NTFY_TOPIC") || "";
-const MAX_PER_RUN = 8, STALE_H = 14;
+const MAX_PER_RUN = 40, STALE_MIN = 30;
 type Row = { id: number; level: number; kind: string; ticker: string | null; title: string; body: string | null; source: string | null; url: string | null; pct: number | null; key: string };
 const pctText = (v: number | null) => v == null ? "" : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
-/* the phone reads two lines: who and how much, then what */
+/* 2 Nov. Alan: "Notifications on the phone are different ... It's not the same thing with the sentence and the summary ... Everything needs to match on iPhone, iMac, and MacBook Pro. Same things."
+   The same card as the Macs (Scintilla.swift CardView): the name, the day's move and where it came from, then the headline, then its second line. */
 function phoneLines(r: Row) {
-  /* 1 Nov. Alan: "everything going to my phone would be great as long as it's cleanly separated, branded". One phone app, so the first word says whose it is */
-  const brand = r.kind === "urth" ? "URTH" : r.kind === "system" ? "THIS MAC" : (r.source === "Volume Pulse" || /^(scintilla\s*·\s*)?volume\b/i.test(r.title)) ? "VOLUME" : r.source === "Ratings" ? "RATINGS" : r.source === "Situation" ? "SITUATION" : "";
-  if (brand) return { title: brand + " · " + r.title.replace(/^scintilla\s*·\s*/i, ""), body: r.body || "" };
-  if (r.level >= 3 || !r.ticker && r.kind !== "macro" && r.kind !== "news" && r.kind !== "press") return { title: r.title, body: r.body || "" };
-  const who = [r.ticker, pctText(r.pct), r.source].filter(Boolean).join(" · ");
-  return { title: who || "SCINTILLA", body: r.title };
+  const isVolume = r.source === "Volume Pulse" || /^(scintilla\s*·\s*)?volume\b/i.test(r.title);
+  const who = r.kind === "urth" ? "URTH" : r.kind === "system" ? "THIS MAC" : isVolume ? "VOLUME" : r.ticker || (r.level >= 3 ? "SCINTILLA" : "MARKET");
+  return { title: [who, pctText(r.pct)].filter(Boolean).join(" ") + (r.source ? " · " + r.source : ""), body: r.title + (r.body ? "\n" + r.body : "") };
 }
 async function sendOne(subs: Array<{ endpoint: string; p256dh: string; auth: string; device: string | null; ua: string | null }>, useNtfy: boolean, m: { title: string; body: string; url: string; tag: string; level: number }) {
   let sent = 0, failed = 0; const errors: string[] = [];
@@ -89,36 +87,29 @@ async function sendOne(subs: Array<{ endpoint: string; p256dh: string; auth: str
   return { sent, failed, errors };
 }
 async function phoneFanOut() {
+  // every card the Macs show, one by one, no roll-ups. At night only level 3 buzzes the phone; the rest stay in the list and are not sent later in a burst.
   const quiet = await rpc("push_quiet_now");
-  const stale = new Date(Date.now() - STALE_H * 3600000).toISOString();
-  await pg("notify_stream?phone_at=is.null&level=gte.2&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
-  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&level=gte.2&order=id.asc&limit=200");
+  const stale = new Date(Date.now() - STALE_MIN * 60000).toISOString();
+  await pg("notify_stream?phone_at=is.null&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
+  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&order=id.asc&limit=200");
+  const done = async (ids: number[], n: number, note: string | null) => { if (ids.length) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: n, phone_note: note }) }); };
   const go = quiet ? rows.filter((r) => r.level >= 3) : rows;
-  if (!go.length) return { pending: rows.length, sent: 0, quiet };
+  if (quiet) await done(rows.filter((r) => r.level < 3).map((r) => r.id), 0, "night");
+  if (!go.length) return { pending: 0, sent: 0, quiet };
   const subs = await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua");
   const iphoneOnWebPush = (subs || []).some((s: { ua: string | null; device: string | null }) => /iphone/i.test(String(s.ua || "") + String(s.device || "")));
   const useNtfy = !iphoneOnWebPush;
-  // alerts first, then the newest headlines singly; the surplus rides one line
-  const alerts = go.filter((r) => r.level >= 3), news = go.filter((r) => r.level < 3);
-  const single = alerts.concat(news.slice(-Math.max(0, MAX_PER_RUN - alerts.length))), rest = news.filter((r) => !single.includes(r));
+  const single = go.filter((r) => r.level >= 3).concat(go.filter((r) => r.level < 3)).slice(0, MAX_PER_RUN);   // what does not fit goes on the next minute's run
   let sent = 0, failed = 0; const errors: string[] = [];
-  const done = async (ids: number[], n: number, note: string | null) => { if (ids.length) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: n, phone_note: note }) }); };
-  if (rest.length) {
-    const tally = new Map<string, number>(); for (const r of rest) { const t = String(r.ticker || "market").split(" · ")[0]; tally.set(t, (tally.get(t) || 0) + 1); }
-    const top = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t, n]) => n > 1 ? t + " " + n : t).join(" · ");
-    const res = await sendOne(subs || [], useNtfy, { title: rest.length + " more headlines", body: top, url: "https://station.scintillahub.ai/notify/", tag: "digest|" + rest[rest.length - 1].id, level: 2 });
-    sent += res.sent; failed += res.failed; errors.push(...res.errors);
-    await done(rest.map((r) => r.id), res.sent, "in one line");
-  }
   for (const r of single) {
     const { title, body } = phoneLines(r);
-    const res = await sendOne(subs || [], useNtfy, { title, body, url: r.url || "https://station.scintillahub.ai/notify/", tag: r.key.slice(0, 60), level: r.level });
+    const res = await sendOne(subs || [], useNtfy, { title, body, url: r.url || "https://station.scintillahub.ai/notify/", tag: "card-" + r.id, level: r.level });   // by card id: a shared tag makes the phone replace the last alert, and keys often share their first 60 characters
     sent += res.sent; failed += res.failed; errors.push(...res.errors);
     await done([r.id], res.sent, res.errors[0] || null);
   }
   /* the phone route failing must not be silent: one card on the Macs an hour (level 1: it does not try the failing route again) */
   if (errors.length) { const hour = new Date().toISOString().slice(0, 13); await pg("notify_stream?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify([{ level: 1, kind: "ops", title: "Phone alerts are failing", body: errors[0], source: "SCINTILLA", key: "ops|phone-route|" + hour }]) }).catch(() => {}); }
-  return { pending: rows.length - go.length, single: single.length, rolled: rest.length, sent, failed, errors: errors.slice(0, 6), via: { webPush: (subs || []).length, ntfy: useNtfy && !!NTFY_TOPIC } };
+  return { pending: go.length - single.length, single: single.length, sent, failed, errors: errors.slice(0, 6), via: { webPush: (subs || []).length, ntfy: useNtfy && !!NTFY_TOPIC } };
 }
 
 /* one message to every subscription, with the log row written whatever happens */
