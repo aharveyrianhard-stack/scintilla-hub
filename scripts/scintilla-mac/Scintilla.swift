@@ -17,7 +17,7 @@ import WebKit
 import CoreGraphics
 import UserNotifications
 
-let VERSION = "2.0"
+let VERSION = "2.1"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -168,11 +168,12 @@ final class XPanel: NSPanel { override var canBecomeKey: Bool { true }; override
 final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
   static let shared = XColumn()
   var on: Bool { get { UserDefaults.standard.object(forKey: "xColumn") as? Bool ?? true } set { UserDefaults.standard.set(newValue, forKey: "xColumn"); tick() } }
-  private var textScale: Double { get { let v = UserDefaults.standard.double(forKey: "xScale"); return v > 0 ? v : 1 } set { UserDefaults.standard.set(newValue, forKey: "xScale") } }
+  private var textScale: Double { get { let v = UserDefaults.standard.double(forKey: "xText"); return v > 0 ? v : 1 } set { UserDefaults.standard.set(newValue, forKey: "xText") } }
   private var cfg: Config?; private var socket: URLSessionWebSocketTask?; private var panel: XPanel?; private var web: WKWebView?; private var popup: NSPanel?; private var shown = false; private var lastW: CGFloat = 0
   private struct Want { let show: Bool; let x, y, w, h, iw, ih, sw, sh: Double }
   private var want: Want?
-  func start(_ c: Config) { cfg = c; connect(); Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }; Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in self?.send(["topic": "phoenix", "event": "heartbeat", "payload": [String: Any](), "ref": "h"]) } }
+  private var signInB: NSButton?; private var signInPanel: NSPanel?; private var signInTimer: Timer?; private var signedIn: Bool?
+  func start(_ c: Config) { cfg = c; connect(); Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }; Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in self?.send(["topic": "phoenix", "event": "heartbeat", "payload": [String: Any](), "ref": "h"]) }; Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.checkSignIn() } }
   // the channel
   private func connect() {
     guard let c = cfg, let u = URL(string: c.url.replacingOccurrences(of: "https://", with: "wss://") + "/realtime/v1/websocket?apikey=" + c.anon + "&vsn=1.0.0") else { return }
@@ -235,7 +236,8 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
     if rect.width != lastW { lastW = rect.width; applyZoom() }
     if !shown { p.orderFrontRegardless(); shown = true }
   }
-  private func applyZoom() { web?.pageZoom = CGFloat(min(1, max(0.5, Double(lastW) / 380)) * textScale) }   // X's phone-width layout starts near 380 wide; the column is narrower than that on most screens
+  // 4 Nov, Alan: "make the fonts a little bit bigger". X fits a 320-wide page with nothing cut off (measured at columns of 192, 236 and 300), so the page is laid out for 320, not 380, and the posts' own text is set larger below.
+  private func applyZoom() { web?.pageZoom = CGFloat(min(1, max(0.6, Double(lastW) / 320)) * textScale) }
   private func build() {
     let p = XPanel(contentRect: NSRect(x: 0, y: 0, width: 240, height: 600), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     p.level = .floating; p.hidesOnDeactivate = false; p.isReleasedWhenClosed = false; p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]; p.backgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1); p.animationBehavior = .none; p.hasShadow = false
@@ -246,8 +248,10 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
     for (title, tip, sel) in [("⌂", "For You", #selector(goHome)), ("≡", "Your lists", #selector(goLists)), ("↻", "Refresh", #selector(refresh)), ("–", "Smaller", #selector(smaller)), ("+", "Bigger", #selector(bigger))] as [(String, String, Selector)] {
       let b = NSButton(title: title, target: self, action: sel); b.isBordered = false; b.font = .systemFont(ofSize: 13); b.contentTintColor = DIM; b.toolTip = tip; b.frame = NSRect(x: bx, y: 1, width: 24, height: 18); head.addSubview(b); bx += 26
     }
+    let si = NSButton(title: "Sign in", target: self, action: #selector(openSignIn)); si.isBordered = false; si.font = .systemFont(ofSize: 11, weight: .semibold); si.contentTintColor = NSColor(srgbRed: 0.2, green: 0.85, blue: 0.55, alpha: 1); si.toolTip = "This Mac is not signed in to X"; si.frame = NSRect(x: bx, y: 1, width: 48, height: 18); si.isHidden = true; head.addSubview(si); signInB = si
     let c = WKWebViewConfiguration(); c.websiteDataStore = .default(); c.mediaTypesRequiringUserActionForPlayback = .all
-    let v = WKWebView(frame: NSRect(x: 0, y: 0, width: 240, height: 600 - headH), configuration: c); v.autoresizingMask = [.width, .height]; v.navigationDelegate = self; v.uiDelegate = self; v.allowsBackForwardNavigationGestures = true; v.underPageBackgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1)
+    c.userContentController.addUserScript(WKUserScript(source: "(function(){var a=function(){if(document.getElementById('sc-x'))return;var e=document.createElement('style');e.id='sc-x';e.textContent=\"[data-testid='tweetText'],[data-testid='tweetText'] span{font-size:17px !important;line-height:1.3 !important}\";(document.head||document.documentElement).appendChild(e)};a();document.addEventListener('DOMContentLoaded',a)})()", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    let v = WKWebView(frame: NSRect(x: 0, y: 0, width: 240, height: 600 - headH), configuration: c); v.autoresizingMask = [.width, .height]; v.navigationDelegate = self; v.uiDelegate = self; v.allowsBackForwardNavigationGestures = false; v.underPageBackgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1)
     v.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"; root.addSubview(v)
     panel = p; web = v; v.load(URLRequest(url: URL(string: "https://x.com/home")!))
   }
@@ -256,6 +260,34 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
   @objc private func refresh() { web?.reload() }
   @objc private func smaller() { textScale = max(0.6, textScale - 0.08); applyZoom() }
   @objc private func bigger() { textScale = min(1.6, textScale + 0.08); applyZoom() }
+  // 4 Nov, Alan: "it makes me sign in all the time". Read that night: the MacBook's X sign-in had held since 3 Nov; the swipe back landed on the old sign-in page and only looked signed out. The iMac held no sign-in at all, and its column is too small to sign in on, so signing in gets a real window. Only the cookie's name is read, never its value; the log says when it changes, so the next sign-out names itself.
+  private func checkSignIn() {
+    guard let w = web else { return }
+    w.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] all in
+      guard let self = self else { return }
+      let has = all.contains { $0.name == "auth_token" && ($0.domain.hasSuffix("x.com") || $0.domain.hasSuffix("twitter.com")) }
+      if self.signedIn != has { let p = w.url?.path ?? ""; note("x " + (has ? "signed in" : "not signed in") + " at " + (p.contains("flow") || p.contains("login") || p.contains("logout") || p.contains("onboarding") ? p : "feed")); self.signedIn = has }
+      self.signInB?.isHidden = has
+      if has, let p = self.signInPanel { p.close(); self.signInPanel = nil; self.signInTimer?.invalidate(); self.signInTimer = nil; self.goHome() }
+      else if self.signInPanel?.isVisible != true { self.signInTimer?.invalidate(); self.signInTimer = nil }
+    }
+  }
+  @objc private func openSignIn() {
+    if signInPanel == nil {
+      let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 700), styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false); p.level = .floating; p.title = "Sign in to X"; p.center(); p.isReleasedWhenClosed = false
+      let c = WKWebViewConfiguration(); c.websiteDataStore = .default()
+      let v = WKWebView(frame: p.contentView!.bounds, configuration: c); v.autoresizingMask = [.width, .height]; v.uiDelegate = self; v.customUserAgent = web?.customUserAgent; p.contentView!.addSubview(v); v.load(URLRequest(url: URL(string: "https://x.com/i/flow/login")!)); signInPanel = p
+    }
+    signInPanel?.makeKeyAndOrderFront(nil)
+    if signInTimer == nil { signInTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkSignIn() } }
+  }
+  func webView(_ w: WKWebView, didFinish n: WKNavigation!) {
+    guard w === web else { return }
+    checkSignIn()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+      self?.web?.evaluateJavaScript("(function(){var t=document.querySelector('[data-testid=tweetText]');return 'page '+innerWidth+' wide '+document.scrollingElement.scrollWidth+' scroll, posts '+document.querySelectorAll('[data-testid=tweetText]').length+', text '+(t?getComputedStyle(t).fontSize:'none')})()") { r, _ in if let s = r as? String, let z = self?.web?.pageZoom { note("x view: " + s + ", zoom " + String(format: "%.2f", z)) } }
+    }
+  }
   private func isX(_ u: URL) -> Bool { let h = (u.host ?? "").lowercased(); return h == "x.com" || h.hasSuffix(".x.com") || h == "twitter.com" || h.hasSuffix(".twitter.com") }
   private func isSignIn(_ u: URL) -> Bool { let h = (u.host ?? "").lowercased(); return h.hasSuffix("google.com") || h.hasSuffix("apple.com") || h.hasSuffix("gstatic.com") }
   // a link out of X opens in the reader, so the column stays on X
