@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 4c5af11) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 87a6113) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -6233,9 +6233,17 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
   const SC_RANK_MAX_NAMED_ABSENT_SYMBOLS = 6;   // about 1% of the 590
   const cgAcc = SC_CG.meta && SC_CG.meta.accounting, cgCov = SC_CG.meta && SC_CG.meta.coverage;
   const cgMissing = cgCov && Array.isArray(cgCov.incomplete_symbols) ? cgCov.incomplete_symbols.length : null;
-  window.SC_RANK_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT &&
+  /* 16 Nov (coordinator; Alan: "the rankings of all the columns are not doing shit ... not market cap, not anything") —
+     ONLY THE GEIGER'S OWN COLUMNS WAIT FOR THE GEIGER. Every Geiger timeframe but the daily one had gone stale (the
+     intraday catch-up was off), the coverage test below failed for all 590 names, and MKT CAP, LAST, CHG, F P/E, REVENUE,
+     RSI and RVOL froze with the Geiger. SC_RANK_BASE_READY is the snapshot itself: the whole declared set with the
+     provider price and Geiger overlays applied (a value or an honest blank on every row). computeBoardOrder() ranks
+     GEIGER, TREND and MOMENTUM only on SC_RANK_READY (that snapshot plus a complete, validated Geiger) and every other
+     column on SC_RANK_BASE_READY, so a cold boot still never ranks on cached numbers. */
+  window.SC_RANK_BASE_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT &&
     (num(qOverlay.applied) || 0) + (num(qOverlay.blanked) || 0) === declaredSet.size &&
-    (num(gOverlay.applied) || 0) + (num(gOverlay.blanked) || 0) === declaredSet.size &&
+    (num(gOverlay.applied) || 0) + (num(gOverlay.blanked) || 0) === declaredSet.size;
+  window.SC_RANK_READY = declaredSet.size === SC_EXPECTED_EQUITY_COUNT && window.SC_RANK_BASE_READY === true &&
     !!(SC_CG.meta && SC_CG.meta.current_equalizer_validated === true &&
        SC_CG.meta.universe_digest === SC_EQUITY_UNIVERSE_DIGEST &&
        cgAcc && cgAcc.failed === 0 &&
@@ -8098,8 +8106,12 @@ function computeBoardOrder() {
      and cannot go stale.
      WHY THIS EXISTS: the default sort key is Geiger, and the cache seeded Geiger values at any
      age, so a cold boot could rank the entire board on day-old numbers and then visibly reorder
-     when the real ones arrived. */
-  if (key !== "t" && !window.SC_RANK_READY) return (S.rows || []).map((r) => r.t);
+     when the real ones arrived.
+     16 Nov (coordinator; Alan: "not market cap, not anything"): only GEIGER, TREND and MOMENTUM wait for a complete
+     Geiger (SC_RANK_READY); every other column ranks once the snapshot itself has landed (SC_RANK_BASE_READY). */
+  const geigerKey = key === "g" || key === "tr" || key === "mo";
+  const rankReady = !!window.SC_RANK_READY || (!geigerKey && !!window.SC_RANK_BASE_READY);
+  if (key !== "t" && !rankReady) return (S.rows || []).map((r) => r.t);
   /* S7 (2 Oct) — EMPTY LAST ON EVERY COLUMN, BOTH DIRECTIONS (F1 did it for RVOL on 1 Oct; the coordinator's call for the rest).
      A row whose cell shows a dash (or nothing) for the sorted column goes to the bottom whether the column is sorted highest
      first or lowest first, keeping its arrival order among the other empty rows. Before, an empty value counted as the lowest,
@@ -26100,8 +26112,10 @@ window.SC_GUARD = { refused_legacy_equity: 0, provider_applied: 0, nonequity_pas
                    refused_authority_unknown: 0 };
 /* Flipped true the first time a board build completes with the provider price and Geiger overlays
    applied. Until then every row's price and percentage is a placeholder and no dynamic column may
-   be ranked. Read by computeBoardOrder(). */
+   be ranked. Read by computeBoardOrder(). SC_RANK_BASE_READY (16 Nov) is the same snapshot without the Geiger
+   coverage test: it lets every column but GEIGER, TREND and MOMENTUM rank. */
 window.SC_RANK_READY = false;
+window.SC_RANK_BASE_READY = false;
 
 /* ── MACHINE-READABLE STATE ────────────────────────────────────────────────────────────────────
    Everything a machine needs to check this page WITHOUT reading pixels or parsing formatted text:

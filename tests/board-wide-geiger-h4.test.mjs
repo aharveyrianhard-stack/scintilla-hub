@@ -50,7 +50,13 @@ test("TREND and MOMENTUM carry sort keys and re-rank by what the board shows (a 
   assert.deepEqual(order("mo", 1, { SCIN_TM: live }), ["A", "B", "C", "D"], "ascending: the name with no reading still last");
   const shown = { A: { tr: 1, mo: 0 }, B: { tr: 0, mo: 0 }, C: { tr: 0.5, mo: 0 }, D: null };
   assert.deepEqual(order("tr", -1, { SCIN_TM: live, SCIN_TM_SHOWN: shown }), ["A", "C", "B", "D"], "the numbers on screen win");
-  assert.match(fn("computeBoardOrder"), /if \(key !== "t" && !window\.SC_RANK_READY\)/, "still no ranking before an authoritative snapshot");
+  /* 16 Nov (coordinator): the gate is now per column. TREND and MOMENTUM are the Geiger's own columns, so they still wait for
+     the full gate (SC_RANK_READY) even when the snapshot itself has landed; nothing ranks before the snapshot. */
+  assert.match(fn("computeBoardOrder"), /if \(key !== "t" && !rankReady\)/, "still no ranking before an authoritative snapshot");
+  assert.deepEqual(order("tr", -1, { SC_RANK_READY: false, SC_RANK_BASE_READY: true, SCIN_TM: live }), ["A", "B", "C", "D"],
+    "TREND waits for a complete Geiger");
+  assert.deepEqual(order("mo", -1, { SC_RANK_READY: false, SC_RANK_BASE_READY: true, SCIN_TM: live }), ["A", "B", "C", "D"],
+    "MOMENTUM waits for a complete Geiger");
 });
 
 test("the Geiger cell is a keyboard-reachable button for its breakdown, and the row still opens the company", () => {
