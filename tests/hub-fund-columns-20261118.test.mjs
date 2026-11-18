@@ -107,6 +107,10 @@ test("wiring: the universe never grows, the membership read is unchanged, the li
   assert.match(lite, /geigerMiniHTML\(r\.g, 1, true\)/, "the board's own Geiger bar, on the fixed −1 … +1");
   assert.ok(!/sc-board__row/.test(lite), "not a board row: no row code ever counts or sorts it");
   assert.match(page, /\.sc-lite:empty\{ display:none; \}/);
+  const q = fn("fundLiteQuotesLoad");
+  assert.match(q, /fetch\(SB \+ "\/functions\/v1\/fund-lite-quotes\?symbols=" \+ encodeURIComponent\(key\)/, "prices through the house's own door, one call for the rows on screen");
+  assert.match(q, /Date\.now\(\) - FUND_LITE_Q\.at < 60000\) \|\| Date\.now\(\) - FUND_LITE_Q\.failAt < 60000/, "at most once a minute, and a failure waits a minute");
+  assert.match(lite, /fundLiteQuotesLoad\(syms\)/);
 });
 
 test("the names file is deployed with the page and has the shape the page reads", () => {

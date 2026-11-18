@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 125b751) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 466c466) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -159,7 +159,9 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .sc-lite__hd{ display:flex; gap:10px; align-items:baseline; padding:9px 10px 5px; font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase; }
 .sc-lite__hd b{ color:var(--crk); font-weight:600; }
 .sc-lite__n{ margin-left:auto; color:var(--mute); white-space:nowrap; }
-.sc-lite__row{ display:grid; grid-template-columns:64px minmax(0,1fr) 54px minmax(90px,150px) 128px; align-items:center; gap:8px; padding:3px 10px; font-family:var(--mono); font-size:11px; color:var(--ink2); }
+.sc-lite__row{ display:grid; grid-template-columns:64px minmax(0,1fr) 54px 72px 64px minmax(90px,150px) 128px; align-items:center; gap:8px; padding:3px 10px; font-family:var(--mono); font-size:11px; color:var(--ink2); }
+.sc-lite__px, .sc-lite__c{ text-align:right; font-variant-numeric:tabular-nums; } .sc-lite__px{ color:var(--ink2); }
+.sc-lite__c.up{ color:var(--bull); } .sc-lite__c.dn{ color:var(--bear); } .sc-lite__c.na{ color:var(--mute); }
 .sc-lite__tk{ color:var(--ink); }
 .sc-lite__nm{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--mute); }
 .sc-lite__w{ text-align:right; color:var(--mute); font-variant-numeric:tabular-nums; }
@@ -8336,10 +8338,23 @@ function boardRowsHTML() {
    need like the fundamentals ... just basic info." Under a fund column's board (any fund on the holdings file: SPDR,
    iShares, Vanguard, RSPx, the index funds): the fund's biggest holdings that are NOT on the Hub, by weight, with the
    nightly daily Geiger (the off-Hub tier, /v1/scout-geiger: level, trend, momentum, the session it read). Never a board
-   row - not in the order, the count, the cohort mean or the universe. No price yet: that nightly read carries none. */
+   row - not in the order, the count, the cohort mean or the universe. Price and day % come from FMP through the house's own
+   door (Supabase function fund-lite-quotes: one batch call for the rows on screen, at most once a minute). */
 const FUND_LITE_MAX = 25;
 const FUND_NAMES_URL = "/deliverables/20261118/fund-lite/names.json";
 let FUND_NAMES = null, fundNamesReady = null, FUND_LITE_IX = null, FUND_NAMES_FAIL_AT = 0;
+let FUND_LITE_Q = { key: "", at: 0, map: {}, busy: false, failAt: 0 };
+/* the light rows' prices: one call for the names on screen, again after a minute; a failed call waits a minute too */
+function fundLiteQuotesLoad(syms) {
+  const key = syms.join(",");
+  if (!key || FUND_LITE_Q.busy || typeof fetch !== "function") return;
+  if ((FUND_LITE_Q.key === key && Date.now() - FUND_LITE_Q.at < 60000) || Date.now() - FUND_LITE_Q.failAt < 60000) return;
+  FUND_LITE_Q.busy = true;
+  fetch(SB + "/functions/v1/fund-lite-quotes?symbols=" + encodeURIComponent(key), { headers: { apikey: ANON, Authorization: "Bearer " + ANON } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+    .then((j) => { FUND_LITE_Q = { key, at: Date.now(), map: (j && j.quotes) || {}, busy: false, failAt: 0 }; fundLitePaint(); })
+    .catch(() => { FUND_LITE_Q.busy = false; FUND_LITE_Q.failAt = Date.now(); });
+}
 function fundNamesLoad() {
   if (!fundNamesReady) fundNamesReady = (typeof fetch === "function" ? fetch(FUND_NAMES_URL).then((r) => (r.ok ? r.json() : null)) : Promise.resolve(null))
     .then((j) => { if (j && j.names) FUND_NAMES = j.names; else { fundNamesReady = null; FUND_NAMES_FAIL_AT = Date.now(); } return FUND_NAMES; })
@@ -8387,6 +8402,11 @@ function fundLiteHTML(coh) {
   const L = fundLiteRows(coh, FUND_HOLD, scout, onHub, FUND_LITE_MAX);
   if (!L || !L.rows.length) return empty;
   const names = FUND_NAMES || {};
+  const syms = L.rows.map((r) => r.t); fundLiteQuotesLoad(syms);
+  const Q = FUND_LITE_Q.key === syms.join(",") ? FUND_LITE_Q.map : {};
+  const pxOf = (t) => { const q = Q[t]; return q && q.price != null && Number.isFinite(+q.price) ? (+q.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"; };
+  const chOf = (t) => { const q = Q[t], c = q && q.change_pct != null ? +q.change_pct : NaN; if (!Number.isFinite(c)) return '<span class="sc-lite__c na">—</span>';
+    return '<span class="sc-lite__c ' + (c >= 0 ? "up" : "dn") + '">' + (typeof fmtC === "function" ? fmtC(c) : (c >= 0 ? "+" : "−") + Math.abs(c).toFixed(2) + "%") + "</span>"; };
   return '<div class="sc-lite" id="fundLite" data-fund="' + esc(coh) + '" role="list" aria-label="' + esc(coh) + ' holdings not on the Hub">' +
     '<div class="sc-lite__hd"><b>also in ' + esc(coh) + '</b><span>not on the Hub · daily Geiger' + (L.session ? " · " + esc(fundLiteSess(L.session)) : "") +
       (L.alias ? " · its own list is not on file, " + esc(L.alias) + " stands in" : "") + '</span><span class="sc-lite__n">' + L.rows.length + " of " + L.off + "</span></div>" +
@@ -8394,6 +8414,7 @@ function fundLiteHTML(coh) {
       const nm = names[r.t] ? String(names[r.t][0] || "") : "";
       return '<div class="sc-lite__row" role="listitem" data-t="' + esc(r.t) + '" title="' + esc(r.t + (nm ? " · " + nm : "") + " · " + r.w.toFixed(2) + "% of " + coh) + '">' +
         '<span class="sc-lite__tk">' + esc(r.t) + '</span><span class="sc-lite__nm">' + esc(nm) + '</span><span class="sc-lite__w">' + r.w.toFixed(1) + "%</span>" +
+        '<span class="sc-lite__px">' + pxOf(r.t) + "</span>" + chOf(r.t) +
         geigerMiniHTML(r.g, 1, true) + '<span class="sc-lite__tm">trend ' + fundLiteNum(r.tr) + " · mom " + fundLiteNum(r.mo) + "</span></div>";
     }).join("") + "</div>";
 }
