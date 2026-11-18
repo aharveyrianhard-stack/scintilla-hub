@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 87a6113) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 125b751) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -153,6 +153,18 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 .ch > *{ min-width:0; overflow:hidden; }
 .sc-pending{ color:var(--dim); opacity:.75; letter-spacing:.08em; }
 .sc-board__pending{ padding:14px 10px; font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase; }
+/* 18 Nov — a fund's other holdings, light (fundLiteHTML): under the board's own rows, never one of them */
+.sc-lite{ border-top:1px solid var(--line); margin-top:6px; padding:2px 0 10px; }
+.sc-lite:empty{ display:none; }
+.sc-lite__hd{ display:flex; gap:10px; align-items:baseline; padding:9px 10px 5px; font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase; }
+.sc-lite__hd b{ color:var(--crk); font-weight:600; }
+.sc-lite__n{ margin-left:auto; color:var(--mute); white-space:nowrap; }
+.sc-lite__row{ display:grid; grid-template-columns:64px minmax(0,1fr) 54px minmax(90px,150px) 128px; align-items:center; gap:8px; padding:3px 10px; font-family:var(--mono); font-size:11px; color:var(--ink2); }
+.sc-lite__tk{ color:var(--ink); }
+.sc-lite__nm{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--mute); }
+.sc-lite__w{ text-align:right; color:var(--mute); font-variant-numeric:tabular-nums; }
+.sc-lite__tm{ font-size:9.5px; white-space:nowrap; color:var(--mute); font-variant-numeric:tabular-nums; }
+.sc-lite__tm .up{ color:var(--bull); } .sc-lite__tm .dn{ color:var(--bear); }
 /* FIX (Alan: "something crops the (parenthesis) of chg% on cmd +/- zoom") — the blanket
    overflow:hidden above is correct for the ticker/name cell (real ellipsis truncation),
    but the Chg/RSI/F P/E cells are short fixed-format numbers ("(1.60%)") that should
@@ -6111,6 +6123,7 @@ function boardScopeHas(cohort, t, homeCohort) {
   if (cohort === "ALL") return true;
   const k = cohKey(cohort);
   if (COHSETS && COHSETS[k]) return COHSETS[k].has(t);
+  if (typeof FUNDSETS !== "undefined" && FUNDSETS && FUNDSETS[k]) return FUNDSETS[k].has(t);   // 18 Nov — a broad fund: our names it holds
   return homeCohort === cohort;
 }
 let BOARD_SNAPSHOT = null;                         // { at, rows (whole universe, built by the latest pull), cohByT }
@@ -8316,7 +8329,82 @@ function boardRowsHTML() {
       (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
       "</div>";
-  }).join("");
+  }).join("") + (typeof fundLiteHTML === "function" ? fundLiteHTML(S.coh) : "");
+}
+/* 18 Nov 2026 — THE FUND'S OTHER HOLDINGS, LIGHT. Alan: "think of it like the off Geiger treatment, just like we don't need all
+   the drama ... some kind of like maybe daily Geiger ... level type thing, but then I can actually see it. I don't think we
+   need like the fundamentals ... just basic info." Under a fund column's board (any fund on the holdings file: SPDR,
+   iShares, Vanguard, RSPx, the index funds): the fund's biggest holdings that are NOT on the Hub, by weight, with the
+   nightly daily Geiger (the off-Hub tier, /v1/scout-geiger: level, trend, momentum, the session it read). Never a board
+   row - not in the order, the count, the cohort mean or the universe. No price yet: that nightly read carries none. */
+const FUND_LITE_MAX = 25;
+const FUND_NAMES_URL = "/deliverables/20261118/fund-lite/names.json";
+let FUND_NAMES = null, fundNamesReady = null, FUND_LITE_IX = null, FUND_NAMES_FAIL_AT = 0;
+function fundNamesLoad() {
+  if (!fundNamesReady) fundNamesReady = (typeof fetch === "function" ? fetch(FUND_NAMES_URL).then((r) => (r.ok ? r.json() : null)) : Promise.resolve(null))
+    .then((j) => { if (j && j.names) FUND_NAMES = j.names; else { fundNamesReady = null; FUND_NAMES_FAIL_AT = Date.now(); } return FUND_NAMES; })
+    .catch(() => { fundNamesReady = null; FUND_NAMES_FAIL_AT = Date.now(); return null; });
+  return fundNamesReady;
+}
+/* pure: a fund's holdings → its names off the Hub that have a daily reading, biggest weight first */
+function fundLiteRows(fund, hold, scout, onHub, max) {
+  const d = hold && hold.data, f = d && (d[fund] || d[FUND_HOLD_ALIAS[fund]]);
+  if (!f || !Array.isArray(f.h) || !scout || !Array.isArray(scout.rows)) return null;
+  const col = {}; (scout.row_columns || []).forEach((c, i) => { col[c] = i; });
+  let by = FUND_LITE_IX && FUND_LITE_IX.src === scout ? FUND_LITE_IX.by : null, newest = by ? FUND_LITE_IX.newest : "";
+  if (!by) {
+    by = new Map(); newest = "";
+    for (const r of scout.rows) { by.set(fundTk(r[col.ticker]), r); const ls = String(r[col.last_session] || ""); if (ls > newest) newest = ls; }
+    FUND_LITE_IX = { src: scout, by, newest };
+  }
+  /* a reading more than a week older than the newest session is a name that stopped trading or changed its ticker (ANTM, 27 Jun) */
+  const oldest = newest ? new Date(Date.parse(newest.slice(0, 10) + "T00:00:00Z") - 7 * 86400000).toISOString().slice(0, 10) : "";
+  const out = [], seen = new Set(); let off = 0;
+  for (const h of f.h.slice().sort((a, b) => (+(b && b[1]) || 0) - (+(a && a[1]) || 0))) {
+    const t = fundTk(h && h[0]); if (!t || seen.has(t)) continue; seen.add(t);
+    if (onHub && onHub.has(t)) continue;
+    const r = by.get(t); if (!r || r[col.composite] == null || !Number.isFinite(+r[col.composite])) continue;   /* no daily reading: cash lines, foreign listings, old tickers */
+    if (oldest && String(r[col.last_session] || "").slice(0, 10) < oldest) continue;
+    off++;
+    if (out.length < (max || FUND_LITE_MAX)) out.push({ t, w: +h[1] || 0, g: +r[col.composite],
+      tr: r[col.trend] == null ? null : +r[col.trend], mo: r[col.momentum] == null ? null : +r[col.momentum], s: r[col.last_session] || null });
+  }
+  return { rows: out, off, total: f.h.length, alias: d[fund] ? null : (FUND_HOLD_ALIAS[fund] || null), session: newest || null };
+}
+const fundLiteSess = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || "")); return m ? (+m[3]) + " " + ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][+m[2] - 1] + " close" : ""; };
+const fundLiteNum = (v) => v == null || !Number.isFinite(v) ? "—" : '<span class="' + (v >= 0 ? "up" : "dn") + '">' + (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "</span>";
+function fundLiteHTML(coh) {
+  if (!coh || coh === "ALL" || (typeof isListCoh === "function" && isListCoh(coh))) return "";
+  const empty = '<div class="sc-lite" id="fundLite" data-fund="' + esc(coh) + '"></div>';
+  /* a read that failed waits a minute before the next try - a paint never starts a loop of reads */
+  if (!FUND_HOLD) { if (Date.now() - FUND_HOLD_FAIL_AT > 60000) fundSetsLoad().then(() => { if (FUND_HOLD) fundLitePaint(); }); return empty; }
+  const d = FUND_HOLD.data; if (!d || !(d[coh] || d[FUND_HOLD_ALIAS[coh]])) return "";
+  const scout = typeof SC_BLEND !== "undefined" ? SC_BLEND.scout : null;
+  if (!scout) { const p = typeof scBlendLoad === "function" ? scBlendLoad() : null; if (p && p.then) p.then(() => { if (SC_BLEND.scout) fundLitePaint(); }); return empty; }
+  const onHub = window.SC_DECLARED_SET;
+  if (!onHub || !onHub.size) return empty;   /* without the Hub's own set every holding would look "off the Hub" */
+  if (!FUND_NAMES && Date.now() - FUND_NAMES_FAIL_AT > 60000) fundNamesLoad().then(() => { if (FUND_NAMES) fundLitePaint(); });
+  const L = fundLiteRows(coh, FUND_HOLD, scout, onHub, FUND_LITE_MAX);
+  if (!L || !L.rows.length) return empty;
+  const names = FUND_NAMES || {};
+  return '<div class="sc-lite" id="fundLite" data-fund="' + esc(coh) + '" role="list" aria-label="' + esc(coh) + ' holdings not on the Hub">' +
+    '<div class="sc-lite__hd"><b>also in ' + esc(coh) + '</b><span>not on the Hub · daily Geiger' + (L.session ? " · " + esc(fundLiteSess(L.session)) : "") +
+      (L.alias ? " · its own list is not on file, " + esc(L.alias) + " stands in" : "") + '</span><span class="sc-lite__n">' + L.rows.length + " of " + L.off + "</span></div>" +
+    L.rows.map((r) => {
+      const nm = names[r.t] ? String(names[r.t][0] || "") : "";
+      return '<div class="sc-lite__row" role="listitem" data-t="' + esc(r.t) + '" title="' + esc(r.t + (nm ? " · " + nm : "") + " · " + r.w.toFixed(2) + "% of " + coh) + '">' +
+        '<span class="sc-lite__tk">' + esc(r.t) + '</span><span class="sc-lite__nm">' + esc(nm) + '</span><span class="sc-lite__w">' + r.w.toFixed(1) + "%</span>" +
+        geigerMiniHTML(r.g, 1, true) + '<span class="sc-lite__tm">trend ' + fundLiteNum(r.tr) + " · mom " + fundLiteNum(r.mo) + "</span></div>";
+    }).join("") + "</div>";
+}
+/* repaint the light list alone when its data arrives (the board's own rows are not touched) */
+function fundLitePaint() {
+  if (typeof document === "undefined") return;
+  const box = document.getElementById("fundLite"); if (!box) return;
+  const html = fundLiteHTML(S.coh);
+  if (!html) { box.remove(); return; }
+  const t = document.createElement("div"); t.innerHTML = html;
+  const nb = t.firstElementChild; if (nb && nb.outerHTML !== box.outerHTML) box.replaceWith(nb);
 }
 
 /* ---- Room 2 · DASHBOARD ------------------------------------------------------ */
@@ -11707,9 +11795,38 @@ let COHSETS = null;          // cohort → Set(tickers) — the ONE full map
 const SPDR_TO_SECTOR = { XLB:"MATERIALS", XLE:"ENERGY", XLF:"FINANCIALS", XLI:"INDUSTRIAL",
   XLK:"TECH", XLP:"STAPLES", XLRE:"REAL_ESTATE", XLU:"UTILITIES", XLV:"HEALTH",
   XLY:"DISCRET", XLC:"COMMS" };
+/* 18 Nov 2026 — Alan: "I'm clicking around between the sectors. But there's a lot of these that don't have securities in
+   the cohort ... when I click on them. Can we load some of those." The iShares, Vanguard and equal-weight (RSPx) columns
+   sit in the same eleven slots as the SPDRs (SECT_FAMILY_FUNDS) and stand for the same sector, but had no key of their
+   own: 33 columns opened an empty board. They resolve to their slot's sector, exactly as the SPDR beside them. */
+const FAMILY_TO_SECTOR = {
+  IYM:"MATERIALS", IYE:"ENERGY", IYF:"FINANCIALS", IYJ:"INDUSTRIAL", IYW:"TECH", IYK:"STAPLES", IYR:"REAL_ESTATE", IDU:"UTILITIES", IYH:"HEALTH", IYC:"DISCRET", IYZ:"COMMS",
+  VAW:"MATERIALS", VDE:"ENERGY", VFH:"FINANCIALS", VIS:"INDUSTRIAL", VGT:"TECH", VDC:"STAPLES", VNQ:"REAL_ESTATE", VPU:"UTILITIES", VHT:"HEALTH", VCR:"DISCRET", VOX:"COMMS",
+  RSPM:"MATERIALS", RSPG:"ENERGY", RSPF:"FINANCIALS", RSPN:"INDUSTRIAL", RSPT:"TECH", RSPS:"STAPLES", RSPR:"REAL_ESTATE", RSPU:"UTILITIES", RSPH:"HEALTH", RSPD:"DISCRET", RSPC:"COMMS" };
 function cohKey(k){
   if (COHSETS && COHSETS[k]) return k;               // a real cohort/sector key already
-  return SPDR_TO_SECTOR[k] || k;                     // otherwise try the SPDR mapping
+  return SPDR_TO_SECTOR[k] || FAMILY_TO_SECTOR[k] || k;   // otherwise the sector the fund's slot stands for (SPDR, iShares, Vanguard, RSPx)
+}
+/* 18 Nov — THE BROAD FUNDS. The INDEX FUNDS card (SPY QQQ DIA IWM MDY IJR RSP QQQE IWV ITOT VTI) and BREADTH's RSP / QQQE /
+   EQAL have no sector: their column is OUR names the fund holds, read from the holdings file the compare strip already
+   loads (FMP /stable/etf/holdings, weights; scBlendLoad). Kept apart from COHSETS on purpose: the board's universe is the
+   declared set plus the membership pull, and a fund's holdings must never add a name to it (the 590-name digest). */
+const FUND_HOLD_URL = "/deliverables/20260928/coverage-tree/data/holdings.json";
+const FUND_HOLD_ALIAS = { EQAL: "IWV" };   /* EQAL's own list is not on file; the Russell 3000 stands in, and the board says so */
+let FUNDSETS = null, FUND_HOLD = null, fundSetsReady = null, FUND_HOLD_FAIL_AT = 0;
+const fundTk = (t) => String(t == null ? "" : t).trim().toUpperCase().replace(/\./g, "-");
+function buildFundSets(hold) {                           // pure: the holdings file → { fund: Set(tickers) }
+  const out = {}, d = hold && hold.data;
+  if (!d) return out;
+  for (const f in d) { const h = d[f] && d[f].h; if (Array.isArray(h)) out[f] = new Set(h.map((r) => fundTk(r && r[0])).filter(Boolean)); }
+  for (const a in FUND_HOLD_ALIAS) if (!out[a] && out[FUND_HOLD_ALIAS[a]]) out[a] = out[FUND_HOLD_ALIAS[a]];
+  return out;
+}
+function fundSetsLoad() {
+  if (!fundSetsReady) fundSetsReady = (typeof fetch === "function" ? fetch(FUND_HOLD_URL).then((r) => (r.ok ? r.json() : null)) : Promise.resolve(null))
+    .then((j) => { if (j) { FUND_HOLD = j; FUNDSETS = buildFundSets(j); } else { fundSetsReady = null; FUND_HOLD_FAIL_AT = Date.now(); } return FUNDSETS; })
+    .catch(() => { fundSetsReady = null; FUND_HOLD_FAIL_AT = Date.now(); return null; });   /* never fails the board: a fund column just stays as it was */
+  return fundSetsReady;
 }
 let cohSetsReady = null;
 function loadCohSets() {
@@ -11718,9 +11835,10 @@ function loadCohSets() {
      (7 of 12 left), AI_HARDWARE lost 15 of 43 (AMD, AVGO, NBIS, ARM, SMCI, VRT ...) - so those names were missing from
      their cohort's board, and the cohort means on the compare strip were taken over the wrong members. Same reader and
      paging as the estimates (pgAll); the explicit order keeps the pages disjoint. */
+  const fundsRead = typeof fundSetsLoad === "function" ? fundSetsLoad() : Promise.resolve(null);   /* 18 Nov — the broad funds' holdings, in parallel; resolves (null) even when it fails */
   if (!cohSetsReady) cohSetsReady = pgAll("ticker_cohorts?select=ticker,cohort&order=ticker.asc,cohort.asc").then((ms) => {   // FIX (R2026-07-22) — was reading the legacy single-cohort `cohorts` view; ticker_cohorts is the real multi-membership table (same primary per ticker, PLUS secondary rows like ETF->INDEXES)
     COHSETS = buildCohSets(ms);
-    return COHSETS;
+    return fundsRead.then(() => COHSETS);
   }).catch((e) => { cohSetsReady = null; throw e; });   // retry on next call if the pull failed
   return cohSetsReady;
 }
