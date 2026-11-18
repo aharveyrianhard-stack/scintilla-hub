@@ -17,7 +17,7 @@ import WebKit
 import CoreGraphics
 import UserNotifications
 
-let VERSION = "2.1"
+let VERSION = "2.2"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -166,6 +166,7 @@ final class Reader: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelega
 let STATION_OWNER = "SCINTILLA Station"
 final class XPanel: NSPanel { override var canBecomeKey: Bool { true }; override var canBecomeMain: Bool { false } }
 final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
+  private var urlWatch: NSKeyValueObservation?
   static let shared = XColumn()
   var on: Bool { get { UserDefaults.standard.object(forKey: "xColumn") as? Bool ?? true } set { UserDefaults.standard.set(newValue, forKey: "xColumn"); tick() } }
   private var textScale: Double { get { let v = UserDefaults.standard.double(forKey: "xText"); return v > 0 ? v : 1 } set { UserDefaults.standard.set(newValue, forKey: "xText") } }
@@ -254,6 +255,8 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
     let v = WKWebView(frame: NSRect(x: 0, y: 0, width: 240, height: 600 - headH), configuration: c); v.autoresizingMask = [.width, .height]; v.navigationDelegate = self; v.uiDelegate = self; v.allowsBackForwardNavigationGestures = false; v.underPageBackgroundColor = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 1)
     v.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"; root.addSubview(v)
     panel = p; web = v; v.load(URLRequest(url: URL(string: "https://x.com/home")!))
+    // 2.2: X changes pages inside itself (a post, back to the feed) without a page load; the address change goes in the log too
+    urlWatch = v.observe(\.url, options: [.new]) { wv, _ in if let u = wv.url { note("x at: " + (u.host ?? "") + u.path) } }
   }
   @objc private func goHome() { web?.load(URLRequest(url: URL(string: "https://x.com/home")!)) }
   @objc private func goLists() { if let u = web?.url, let name = u.path.split(separator: "/").first, !["home", "i", "search", "explore", "notifications", "messages"].contains(String(name)) { web?.load(URLRequest(url: URL(string: "https://x.com/" + name + "/lists")!)) } else { web?.load(URLRequest(url: URL(string: "https://x.com/i/lists")!)) } }
@@ -292,6 +295,12 @@ final class XColumn: NSObject, WKNavigationDelegate, WKUIDelegate {
   private func isSignIn(_ u: URL) -> Bool { let h = (u.host ?? "").lowercased(); return h.hasSuffix("google.com") || h.hasSuffix("apple.com") || h.hasSuffix("gstatic.com") }
   // a link out of X opens in the reader, so the column stays on X
   func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+    // 2.2, 18 Nov. Alan: "it was like a browser. So it kind of like did back". Every page load in the column goes in the log with how it
+    // started (link, back/forward, reload, other), so the next jump names itself. Swipe-back has been off here since 2.1.
+    if w === web, a.targetFrame?.isMainFrame ?? true, let u = a.request.url {
+      let how: String; switch a.navigationType { case .backForward: how = "back/forward"; case .linkActivated: how = "link"; case .reload: how = "reload"; case .formSubmitted: how = "form"; default: how = "other" }
+      note("x load \(how): " + (u.host ?? "") + u.path)
+    }
     if a.navigationType == .linkActivated, let u = a.request.url, !isX(u), !isSignIn(u) { Reader.shared.open(u, title: u.host ?? "X"); decisionHandler(.cancel); return }
     decisionHandler(.allow)
   }
@@ -345,8 +354,22 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
       let now = "status \(s.authorizationStatus.rawValue) banners \(s.alertStyle.rawValue)"; if now != self.said { self.said = now; note(now) }
     } } }
   }
+  // 2.2, 18 Nov. Alan (relayed by the market-research session): notifications grouped "as if they were separate apps by topic", the
+  // single stream is too many to parse. macOS stacks one thread's notifications together in Notification Center: each topic its own
+  // box. The words stay the phone's (same lines everywhere); only the grouping is new.
+  static func topic(_ it: Item) -> String {
+    let k = it.kind.lowercased(), s = (it.source ?? "").lowercased()
+    if k == "urth" { return "Urth" }
+    if k == "system" || k == "ops" { return "System" }
+    if k == "home" || k == "lights" || s.contains("hue") || s.contains("lights") { return "Lights & home" }
+    if k == "research" { return "Research" }
+    if k == "video" { return "Video" }
+    if s == "volume pulse" || it.title.lowercased().hasPrefix("volume") { return "Volume" }
+    return "Markets"
+  }
   func post(_ it: Item) {
     let n = UNMutableNotificationContent(); (n.title, n.body) = alertLines(it)
+    n.threadIdentifier = Banners.topic(it)
     n.userInfo = ["url": it.url ?? "", "reader": [it.ticker, it.source].compactMap { $0 }.joined(separator: " · ")]
     // 1 Nov: "those Urth ones should be Urth branded". Their mark comes along; macOS moves the file it is given, so it gets a copy.
     if it.kind == "urth", let p = Bundle.main.url(forResource: "urth", withExtension: "png") {
