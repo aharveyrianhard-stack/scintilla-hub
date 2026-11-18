@@ -357,14 +357,21 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
   // 2.2, 18 Nov. Alan (relayed by the market-research session): notifications grouped "as if they were separate apps by topic", the
   // single stream is too many to parse. macOS stacks one thread's notifications together in Notification Center: each topic its own
   // box. The words stay the phone's (same lines everywhere); only the grouping is new.
+  // Same day, the same session: an "Economy & earnings" box too ("Fed minutes, CPI, earnings dates"). That box holds the scheduled
+  // events: our earnings reports and transcripts, and any alert that names a release. Macro news stays with the market news.
+  // Press releases get a box of their own: about 140 a day, the biggest stream; on 18 Nov the 14:00 Fed minutes alert went to both
+  // Macs and the phone but sat in one list among about 100 alerts that hour, mostly press releases, and he never saw it.
   static func topic(_ it: Item) -> String {
     let k = it.kind.lowercased(), s = (it.source ?? "").lowercased()
     if k == "urth" { return "Urth" }
     if k == "system" || k == "ops" { return "System" }
     if k == "home" || k == "lights" || s.contains("hue") || s.contains("lights") { return "Lights & home" }
+    if ["actual", "transcript", "earnings", "econ", "calendar"].contains(k) || s == "economy" || s == "earnings" { return "Economy & earnings" }
+    if k == "alert", it.title.range(of: #"\b(fomc|fed minutes|minutes are out|rate decision|cpi|ppi|pce|payrolls|jobs report|nonfarm|jobless claims|gdp|retail sales|ism|earnings)\b"#, options: [.regularExpression, .caseInsensitive]) != nil { return "Economy & earnings" }
     if k == "research" { return "Research" }
     if k == "video" { return "Video" }
     if s == "volume pulse" || it.title.lowercased().hasPrefix("volume") { return "Volume" }
+    if k == "press" { return "Press releases" }
     return "Markets"
   }
   func post(_ it: Item) {
