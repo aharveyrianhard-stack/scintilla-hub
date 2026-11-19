@@ -108,7 +108,12 @@ async function phoneFanOut(dry = false) {
   const quiet = await rpc("push_quiet_now");
   const stale = new Date(Date.now() - STALE_MIN * 60000).toISOString();
   if (!dry) await pg("notify_stream?phone_at=is.null&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
-  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key,phone_box&phone_at=is.null&order=id.asc&limit=200");
+  /* v14 (19 Nov 18:30 ET, Alan: "the same alert on all devices at the same time"): a new card now starts this pass the moment it lands
+     (trigger notify_stream_kick_phone) as well as every minute, so runs can overlap. The real pass CLAIMS its cards
+     (notify_claim_phone: FOR UPDATE SKIP LOCKED, marked 'sending'), so no two runs ever take the same card. The dry run only reads. */
+  const rows: Row[] = dry
+    ? await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key,phone_box&phone_at=is.null&order=id.asc&limit=200")
+    : ((await rpc("notify_claim_phone", { p_limit: quiet ? 200 : MAX_PER_RUN })) || []);
   const done = async (ids: number[], n: number, note: string | null) => { if (ids.length && !dry) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: n, phone_note: note }) }); };
   const go = quiet ? rows.filter((r) => r.level >= 3) : rows;
   if (quiet) await done(rows.filter((r) => r.level < 3).map((r) => r.id), 0, "night");
@@ -117,7 +122,12 @@ async function phoneFanOut(dry = false) {
   const iphoneOnWebPush = subs.some((s) => /iphone/i.test(String(s.ua || "") + String(s.device || "")));
   const useNtfy = !iphoneOnWebPush;
   const single = go.filter((r) => r.level >= 3).concat(go.filter((r) => r.level < 3)).slice(0, MAX_PER_RUN);   // what does not fit goes on the next minute's run
+  /* v14: a claimed card this run does not send goes back in the queue (never stuck as 'sending') */
+  const release = async (ids: number[]) => { if (ids.length && !dry) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: null, phone_note: null }) }); };
+  await release(go.filter((r) => !single.includes(r)).map((r) => r.id));
+  const doneIds = new Set<number>();
   let sent = 0, failed = 0; const errors: string[] = [], plan: unknown[] = [];
+  try {
   for (const r of single) {
     const { title, body } = phoneLines(r);
     /* 2 Nov: a tap opens this card's own page, which goes on to the story. An iPhone Home Screen app will not reliably open another site directly from a notification (it brought back the feed). */
@@ -128,7 +138,9 @@ async function phoneFanOut(dry = false) {
     const res = await sendOne(to, useNtfy, { title, body, url: "https://station.scintillahub.ai/notify/card.html" + q, tag: "card-" + r.id, level: r.level });   // by card id: a shared tag makes the phone replace the last alert, and keys often share their first 60 characters
     sent += res.sent; failed += res.failed; errors.push(...res.errors);
     await done([r.id], res.sent, res.errors[0] || null);
+    doneIds.add(r.id);
   }
+  } catch (e) { await release(single.filter((r) => !doneIds.has(r.id)).map((r) => r.id)); throw e; }
   if (dry) return { dry, quiet, waiting: go.length, devices: subs.map((s) => (s.device || "?") + "/" + (s.box || "all")), plan };
   /* the phone route failing must not be silent: one card on the Macs an hour (level 1: it does not try the failing route again) */
   if (errors.length) { const hour = new Date().toISOString().slice(0, 13); await pg("notify_stream?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify([{ level: 1, kind: "ops", title: "Phone alerts are failing", body: errors[0], source: "SCINTILLA", key: "ops|phone-route|" + hour }]) }).catch(() => {}); }
