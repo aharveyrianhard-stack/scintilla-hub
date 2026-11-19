@@ -367,17 +367,24 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
   // So: the box comes from the database (public.notify_topic, changeable without a rebuild, because a rebuild empties his list), its name
   // is the subtitle of every alert, and before each post the app keeps the list at 96 by removing the OLDEST alert of the FULLEST box.
   // A quiet box (Economy & earnings, a few a day) is never pushed out by a busy one (press releases, ~140 a day).
-  static let keep = 96
-  // which alerts leave so that `incoming` new ones fit under `keep`: always the oldest of the box holding the most (new ones included in the count)
-  static func pickDrops(_ have: [(id: String, box: String, date: Date)], incoming: [String], keep: Int) -> [String] {
+  // 10:20 ET, his follow-up: "if we don't have to design it perfectly, just improve it a bit. I'll tell you how I feel about it." A few
+  // broad boxes, not one per watcher: Markets & headlines, Press releases, Earnings, Fed & macro, Research, Video, Home, Urth, System.
+  // The names live in the database only; when he asks for a change, replace public.notify_topic (no rebuild, his list stays).
+  static let keep = 96, maxAge: TimeInterval = 36 * 3600
+  // which alerts leave so that `incoming` new ones fit under `keep`: first anything older than a day and a half (so a box that was renamed
+  // or retired empties itself), then always the oldest of the box holding the most (new ones included in the count)
+  static func pickDrops(_ have: [(id: String, box: String, date: Date)], incoming: [String], keep: Int, now: Date = Date()) -> [String] {
     var excess = have.count + incoming.count - keep
     if excess <= 0 { return [] }
+    var drops: [String] = []
+    for s in have.filter({ now.timeIntervalSince($0.date) > maxAge }).sorted(by: { $0.date < $1.date }) where excess > 0 { drops.append(s.id); excess -= 1 }
+    if excess <= 0 { return drops }
+    let gone = Set(drops)
     var byBox: [String: [(id: String, date: Date)]] = [:]
-    for h in have { byBox[h.box, default: []].append((h.id, h.date)) }
+    for h in have where !gone.contains(h.id) { byBox[h.box, default: []].append((h.id, h.date)) }
     for k in Array(byBox.keys) { byBox[k]!.sort { $0.date < $1.date } }
     var count: [String: Int] = byBox.mapValues { $0.count }
     for t in incoming { count[t, default: 0] += 1 }
-    var drops: [String] = []
     while excess > 0 {
       let candidates = byBox.filter { !$0.value.isEmpty }.keys
       guard let box = candidates.max(by: { a, b in
