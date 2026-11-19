@@ -9,6 +9,9 @@
 //   POST ?mode=stream                → 1 Nov: THE PHONE'S END OF THE SWITCHBOARD (public.notify_stream). Every minute: level 3 goes at once, level 2 goes outside the quiet window, at most
 //                                      MAX_PER_RUN singly and the rest as one line; what waited overnight arrives as one line in the morning. Goes to every device that allowed Web Push (logo)
 //                                      and, while the iPhone has not, to the ntfy app it already has (NTFY_TOPIC in this function's secrets, never printed).
+//   POST ?mode=stream&dry=1          → v13: the routing plan for the waiting cards (which device and box each would go to); sends nothing, marks nothing.
+//   v13, 19 Nov 2026 — THE PHONE'S BOXES: a card goes to the Home Screen app of its box (push_subscriptions.box); the all-in-one app keeps every card
+//                                      whose box that same device has not added. ?mode=test takes { device, box } to reach one test device only.
 //
 // THE RULES (enforced here AND readable in SQL: push_can_send_now()):
 //   · never more than one push a minute (push_log: a sent row in the last 60 s declines this one, logged as 'rate limit')
@@ -54,12 +57,12 @@ async function authorized(req: Request) {
   return false;
 }
 
-type Msg = { kind: string; key: string; title: string; body?: string; url?: string; at?: string };
+type Msg = { kind: string; key: string; title: string; body?: string; url?: string; at?: string; device?: string; box?: string };
 
 /* ---- 1 Nov: the phone's end of the switchboard ---- */
 const NTFY_TOPIC = Deno.env.get("NTFY_TOPIC") || "";
 const MAX_PER_RUN = 40, STALE_MIN = 30;
-type Row = { id: number; level: number; kind: string; ticker: string | null; title: string; body: string | null; source: string | null; url: string | null; pct: number | null; key: string };
+type Row = { id: number; level: number; kind: string; ticker: string | null; title: string; body: string | null; source: string | null; url: string | null; pct: number | null; key: string; phone_box?: string | null };
 const pctText = (v: number | null) => v == null ? "" : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
 /* 2 Nov. Alan: "Notifications on the phone are different ... It's not the same thing with the sentence and the summary ... Everything needs to match on iPhone, iMac, and MacBook Pro. Same things."
    The same card as the Macs (Scintilla.swift CardView): the name, the day's move and where it came from, then the headline, then its second line. */
@@ -68,12 +71,25 @@ function phoneLines(r: Row) {
   const who = r.kind === "urth" ? "URTH" : r.kind === "system" ? "THIS MAC" : isVolume ? "VOLUME" : r.ticker || (r.level >= 3 ? "SCINTILLA" : "MARKET");
   return { title: [who, pctText(r.pct)].filter(Boolean).join(" ") + (r.source ? " · " + r.source : ""), body: r.title + (r.body ? "\n" + r.body : "") };
 }
-async function sendOne(subs: Array<{ endpoint: string; p256dh: string; auth: string; device: string | null; ua: string | null }>, useNtfy: boolean, m: { title: string; body: string; url: string; tag: string; level: number }) {
+type Sub = { endpoint: string; p256dh: string; auth: string; device: string | null; ua: string | null; box: string | null; url?: string };
+/* 19 Nov (coordinator). THE PHONE'S BOXES. Alan, 12:33 ET (relayed): "what are we gonna do about the notification center on the phone, buddy?" The Macs file
+   alerts in topic boxes; on the iPhone each Home Screen web app is its own stack in Notification Center, so each box is its own small app
+   (station.scintillahub.ai/notify/b/<box>/, built by notify/b/build-boxes.py in the Station repo). The database files every card in a phone box
+   (public.phone_box over public.notify_topic - re-box there, nothing to rebuild). A box app (push_subscriptions.box set) gets its box's cards; the
+   all-in-one app (box null) keeps every card whose box the same device (push_subscriptions.device) has not added - so nothing arrives twice and
+   nothing is lost while he adds the boxes one by one. A box app the phone has deleted answers 410 and is dropped, and its cards go back to the all-in-one. */
+const BOX_CARD = (box: string) => "https://station.scintillahub.ai/notify/b/" + box + "/card.html";
+function routeFor(subs: Sub[], box: string) {
+  const added = new Set(subs.filter((s) => s.box === box).map((s) => s.device || ""));
+  return subs.filter((s) => (s.box ? s.box === box : !added.has(s.device || "")));
+}
+async function sendOne(subs: Sub[], useNtfy: boolean, m: { title: string; body: string; url: string; tag: string; level: number }) {
   let sent = 0, failed = 0; const errors: string[] = [];
-  const payload = JSON.stringify({ title: m.title.slice(0, 120), body: m.body.slice(0, 300), url: m.url, tag: m.tag, at: new Date().toISOString() });
+  const payloads = new Map<string, string>(), at = new Date().toISOString();
+  const payloadFor = (url: string) => { let p = payloads.get(url); if (!p) { p = JSON.stringify({ title: m.title.slice(0, 120), body: m.body.slice(0, 300), url, tag: m.tag, at }); payloads.set(url, p); } return p; };
   for (const s of subs) {
     try {
-      const r = await sendPush(s, payload, VAPID, { ttl: 3600, urgency: m.level >= 3 ? "high" : "normal", topic: null });
+      const r = await sendPush(s, payloadFor(s.url || m.url), VAPID, { ttl: 3600, urgency: m.level >= 3 ? "high" : "normal", topic: null });
       const ep = "push_subscriptions?endpoint=eq." + encodeURIComponent(s.endpoint);
       if (r.status >= 200 && r.status < 300) { sent++; await pg(ep, { method: "PATCH", body: JSON.stringify({ last_ok_at: new Date().toISOString(), failures: 0, last_error: null }) }); }
       else if (r.status === 404 || r.status === 410) { await pg(ep, { method: "DELETE" }); }
@@ -86,29 +102,34 @@ async function sendOne(subs: Array<{ endpoint: string; p256dh: string; auth: str
   }
   return { sent, failed, errors };
 }
-async function phoneFanOut() {
+async function phoneFanOut(dry = false) {
   // every card the Macs show, one by one, no roll-ups. At night only level 3 buzzes the phone; the rest stay in the list and are not sent later in a burst.
+  // dry (v13): the routing plan for what is waiting - nothing is sent and nothing is marked
   const quiet = await rpc("push_quiet_now");
   const stale = new Date(Date.now() - STALE_MIN * 60000).toISOString();
-  await pg("notify_stream?phone_at=is.null&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
-  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&phone_at=is.null&order=id.asc&limit=200");
-  const done = async (ids: number[], n: number, note: string | null) => { if (ids.length) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: n, phone_note: note }) }); };
+  if (!dry) await pg("notify_stream?phone_at=is.null&at=lt." + encodeURIComponent(stale), { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: 0, phone_note: "too old" }) });
+  const rows: Row[] = await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key,phone_box&phone_at=is.null&order=id.asc&limit=200");
+  const done = async (ids: number[], n: number, note: string | null) => { if (ids.length && !dry) await pg("notify_stream?id=in.(" + ids.join(",") + ")", { method: "PATCH", body: JSON.stringify({ phone_at: new Date().toISOString(), phone_sent: n, phone_note: note }) }); };
   const go = quiet ? rows.filter((r) => r.level >= 3) : rows;
   if (quiet) await done(rows.filter((r) => r.level < 3).map((r) => r.id), 0, "night");
-  if (!go.length) return { pending: 0, sent: 0, quiet };
-  const subs = await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua");
-  const iphoneOnWebPush = (subs || []).some((s: { ua: string | null; device: string | null }) => /iphone/i.test(String(s.ua || "") + String(s.device || "")));
+  const subs: Sub[] = (await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua,box")) || [];
+  if (!go.length) return { pending: 0, sent: 0, quiet, ...(dry ? { dry, devices: subs.map((s) => (s.device || "?") + "/" + (s.box || "all")) } : {}) };
+  const iphoneOnWebPush = subs.some((s) => /iphone/i.test(String(s.ua || "") + String(s.device || "")));
   const useNtfy = !iphoneOnWebPush;
   const single = go.filter((r) => r.level >= 3).concat(go.filter((r) => r.level < 3)).slice(0, MAX_PER_RUN);   // what does not fit goes on the next minute's run
-  let sent = 0, failed = 0; const errors: string[] = [];
+  let sent = 0, failed = 0; const errors: string[] = [], plan: unknown[] = [];
   for (const r of single) {
     const { title, body } = phoneLines(r);
     /* 2 Nov: a tap opens this card's own page, which goes on to the story. An iPhone Home Screen app will not reliably open another site directly from a notification (it brought back the feed). */
     const k = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(r.key)))].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
-    const res = await sendOne(subs || [], useNtfy, { title, body, url: "https://station.scintillahub.ai/notify/card.html?id=" + r.id + "&k=" + k, tag: "card-" + r.id, level: r.level });   // by card id: a shared tag makes the phone replace the last alert, and keys often share their first 60 characters
+    const q = "?id=" + r.id + "&k=" + k, box = r.phone_box || "markets";
+    const to = routeFor(subs, box).map((s) => (s.box ? { ...s, url: BOX_CARD(s.box) + q } : s));   // a box app opens the card inside itself
+    if (dry) { plan.push({ id: r.id, level: r.level, box, title: r.title.slice(0, 60), to: to.map((s) => (s.device || "?") + "/" + (s.box || "all")) }); continue; }
+    const res = await sendOne(to, useNtfy, { title, body, url: "https://station.scintillahub.ai/notify/card.html" + q, tag: "card-" + r.id, level: r.level });   // by card id: a shared tag makes the phone replace the last alert, and keys often share their first 60 characters
     sent += res.sent; failed += res.failed; errors.push(...res.errors);
     await done([r.id], res.sent, res.errors[0] || null);
   }
+  if (dry) return { dry, quiet, waiting: go.length, devices: subs.map((s) => (s.device || "?") + "/" + (s.box || "all")), plan };
   /* the phone route failing must not be silent: one card on the Macs an hour (level 1: it does not try the failing route again) */
   if (errors.length) { const hour = new Date().toISOString().slice(0, 13); await pg("notify_stream?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify([{ level: 1, kind: "ops", title: "Phone alerts are failing", body: errors[0], source: "SCINTILLA", key: "ops|phone-route|" + hour }]) }).catch(() => {}); }
   return { pending: go.length - single.length, single: single.length, sent, failed, errors: errors.slice(0, 6), via: { webPush: (subs || []).length, ntfy: useNtfy && !!NTFY_TOPIC } };
@@ -126,11 +147,14 @@ async function deliver(m: Msg, { dedupe = true } = {}) {
   }
   let sent = 0, failed = 0, pruned = 0; const errors: string[] = [];
   if (!declined) {
-    const subs = await pg("push_subscriptions?select=endpoint,p256dh,auth,device");
-    const payload = JSON.stringify({ title: m.title, body: m.body || "", url: m.url || "/", tag: m.key, at: m.at || new Date().toISOString() });
-    for (const s of subs as Array<{ endpoint: string; p256dh: string; auth: string; device: string | null }>) {
+    const all: Sub[] = (await pg("push_subscriptions?select=endpoint,p256dh,auth,device,ua,box")) || [];
+    /* v13: a test may name one device (and one box) and reaches only that; anything else goes once per device, a box app taking it when the
+       device has added the message's box ('markets' unless the message names one). A box app opens its own list when tapped. */
+    const subs = m.device ? all.filter((s) => s.device === m.device && (!m.box || s.box === m.box)) : routeFor(all, m.box || "markets");
+    const payloadFor = (s: Sub) => JSON.stringify({ title: m.title, body: m.body || "", url: s.box ? "/notify/b/" + s.box + "/" : (m.url || "/"), tag: m.key, at: m.at || new Date().toISOString() });
+    for (const s of subs) {
       try {
-        const r = await sendPush(s, payload, VAPID, { ttl: 3600, urgency: "high", topic: m.kind.slice(0, 32) });
+        const r = await sendPush(s, payloadFor(s), VAPID, { ttl: 3600, urgency: "high", topic: m.kind.slice(0, 32) });
         const ep = "push_subscriptions?endpoint=eq." + encodeURIComponent(s.endpoint);
         if (r.status >= 200 && r.status < 300) { sent++; await pg(ep, { method: "PATCH", body: JSON.stringify({ last_ok_at: new Date().toISOString(), failures: 0, last_error: null }) }); }
         else if (r.status === 404 || r.status === 410) { pruned++; await pg(ep, { method: "DELETE" }); }
@@ -150,7 +174,7 @@ Deno.serve(async (req) => {
   if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
   if (!SB || !SERVICE) return J({ error: "function environment incomplete" }, 500);
   try {
-    if (mode === "stream") return J(await phoneFanOut());
+    if (mode === "stream") return J(await phoneFanOut(u.searchParams.get("dry") === "1"));
     if (mode === "events") {
       /* 1 Nov: earnings prints and transcripts enter the switchboard, which carries them to every device */
       const pending = await rpc("push_events_pending");
@@ -161,7 +185,8 @@ Deno.serve(async (req) => {
     }
     if (mode === "test") {
       const body = await req.json().catch(() => ({}));
-      const m: Msg = { kind: "test", key: "test|" + new Date().toISOString(), title: body.title || "SCINTILLA · test", body: body.body || "If you can read this, the route works.", url: body.url || "/preview/news/" };
+      const m: Msg = { kind: "test", key: "test|" + new Date().toISOString(), title: body.title || "SCINTILLA · test", body: body.body || "If you can read this, the route works.", url: body.url || "/preview/news/",
+        device: body.device ? String(body.device) : undefined, box: body.box ? String(body.box) : undefined };
       return J(await deliver(m, { dedupe: false }));
     }
     const b = await req.json().catch(() => null);
