@@ -17,7 +17,7 @@ import WebKit
 import CoreGraphics
 import UserNotifications
 
-let VERSION = "2.3"
+let VERSION = "2.4"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
@@ -379,20 +379,10 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
     var drops: [String] = []
     for s in have.filter({ now.timeIntervalSince($0.date) > maxAge }).sorted(by: { $0.date < $1.date }) where excess > 0 { drops.append(s.id); excess -= 1 }
     if excess <= 0 { return drops }
+    // 2.4, 19 Nov 18:30 ET. Alan (relayed): the 100-alert limit - "if it is [the cause], keep newest, drop oldest". The list keeps the
+    // NEWEST alerts: the oldest one goes, whatever its box (2.3 took the oldest of the fullest box). `incoming` stays in the signature.
     let gone = Set(drops)
-    var byBox: [String: [(id: String, date: Date)]] = [:]
-    for h in have where !gone.contains(h.id) { byBox[h.box, default: []].append((h.id, h.date)) }
-    for k in Array(byBox.keys) { byBox[k]!.sort { $0.date < $1.date } }
-    var count: [String: Int] = byBox.mapValues { $0.count }
-    for t in incoming { count[t, default: 0] += 1 }
-    while excess > 0 {
-      let candidates = byBox.filter { !$0.value.isEmpty }.keys
-      guard let box = candidates.max(by: { a, b in
-        let ca = count[a] ?? 0, cb = count[b] ?? 0
-        return ca != cb ? ca < cb : byBox[a]!.first!.date > byBox[b]!.first!.date   // equal size: the box with the older alert gives first
-      }) else { break }
-      drops.append(byBox[box]!.removeFirst().id); count[box]! -= 1; excess -= 1
-    }
+    for h in have.filter({ !gone.contains($0.id) }).sorted(by: { $0.date < $1.date }) where excess > 0 { drops.append(h.id); excess -= 1 }
     return drops
   }
   func makeRoom(for incoming: [String], then go: @escaping () -> Void) {
@@ -436,6 +426,9 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
     let n = UNMutableNotificationContent(); (n.title, n.body) = alertLines(it)
     let box = Banners.box(it)
     n.threadIdentifier = box; n.subtitle = box; n.summaryArgument = box   // 2.3: the box is named on every alert (the subtitle line)
+    // 2.4, 19 Nov: "how are we differentiating the types?" - the box's colour dot (the database names the boxes like the phone apps:
+    // "🔵 Markets", "⚪ Press", "🟡 Earnings & Fed", "🟢 Research & video", "🟩 Urth & system") also leads the title line
+    if let c = box.first, !c.isASCII { n.title = String(c) + " " + n.title }
     note("post \(it.id) \(box)")
     n.userInfo = ["url": it.url ?? "", "reader": [it.ticker, it.source].compactMap { $0 }.joined(separator: " · ")]
     // 1 Nov: "those Urth ones should be Urth branded". Their mark comes along; macOS moves the file it is given, so it gets a copy.
