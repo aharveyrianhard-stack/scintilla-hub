@@ -1,6 +1,6 @@
 // Scintilla.app (1 Nov 2026, coordinator). The alerts on each Mac. Alan: "I get so many, and then I feel like I don't see like a stream of notifications coming in on the
 // computers. I need the notifications coming everywhere ... if we can make that have the Scintilla logo or something like that, because it's ugly as shit."
-// It reads the switchboard (public.notify_since) every ten seconds and turns each new row into a macOS notification with this logo.
+// It reads the switchboard (public.notify_since2, 2.3 on; notify_since before) every ten seconds and turns each new row into a macOS notification with this logo.
 // 2.0, 2 Nov. Alan: "these things, they take up too much screen. I think they have to disappear ... The phone ones are where they kind of like stay unless I clear them ... And they hide in the notification center. I think it's better."
 // So a Mac alert is the phone's alert: the same words, a banner for a few seconds, then it waits in Notification Center until he clears it. A click opens the story in the reader. At night only level 3 goes there, as on the phone. The menu bar logo keeps the last ones.
 // Level 2 keeps its soft sound and level 3 the louder one. Our own card below is only for a Mac that has not allowed notifications (macOS asks once): short, gone by itself, so an alert is never lost.
@@ -17,13 +17,13 @@ import WebKit
 import CoreGraphics
 import UserNotifications
 
-let VERSION = "2.2"
+let VERSION = "2.3"
 let INK = NSColor(srgbRed: 0.91, green: 0.92, blue: 0.96, alpha: 1), DIM = NSColor(srgbRed: 0.60, green: 0.62, blue: 0.72, alpha: 1)
 let CYAN = NSColor(srgbRed: 0, green: 0.83, blue: 1, alpha: 1), AMBER = NSColor(srgbRed: 0.98, green: 0.70, blue: 0.10, alpha: 1)
 let BULL = NSColor(srgbRed: 0, green: 1, blue: 0.64, alpha: 1), BEAR = NSColor(srgbRed: 1, green: 0.27, blue: 0.42, alpha: 1)
 let PANEL = NSColor(srgbRed: 0.04, green: 0.04, blue: 0.06, alpha: 0.97), EDGE = NSColor(srgbRed: 0.21, green: 0.21, blue: 0.31, alpha: 1)
 
-struct Item: Decodable { let id: Int64; let age_s: Int; let level: Int; let kind: String; let ticker: String?; let title: String; let body: String?; let source: String?; let url: String?; let pct: Double? }
+struct Item: Decodable { let id: Int64; let age_s: Int; let level: Int; let kind: String; let ticker: String?; let title: String; let body: String?; let source: String?; let url: String?; let pct: Double?; var topic: String? = nil }   // topic: the box, from public.notify_topic (2.3)
 struct Config: Decodable { let url: String; let anon: String; let token: String }
 
 // The trefoil, from icon.svg: three arcs and a centre dot, drawn so it is crisp at any size
@@ -340,8 +340,8 @@ func alertLines(_ it: Item) -> (String, String) {
 // ---- real macOS notifications: a banner, then Notification Center until he clears it ----
 final class Banners: NSObject, UNUserNotificationCenterDelegate {
   static let shared = Banners()
-  private(set) var allowed = false; private var delivered = 0; private var said = ""
-  var state: String { allowed ? "nc \(delivered)" : "cards" }   // goes up with the version, so both Macs can be read from the database
+  private(set) var allowed = false; private var delivered = 0; private var boxes = 0; private var said = ""; private var lastBoxes = ""; private var lastBoxesAt = Date.distantPast
+  var state: String { allowed ? "nc \(delivered) boxes \(boxes)" : "cards" }   // goes up with the version, so both Macs can be read from the database
   func start() {
     let c = UNUserNotificationCenter.current(); c.delegate = self
     c.requestAuthorization(options: [.alert]) { [weak self] _, err in if let err = err { note("allow: " + err.localizedDescription) }; self?.refresh() }
@@ -351,8 +351,57 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
     let c = UNUserNotificationCenter.current()
     c.getNotificationSettings { s in c.getDeliveredNotifications { d in DispatchQueue.main.async {
       self.allowed = s.authorizationStatus == .authorized || s.authorizationStatus == .provisional; self.delivered = d.count
+      var per: [String: Int] = [:]; for n in d { per[n.request.content.threadIdentifier, default: 0] += 1 }; self.boxes = per.count
       let now = "status \(s.authorizationStatus.rawValue) banners \(s.alertStyle.rawValue)"; if now != self.said { self.said = now; note(now) }
+      // what each box holds, at most every 10 minutes and only when it changed: the log shows the boxes without anyone opening Notification Center
+      let line = per.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+      if line != self.lastBoxes, Date().timeIntervalSince(self.lastBoxesAt) >= 600 { self.lastBoxes = line; self.lastBoxesAt = Date(); note("boxes: " + (line.isEmpty ? "none" : line)) }
+      if d.count > Banners.keep { self.makeRoom(for: []) {} }   // a burst the room-making missed
     } } }
+  }
+  // 2.3, 19 Nov. Alan, ~10:00 ET (relayed by the Dot-com session from the market-report session): "We wanted to separate them by like
+  // topic and classify them so that they're on independent bubbles. Remember that?" 2.2 did split them by topic, measured that morning:
+  // (1) nothing on screen named the box; (2) macOS keeps one list of 100 per app, not per box: 155 alerts since the 01:29 install, no box
+  // above 68, and both Macs read "nc 100"; the busy boxes had already pushed the only Economy & earnings alert (WMT 07:11) out of the list;
+  // (3) the market-report session's ANT watch alerts sat in Markets among ~50 news items.
+  // So: the box comes from the database (public.notify_topic, changeable without a rebuild, because a rebuild empties his list), its name
+  // is the subtitle of every alert, and before each post the app keeps the list at 96 by removing the OLDEST alert of the FULLEST box.
+  // A quiet box (Economy & earnings, a few a day) is never pushed out by a busy one (press releases, ~140 a day).
+  static let keep = 96
+  // which alerts leave so that `incoming` new ones fit under `keep`: always the oldest of the box holding the most (new ones included in the count)
+  static func pickDrops(_ have: [(id: String, box: String, date: Date)], incoming: [String], keep: Int) -> [String] {
+    var excess = have.count + incoming.count - keep
+    if excess <= 0 { return [] }
+    var byBox: [String: [(id: String, date: Date)]] = [:]
+    for h in have { byBox[h.box, default: []].append((h.id, h.date)) }
+    for k in Array(byBox.keys) { byBox[k]!.sort { $0.date < $1.date } }
+    var count: [String: Int] = byBox.mapValues { $0.count }
+    for t in incoming { count[t, default: 0] += 1 }
+    var drops: [String] = []
+    while excess > 0 {
+      let candidates = byBox.filter { !$0.value.isEmpty }.keys
+      guard let box = candidates.max(by: { a, b in
+        let ca = count[a] ?? 0, cb = count[b] ?? 0
+        return ca != cb ? ca < cb : byBox[a]!.first!.date > byBox[b]!.first!.date   // equal size: the box with the older alert gives first
+      }) else { break }
+      drops.append(byBox[box]!.removeFirst().id); count[box]! -= 1; excess -= 1
+    }
+    return drops
+  }
+  func makeRoom(for incoming: [String], then go: @escaping () -> Void) {
+    UNUserNotificationCenter.current().getDeliveredNotifications { d in
+      let have = d.map { (id: $0.request.identifier, box: $0.request.content.threadIdentifier, date: $0.date) }
+      let drops = Banners.pickDrops(have, incoming: incoming, keep: Banners.keep)
+      if !drops.isEmpty { UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: drops) }
+      DispatchQueue.main.async {
+        if !drops.isEmpty {
+          var per: [String: Int] = [:]; let byId = Dictionary(have.map { ($0.id, $0.box) }, uniquingKeysWith: { a, _ in a })
+          for id in drops { per[byId[id] ?? "?", default: 0] += 1 }
+          note("room: " + per.sorted { $0.key < $1.key }.map { "\($0.key) -\($0.value)" }.joined(separator: ", ") + " (had \(d.count), \(incoming.count) new)")
+        }
+        go()
+      }
+    }
   }
   // 2.2, 18 Nov. Alan (relayed by the market-research session): notifications grouped "as if they were separate apps by topic", the
   // single stream is too many to parse. macOS stacks one thread's notifications together in Notification Center: each topic its own
@@ -361,6 +410,8 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
   // events: our earnings reports and transcripts, and any alert that names a release. Macro news stays with the market news.
   // Press releases get a box of their own: about 140 a day, the biggest stream; on 18 Nov the 14:00 Fed minutes alert went to both
   // Macs and the phone but sat in one list among about 100 alerts that hour, mostly press releases, and he never saw it.
+  // the database's box (notify_since2); 2.2's own rules below only if the database sent none
+  static func box(_ it: Item) -> String { if let t = it.topic, !t.isEmpty { return t }; return topic(it) }
   static func topic(_ it: Item) -> String {
     let k = it.kind.lowercased(), s = (it.source ?? "").lowercased()
     if k == "urth" { return "Urth" }
@@ -376,7 +427,9 @@ final class Banners: NSObject, UNUserNotificationCenterDelegate {
   }
   func post(_ it: Item) {
     let n = UNMutableNotificationContent(); (n.title, n.body) = alertLines(it)
-    n.threadIdentifier = Banners.topic(it)
+    let box = Banners.box(it)
+    n.threadIdentifier = box; n.subtitle = box; n.summaryArgument = box   // 2.3: the box is named on every alert (the subtitle line)
+    note("post \(it.id) \(box)")
     n.userInfo = ["url": it.url ?? "", "reader": [it.ticker, it.source].compactMap { $0 }.joined(separator: " · ")]
     // 1 Nov: "those Urth ones should be Urth branded". Their mark comes along; macOS moves the file it is given, so it gets a copy.
     if it.kind == "urth", let p = Bundle.main.url(forResource: "urth", withExtension: "png") {
@@ -404,6 +457,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
   var minLevel: Int { get { max(1, UserDefaults.standard.integer(forKey: "minLevel")) } set { UserDefaults.standard.set(newValue, forKey: "minLevel") } }
   let maxOnScreen = 4, showIfYoungerThan = 900
   var lastOK = Date()
+  var rpc = "notify_since2"   // 2.3: carries each alert's box; if it is ever gone (a rollback), the old door still works
 
   func applicationWillFinishLaunching(_ n: Notification) { Banners.shared.start() }   // macOS wants its listener in place before launch ends, or the click that started the app is lost
   func applicationDidFinishLaunching(_ n: Notification) {
@@ -422,7 +476,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   // ---- reading the switchboard ----
   func poll() {
-    guard let c = cfg, !busy, let u = URL(string: c.url + "/rest/v1/rpc/notify_since") else { return }
+    guard let c = cfg, !busy, let u = URL(string: c.url + "/rest/v1/rpc/" + rpc) else { return }
     busy = true
     var r = URLRequest(url: u, timeoutInterval: 20); r.httpMethod = "POST"
     r.setValue(c.anon, forHTTPHeaderField: "apikey"); r.setValue("Bearer " + c.anon, forHTTPHeaderField: "Authorization"); r.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -430,21 +484,29 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     URLSession.shared.dataTask(with: r) { [weak self] data, resp, err in
       let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
       let items = code == 200 ? data.flatMap { try? JSONDecoder().decode([Item].self, from: $0) } : nil
-      DispatchQueue.main.async { self?.busy = false; self?.heard(items) }
+      DispatchQueue.main.async {
+        if code == 404, self?.rpc == "notify_since2" { self?.rpc = "notify_since"; note("notify_since2 missing (404): reading notify_since, boxes by the app's own rules") }
+        self?.busy = false; self?.heard(items)
+      }
     }.resume()
   }
   func heard(_ items: [Item]?) {
     guard let items = items else { status.button?.alphaValue = Date().timeIntervalSince(lastOK) > 300 ? 0.35 : 1; return }
     lastOK = Date(); status.button?.alphaValue = 1
+    var fresh: [Item] = []
     for it in items {
       lastId = max(lastId, it.id)
       recent.insert(it, at: 0)
       // a Mac that slept does not get a flood: only what is fresh becomes a card; the rest waits in the menu
-      if booted, it.age_s <= showIfYoungerThan, it.level >= minLevel, !(pausedUntil.map { $0 > Date() } ?? false) { show(it) }
+      if booted, it.age_s <= showIfYoungerThan, it.level >= minLevel, !(pausedUntil.map { $0 > Date() } ?? false) { fresh.append(it) }
     }
     if recent.count > 40 { recent.removeLast(recent.count - 40) }
     UserDefaults.standard.set(Int(lastId), forKey: "lastId")
     booted = true
+    // 2.3: room first (the oldest of the fullest box leaves), then the new alerts, so macOS never drops one of a quiet box by itself
+    let night = nightNow()
+    let posting = Banners.shared.allowed ? fresh.filter { !night || $0.level >= 3 }.map { Banners.box($0) } : []
+    if posting.isEmpty { fresh.forEach { show($0) } } else { Banners.shared.makeRoom(for: posting) { [weak self] in fresh.forEach { self?.show($0) } } }
   }
 
   // ---- the cards ----
