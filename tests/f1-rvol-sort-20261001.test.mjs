@@ -30,7 +30,7 @@ const order = (key, dir, rows = ROWS) => new Function("S", "window", "num", fn("
 
 test("the RVol header carries the sort key rv; every other column keeps its key", () => {
   assert.deepEqual(BOARD_COLS[12], ["RVol", "rv"]);
-  assert.deepEqual(BOARD_COLS.map((c) => c[1]), [null, "t", "price", "c", "fpe", "mc", "rev", "rsi", "tr", "mo", null, "g", "rv", null]);
+  assert.deepEqual(BOARD_COLS.map((c) => c[1]), [null, "t", "price", "c", "fpe", "mc", "rev", "rsi", "tr", "mo", null, "g", "rv", null, "gr"]);   /* 22 Nov — GROWTH last */
 });
 
 test("rv is the pace (rvol_at_time) for a current row, null for a stale or missing one", () => {
