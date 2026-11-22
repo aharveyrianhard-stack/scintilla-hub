@@ -34,5 +34,5 @@ test("the board multiple is on the STATS tab's basis: NTM from four quarters, el
   assert.match(api.fpeTitle("B"), /FY26 consensus \(annual\)/);
   assert.match(api.fpeTitle("N"), /consensus EPS is not positive/);
   assert.match(api.fpeTitle("ZZZ"), /no forward EPS estimate stored/);
-  assert.match(page, /title="' \+ esc\(fpeTitle\(d\.t\)\) \+ '">' \+ \(d\.fpe != null/, "the cell carries its basis and source date");
+  assert.match(page, /title="' \+ esc\(fpeTitle\(d\.t\) \+ oNote\(OS\.fpe, d\.fpe, \(v\) => v\.toFixed\(1\) \+ "×"\)\) \+ '">' \+ \(d\.fpe != null/, "the cell carries its basis and source date (and, 22 Nov, how far it sits from its board's middle when it is an outlier)");
 });

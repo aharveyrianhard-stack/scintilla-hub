@@ -16,7 +16,7 @@ const order = (key, dir, rows, win) => new Function("S", "window", "num", fn("bo
 
 const SORTABLE = BOARD_COLS.map((c) => c[1]).filter(Boolean);
 test("the sortable columns are the ones this suite covers", () => {
-  assert.deepEqual(SORTABLE, ["t", "price", "c", "fpe", "mc", "rev", "rsi", "tr", "mo", "g", "rv"]);
+  assert.deepEqual(SORTABLE, ["t", "price", "c", "fpe", "mc", "rev", "rsi", "tr", "mo", "g", "rv", "gr"]);   /* 22 Nov — GROWTH (revenue growth, can be negative) */
 });
 
 /* a fixture per column: three names with values (one negative where the column can be), and dashes in different forms —

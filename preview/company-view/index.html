@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 9a6d27b) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 518578b) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -4498,7 +4498,7 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
    ("down 4.8%" means nothing until you know this name normally moves 1.5%). The width comes from
    READ (10->8) and GEIGER (15->13), the two widest cells that lose the least by narrowing: READ is
    words that truncate gracefully and GEIGER is a bar, not a number. */
-.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr) minmax(0,10fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}
+.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr) minmax(0,10fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) minmax(0,0fr) !important;gap:5px}
 .ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,10fr) minmax(0,9fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,8fr) minmax(0,11fr) minmax(0,7fr) minmax(0,5fr) !important}}
 /* M52 · THE PHONE BOARD. MEASURED at 390 px: with 14 tracks the row collided exactly the way the
@@ -5012,6 +5012,28 @@ body.secfs .sc-secfs .sc-board__row .sc-gnum{ display:block; position:absolute; 
   body.secfs .sc-secfs .ch > :nth-child(11){ text-align:left !important; }
   body.secfs .sc-secfs .sc-board__row .gwx-read{ font-size:11px; }
 }
+/* 22 Nov — GROWTH: the 15th cell of every board row and header, drawn after REVENUE by order (cells 8-14 move one place
+   right), so no nth-child rule anywhere changes. Shown beside the left panel (12 tracks: the Geiger gives 10 fr of its 35)
+   and in full screen (15 tracks); the phone, the full-screen phone and the Geiger-in-motion board keep their columns. */
+.ch > .sc-grow{ display:none; }
+#boardPanel .ch > :nth-child(n+8):not(.sc-grow){ order:1; }
+.sc-grow{ align-items:center; justify-content:center; }
+.sc-grow svg{ display:block; overflow:visible; }
+@media (min-width:561px){
+  body:not(.secfs):not(.gwx-motion) #boardPanel .ch > .sc-grow{ display:flex !important; }
+  body:not(.secfs):not(.gwx-motion) #boardPanel .ch{ grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr) minmax(0,10fr) minmax(0,9fr) minmax(0,10fr) minmax(0,10fr) minmax(0,7fr) minmax(0,25fr) minmax(0,16fr) minmax(0,5fr) !important; }
+  body.secfs #boardPanel.sc-secfs .ch > .sc-grow, body.secfs .sc-secfs #boardPanel .ch > .sc-grow{ display:flex !important; }
+  body.secfs #boardPanel.sc-secfs .ch, body.secfs .sc-secfs #boardPanel .ch{ grid-template-columns:minmax(0,6fr) minmax(0,7fr) minmax(0,8fr) minmax(0,8fr) minmax(0,6fr) minmax(0,7fr) minmax(0,7fr) minmax(0,8fr) minmax(0,5fr) minmax(0,13fr) minmax(0,13fr) minmax(0,11fr) minmax(0,14fr) minmax(0,8fr) minmax(0,3fr) !important; }
+}
+/* 22 Nov — an outlier on its own board (F P/E, P/E, RSI, the Geiger): ringed, so the eye goes straight to it */
+.ch > .is-out{ box-shadow:inset 0 0 0 1px var(--crk); border-radius:3px; }
+/* 22 Nov — the growth-scare gauge on cohort compare */
+.sc-bondg{ display:flex; align-items:center; flex-wrap:wrap; gap:4px 14px; padding:6px 10px; border-bottom:.6px solid var(--line2);
+  font-family:var(--mono); font-size:10px; color:var(--ink2); font-variant-numeric:tabular-nums; }
+.sc-bondg__k{ color:var(--crk); font-weight:600; letter-spacing:.12em; font-size:9px; }
+.sc-bondg__n b{ font-weight:700; } .sc-bondg__n b.up{ color:var(--bull); } .sc-bondg__n b.dn{ color:var(--bear); }
+.sc-bondg__sp{ display:block; }
+.sc-bondg__w{ color:var(--dim); }
 /* FULL SCREEN on a phone: the six a re-rank is read by — ♥ · TICKER · CHG · TREND · MOMENTUM · GEIGER — and (H5) RVOL, its
    width taken from the Geiger (12 → 6 fr); the gap goes 6 → 5 px so the seventh gap costs the other columns nothing */
 @media (max-width:560px){
@@ -6182,7 +6204,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      Individually optional, individually bounded, last-known-good on failure. No entry here can
      fail the board. live_quotes and composite_staged remain ONLY as non-equity enrichment: they
      are no longer the equity price or Geiger authority and no longer gate boot. */
-  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows, geoRows, divAnn] = await Promise.all([
+  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows, geoRows, divAnn, growQ] = await Promise.all([
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
     scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
@@ -6200,6 +6222,8 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('tickers_role',     pg("tickers?select=ticker&role=eq.geiger_only", 1).catch(() => []), []),
     /* 21 Nov — the yield on the DEFENSIVES / DIVIDEND boards; cached six hours, so this is a read only a few times a day */
     scOpt('dividend_annual',  typeof divAnnLoad === "function" ? divAnnLoad() : null, {}),
+    /* 22 Nov — the GROWTH strip; cached six hours */
+    scOpt('growth_quarters',  typeof growQLoad === "function" ? growQLoad() : null, {}),
   ]);
   applyEstimates(fpeEst);                                      // 29 Sep — one place, shared with a late answer (loadEstimates)
   for (const r of fpeTtm) {
@@ -6375,6 +6399,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
         fpe:   fpeVal(m.ticker, price),                                 // R26 FIX 6 — fwd P/E (guarded)
         pe:    typeof peVal === "function" ? peVal(m.ticker, price) : null,   // 21 Nov — P/E (live price ÷ eps_ttm), shown on DEFENSIVES / DIVIDEND
         dy:    typeof dyVal === "function" ? dyVal(m.ticker, price) : null,   // 21 Nov — dividend yield %, shown on DEFENSIVES / DIVIDEND
+        gr:    typeof grVal === "function" ? grVal(m.ticker) : null,          // 22 Nov — latest revenue growth y/y %, what the GROWTH column sorts by
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
         hb:    null,                                                    // M52 — the stored heartbeat row, filled by loadBoardHeartbeat()
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
@@ -7879,7 +7904,7 @@ const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none
 /* H4 (1 Oct) — TREND and MOMENTUM carry sort keys (tr / mo): drawn as bars in full screen, re-ranked like any other column */
 /* F1 (1 Oct; Alan on relative volume: "I've been begging for it") — RVOL carries a sort key too (rv): the PACE, board_volume.
    rvol_at_time, the number beside the battery. A name with no current reading (rv null: stale or no row) sorts last either way. */
-const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend","tr"], ["Momentum","mo"], ["Read", null], ["Geiger","g"], ["RVol","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend","tr"], ["Momentum","mo"], ["Read", null], ["Geiger","g"], ["RVol","rv"], ["Mkt", null], ["Growth","gr"]];   /* 22 Nov — GROWTH last in the model, drawn after REVENUE (CSS order) so no nth-child rule moves */   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
 /* 21 Nov 2026 — THE MULTIPLES BOARDS. Alan asked that every name on DEFENSIVES and DIVIDEND show its P/E, forward P/E and
    dividend yield beside the Geigers. On those two boards only, MKT CAP and REVENUE give their two places (same tracks, same
    widths, nothing else moves) to P/E - the live price over the last twelve months' reported EPS (fundamentals.eps_ttm, the
@@ -8003,12 +8028,13 @@ function dyVal(t, price) {
   if (price == null || !(price > 0) || !a || !(a.annual > 0)) return null;
   return a.annual / price * 100;
 }
-function peCellHTML(d) {
+function peCellHTML(d, OS) {
   const e = typeof EPSTTM !== "undefined" ? EPSTTM[d.t] : null, v = d.pe;
+  const om = OS && typeof outlierMark === "function" ? outlierMark(OS.pe, v) : "";   /* 22 Nov — ringed when far from the board's middle */
   const title = v != null ? "P/E " + v.toFixed(1) + "× = the live price ÷ " + (+e).toFixed(2) + ", the EPS of the last twelve months as reported · fundamentals.eps_ttm"
     : e != null && !(e > 0) ? "no P/E: the last twelve months' EPS is at or below zero (" + (+e).toFixed(2) + ")"
     : "no P/E: no twelve-month EPS in dollars on record";
-  return '<span class="sc-pe" title="' + esc(title) + '">' + (v != null ? (v >= 100 ? Math.round(v) : v.toFixed(1)) + "×" : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>";
+  return '<span class="sc-pe' + om + '" title="' + esc(title + (om && typeof outlierNote === "function" ? outlierNote(OS.pe, v, (x) => x.toFixed(1) + "×") : "")) + '">' + (v != null ? (v >= 100 ? Math.round(v) : v.toFixed(1)) + "×" : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>";
 }
 function yieldCellHTML(d) {
   const a = DIVANN[d.t], v = d.dy;
@@ -8020,6 +8046,141 @@ function yieldCellHTML(d) {
   }
   if (!DIVANN_READ) return '<span class="sc-dy">' + SC_PENDING + "</span>";
   return '<span class="sc-dy is-none" title="no regular dividend on record">none</span>';
+}
+/* 22 Nov 2026 — GROWTH ON EVERY ROW. Alan (relayed by the markets session): "not just y/y % numbers ... a small visual like the
+   Geiger icon - a mini quarterly bar strip of revenue (and EPS) growth, last ~6-8 quarters, so you can see accelerating vs
+   decelerating at a glance". In the defensives the cheap names are cheap because they do not grow. Each row: the last eight
+   reported quarters, oldest at the left, each against the same quarter a year before - revenue on top, EPS under it; up green,
+   down red; one fixed scale for every name (revenue: a full bar is 30 %, EPS: 60 %), so a grower stands tall and a flat name
+   lies low. public.growth_quarters over fundamentals_history (FMP statements). Read once, then every six hours. */
+let GROWQ = {}, GROWQ_READ = false, GROWQ_AT = 0, GROWQ_FLIGHT = null;
+function growQLoad() {
+  if (GROWQ_READ && Date.now() - GROWQ_AT < 6 * 3600e3) return Promise.resolve(GROWQ);
+  if (GROWQ_FLIGHT) return GROWQ_FLIGHT;
+  GROWQ_FLIGHT = pg("growth_quarters?select=ticker,q_end,rev_yoy,eps_yoy").then((rows) => {
+    const m = {};
+    for (const r of rows || []) m[String(r.ticker).toUpperCase()] = { q: r.q_end || [], rev: (r.rev_yoy || []).map((x) => (x == null ? null : +x)), eps: (r.eps_yoy || []).map((x) => (x == null ? null : +x)) };
+    GROWQ = m; GROWQ_READ = true; GROWQ_AT = Date.now(); GROWQ_FLIGHT = null; return GROWQ;
+  }).catch(() => { GROWQ_FLIGHT = null; return GROWQ; });
+  return GROWQ_FLIGHT;
+}
+function grVal(t) {
+  const g = GROWQ[t]; if (!g || !g.rev.length) return null;
+  const v = g.rev[g.rev.length - 1]; return v == null || !Number.isFinite(v) ? null : v * 100;
+}
+const GROW_MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function growCellHTML(d) {
+  const g = GROWQ[d.t];
+  const has = g && g.q.length && (g.rev.some((v) => v != null) || g.eps.some((v) => v != null));
+  if (!has) return '<span class="sc-grow" title="' + esc(GROWQ_READ ? "no quarterly revenue or EPS on record - a fund, a coin, or not reported yet" : "reading the quarters …") + '">' + (GROWQ_READ ? "—" : SC_PENDING) + "</span>";
+  const n = g.q.length, W = 44, bw = 4, gap = n > 1 ? (W - n * bw) / (n - 1) : 0;
+  const strip = (vals, top, h, cap) => vals.map((v, i) => {
+    if (v == null || !Number.isFinite(v)) return "";
+    const f0 = Math.max(-1, Math.min(1, v / cap)), f = Math.sign(f0) * Math.sqrt(Math.abs(f0)), base = top + h * 0.65;   /* square-root scale: a 4 % grower still shows a bar */
+    const len = Math.max(1, Math.abs(f) * (f >= 0 ? h * 0.65 : h * 0.35));
+    return '<rect x="' + (i * (bw + gap)).toFixed(1) + '" y="' + (f >= 0 ? base - len : base).toFixed(1) + '" width="' + bw + '" height="' + len.toFixed(1) +
+      '" fill="' + (v >= 0 ? "var(--bull)" : "var(--bear)") + '"/>';
+  }).join("");
+  const pct = (v) => (v == null || !Number.isFinite(v) ? "—" : (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(0) + "%");
+  const lbl = (q) => { const m = /^(\d{4})-(\d{2})/.exec(String(q)); return m ? GROW_MON[+m[2] - 1] + " '" + m[1].slice(2) : String(q); };
+  const title = "Growth against the same quarter a year before, oldest to newest (quarter ending)\n" +
+    "revenue: " + g.q.map((q, i) => lbl(q) + " " + pct(g.rev[i])).join(" · ") + "\n" +
+    "EPS: " + g.q.map((q, i) => lbl(q) + " " + pct(g.eps[i])).join(" · ") + "\n" +
+    "top bars revenue (a full bar is 30% or more), bottom bars EPS (60% or more), on a square-root scale so slow growth still shows · reported figures, fundamentals_history (FMP)";
+  return '<span class="sc-grow" title="' + esc(title) + '"><svg viewBox="0 0 ' + W + ' 13" width="' + W + '" height="13" aria-hidden="true">' +
+    strip(g.rev, 0, 6, 0.30) + strip(g.eps, 7, 6, 0.60) + "</svg></span>";   /* 13 px tall, no more than the row's own text: the row keeps its height */
+}
+/* 22 Nov 2026 — OUTLIERS INSIDE THE COHORT. Alan: "highlight the outliers inside each cohort on multiples (F P/E, P/E) and on
+   RSI / Geiger, so the eye goes straight to them". A value is an outlier when it sits far from the rest of the board it is on:
+   more than 3 robust spreads (1.4826 × the median absolute deviation) from the board's own middle - the cohort's names,
+   never a universal level. Six readings at least, or nothing is ringed. */
+const OUT_K = 3;        /* the Geiger and RSI: three robust spreads (at 2.5 a broadly red day ringed every name that merely held up) */
+const OUT_K_MULT = 2.5;  /* F P/E and P/E, on their logarithm: 2.5 rings Walmart's 41× and Costco's 48× among the 20× defensives, Merck's 138× */
+/* multiples (F P/E, P/E) are measured on their logarithm: a multiple's spread runs long on the expensive side, and on the raw
+   number every 45× name in a 25× cohort was ringed; on the log only the truly far ones are (a 145× growth name, a 3.5× cyclical) */
+function outlierStats(vals, log) {
+  const tf = (x) => (log ? (x > 0 ? Math.log(x) : null) : x);
+  const v = (vals || []).filter((x) => x != null && Number.isFinite(+x)).map((x) => tf(+x)).filter((x) => x != null).sort((a, b) => a - b);
+  if (v.length < 6) return null;
+  const med = (a) => (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2);
+  const m = med(v), s = med(v.map((x) => Math.abs(x - m)).sort((a, b) => a - b)) * 1.4826;
+  return s > 0 ? { m, s, n: v.length, log: !!log, k: log ? OUT_K_MULT : OUT_K } : null;
+}
+function outlierMark(st, x) {
+  if (!st || x == null || !Number.isFinite(+x)) return "";
+  const xv = st.log ? (+x > 0 ? Math.log(+x) : null) : +x;
+  if (xv == null) return "";
+  const z = (xv - st.m) / st.s, k = st.k || OUT_K;
+  return z >= k ? " is-out is-out-hi" : z <= -k ? " is-out is-out-lo" : "";
+}
+function outlierNote(st, x, fmt) {
+  const k = outlierMark(st, x); if (!k) return "";
+  return " · far " + (k.indexOf("hi") >= 0 ? "above" : "below") + " the rest of this board: its middle is " + fmt(st.log ? Math.exp(st.m) : st.m);
+}
+function boardOutlierStats(rows) {
+  const col = (k, log) => outlierStats((rows || []).map((r) => r && r[k]), log);
+  return { fpe: col("fpe", true), pe: col("pe", true), rsi: col("rsi"), g: col("g") };
+}
+let RSI_OUT_T = 0;
+function scheduleRsiOutliers() {
+  if (RSI_OUT_T || typeof setTimeout !== "function") return;
+  RSI_OUT_T = setTimeout(() => { RSI_OUT_T = 0; markRsiOutliers(); }, 400);
+}
+function markRsiOutliers() {
+  if (typeof document === "undefined" || !S || S.tq) return;
+  const rows = S.rows || [], st = outlierStats(rows.map((r) => r.rsi));
+  for (const r of rows) {
+    const c = el("lr_" + r.t); if (!c || !c.classList) continue;
+    const k = outlierMark(st, r.rsi);
+    c.classList.toggle("is-out", !!k); c.classList.toggle("is-out-hi", k.indexOf("hi") >= 0); c.classList.toggle("is-out-lo", k.indexOf("lo") >= 0);
+  }
+}
+/* 22 Nov 2026 — THE GROWTH-SCARE GAUGE on cohort compare. Alan: "a long-vs-short bonds ratio (TLT/SHY) ... as a growth-scare
+   gauge". TLT (Treasuries over 20 years) ÷ SHY (1 to 3 years): when it climbs, money is buying long bonds - long yields falling
+   faster than short ones, the market pricing slower growth. The strip: where the ratio sits against its 200-day and in its own
+   year, its last month, and a year of it drawn day by day (up green, down red). Daily closes from the chart API, every 30 min. */
+let BONDG = null, BONDG_AT = 0, BONDG_FLIGHT = null;
+function bondGaugeLoad() {
+  if (BONDG && Date.now() - BONDG_AT < 30 * 60e3) return Promise.resolve(BONDG);
+  if (BONDG_FLIGHT || (!BONDG && Date.now() - BONDG_AT < 60e3)) return BONDG_FLIGHT || Promise.resolve(BONDG);
+  if (typeof fetch !== "function") return Promise.resolve(null);
+  const base = typeof SC_CHART_API !== "undefined" && SC_CHART_API ? SC_CHART_API : "";
+  const get = (sym) => fetch(base + "/candles?symbol=" + sym + "&tf=D&limit=320").then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))).then((j) => (j && j.series) || []);
+  BONDG_FLIGHT = Promise.all([get("TLT"), get("SHY")]).then(([a, b]) => {
+    const sb = new Map(b.map((x) => [x.t, +x.c]));
+    const pts = a.filter((x) => sb.has(x.t) && +x.c > 0 && sb.get(x.t) > 0).map((x) => ({ t: +x.t, r: +x.c / sb.get(x.t) }));
+    BONDG = pts.length > 60 ? pts : null; BONDG_AT = Date.now(); BONDG_FLIGHT = null; bondGaugePaint(); return BONDG;
+  }).catch(() => { BONDG_FLIGHT = null; BONDG_AT = Date.now(); return BONDG; });
+  return BONDG_FLIGHT;
+}
+function bondGaugeHTML() {
+  const p = BONDG;
+  if (!p) { bondGaugeLoad(); return '<div class="sc-bondg" id="bondGauge"><b class="sc-bondg__k">BONDS · TLT ÷ SHY</b><span class="sc-bondg__w">reading the daily closes …</span></div>'; }
+  const last = p[p.length - 1], yr = p.slice(-252), rs = yr.map((x) => x.r), lo = Math.min(...rs), hi = Math.max(...rs);
+  const s200 = p.slice(-200), m200 = s200.reduce((a, x) => a + x.r, 0) / s200.length, mAgo = p[Math.max(0, p.length - 22)].r;
+  const vs200 = (last.r / m200 - 1) * 100, mo = (last.r / mAgo - 1) * 100, place = hi > lo ? Math.round((last.r - lo) / (hi - lo) * 100) : 50;
+  const W = 200, H = 26, xs = (i) => (i / Math.max(1, yr.length - 1)) * W, ys = (r) => H - 2 - (hi > lo ? (r - lo) / (hi - lo) : 0.5) * (H - 4);
+  let segs = "";
+  for (let i = 1; i < yr.length; i++) segs += '<line x1="' + xs(i - 1).toFixed(1) + '" y1="' + ys(yr[i - 1].r).toFixed(1) + '" x2="' + xs(i).toFixed(1) + '" y2="' + ys(yr[i].r).toFixed(1) +
+    '" stroke="' + (yr[i].r >= yr[i - 1].r ? "var(--bull)" : "var(--bear)") + '" stroke-width="1.3"/>';
+  const sg = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "%";
+  const word = vs200 > 1 && mo > 0 ? "climbing: money moving into long bonds - the market is pricing slower growth"
+    : vs200 < -1 && mo < 0 ? "falling: long bonds lagging short ones - no growth scare in bonds"
+    : "no clear signal from bonds";
+  const dt = new Date(last.t), day = dt.getUTCDate() + " " + GROW_MON[dt.getUTCMonth()].toUpperCase();
+  return '<div class="sc-bondg" id="bondGauge" title="TLT (US Treasuries over 20 years) ÷ SHY (1 to 3 years), daily closes. Climbing = long bonds beating short ones = long yields falling faster = the market pricing slower growth (a growth scare). Line: the last year, each day green up / red down. Chart API daily bars (Massive).">' +
+    '<b class="sc-bondg__k">BONDS · TLT ÷ SHY</b>' +
+    '<span class="sc-bondg__n"><b class="' + (vs200 >= 0 ? "up" : "dn") + '">' + sg(vs200) + '</b> vs its 200-day</span>' +
+    '<span class="sc-bondg__n"><b class="' + (mo >= 0 ? "up" : "dn") + '">' + sg(mo) + '</b> in a month</span>' +
+    '<span class="sc-bondg__n"><b>' + place + '%</b> of its year</span>' +
+    '<svg class="sc-bondg__sp" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' + segs + "</svg>" +
+    '<span class="sc-bondg__w">' + esc(word) + " · " + esc(day) + " close</span></div>";
+}
+function bondGaugePaint() {
+  if (typeof document === "undefined") return;
+  const n = el("bondGauge"); if (!n) return;
+  const t = document.createElement("div"); t.innerHTML = bondGaugeHTML();
+  const nb = t.firstElementChild; if (nb && nb.outerHTML !== n.outerHTML) n.replaceWith(nb);
 }
 /* ── M52 HEARTBEAT ─────────────────────────────────────────────────────────────────────────
    THE USUAL DAY. The size of a typical daily move for one name: the spread (standard deviation)
@@ -8130,7 +8291,7 @@ function shownRows() {
 function boardHeaderHTML() {
   return '<div class="ch hdr">' + (typeof boardCols === "function" ? boardCols() : BOARD_COLS).map(([label, key]) =>
     key
-      ? '<button class="sc-hcell ' + (S.sort.key === key ? "is-sorted" : "") + '" data-act="sort" data-key="' + key + '">' +
+      ? '<button class="sc-hcell ' + (S.sort.key === key ? "is-sorted" : "") + (key === "gr" ? " sc-grow" : "") + '" data-act="sort" data-key="' + key + '">' +
         label + (S.sort.key === key ? (S.sort.dir < 0 ? " ▼" : " ▲") : "") + "</button>"
       : '<span' + (label ? "" : ' aria-hidden="true"') + ">" + label + "</span>").join("") + "</div>";
 }
@@ -8366,6 +8527,10 @@ function boardRowsHTML() {
       ? 'nothing on ' + esc(S.coh) + ' yet — tap ' + (S.coh === "RADAR" ? "⊙" : "☆") + ' on any row or company to add it (that likes it too)'
       : 'reading ' + esc(S.coh) + ' …') + '</div>';
   const sorted = rows;   // FIX 3 — already in the frozen order; no live re-sort here
+  /* 22 Nov — the board's own middle for each reading, so an outlier is ringed against its own cohort (never during a search) */
+  const OS = (typeof boardOutlierStats === "function" && !S.tq) ? boardOutlierStats(sorted) : {};
+  const oMark = (st, x) => (typeof outlierMark === "function" ? outlierMark(st, x) : "");
+  const oNote = (st, x, f) => (typeof outlierNote === "function" ? outlierNote(st, x, f) : "");
   /* HC1 (6 Oct) — ONE SCALE FOR A NAME'S BAR, WHEREVER IT IS LISTED. Alan: EQIX looked "all the way green" in search and
      "just past the midline" in LIKED. The bar was drawn against the strongest reading AMONG THE ROWS ON SCREEN, so a
      search that found one name always filled its bar (+0.29 drawn as the maximum), and the same name was shorter in a
@@ -8394,20 +8559,21 @@ function boardRowsHTML() {
         : '<span class="sc-chg ' + (d.c >= 0 ? "up" : "dn") + '" id="lc_' + esc(d.t) + '">' + fmtC(d.c) + "</span>") +
       /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
          tab"). The heartbeat is still read and stashed on the row: the cohort line and the header title use it. */
-      '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? (typeof fpeCellText === "function" ? fpeCellText(d.t, d.fpe) : d.fpe.toFixed(1) + "×") : d.state === "CONNECTING" ? SC_PENDING : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
-      (typeof multBoard === "function" && multBoard() ? peCellHTML(d) + yieldCellHTML(d)   /* 21 Nov — DEFENSIVES / DIVIDEND: P/E and YIELD in MKT CAP's and REVENUE's places */
+      '<span class="sc-fpe' + oMark(OS.fpe, d.fpe) + '" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t) + oNote(OS.fpe, d.fpe, (v) => v.toFixed(1) + "×")) + '">' + (d.fpe != null ? (typeof fpeCellText === "function" ? fpeCellText(d.t, d.fpe) : d.fpe.toFixed(1) + "×") : d.state === "CONNECTING" ? SC_PENDING : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
+      (typeof multBoard === "function" && multBoard() ? peCellHTML(d, OS) + yieldCellHTML(d)   /* 21 Nov — DEFENSIVES / DIVIDEND: P/E and YIELD in MKT CAP's and REVENUE's places */
         : mcapCellHTML(d.t, d.mc, d.mcAsOf) +
       revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero)) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
-      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '" data-v="' + Math.round(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
+      '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + oMark(OS.rsi, d.rsi) + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '" data-v="' + Math.round(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
       boardTMCellsHTML() +   /* Trend · Mom · Read — one cell per BOARD_COLS entry, always; values are painted by the rewind module's paintTM() */
       /* H4 — the Geiger cell is the button for its breakdown (trend, momentum, the read); the row's own click still opens the company */
-      '<span class="sc-gcell" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
+      '<span class="sc-gcell' + oMark(OS.g, d.g) + '" role="button" tabindex="0" data-act="gpop" data-t="' + esc(d.t) + '" aria-haspopup="dialog" aria-expanded="false"' +
         ' aria-label="Geiger breakdown for ' + esc(d.t) + '" title="Geiger — click for trend, momentum and the read">' +
         (d.g == null && d.state === "CONNECTING" ? '<span style="text-align:center">' + SC_PENDING + '</span>' : geigerMiniHTML(d.g, 1, true)) + "</span>" +
       (d.rv == null && d.rvS == null && d.state === "CONNECTING" ? '<span class="sc-vol">' + SC_PENDING + '</span>' : volCellHTML(d.rv, d.rvS, d.rvAsOf)) +
       mktDotHTML(d.t) +
+      (typeof growCellHTML === "function" ? growCellHTML(d) : "") +   /* 22 Nov — GROWTH, the 15th cell (drawn after REVENUE) */
       "</div>";
   }).join("") + (typeof fundLiteHTML === "function" ? fundLiteHTML(S.coh) : "");
 }
@@ -9146,7 +9312,7 @@ const CMPX_SPECS = '<details class="sc-pagespecs sc-cmpx__specs"><summary>PAGE S
   "<p><b>REPLAY</b> is the REWIND bar's own clock: the same stored days, the same controls, and the board moves with it. What the stored days hold decides what a replayed day can show, and the cards say it: the tree's close tier has no stored past and the ranking table counts only from 5 Oct 2026 (the consolidated card reads 3/5); the iShares, Vanguard and equal-weight funds have stored trend from 18 Aug 2026 and no stored momentum, so their replayed bars are the trend alone (&ldquo;trend only&rdquo;), and replayed BREADTH is read trend against trend so the gap is like for like; before a fund's first stored day its card is empty and says why.</p>" +
   "</div></details>";
 function cohCompareScreenHTML() {
-  return cmpxBarHTML() + '<div class="sc-cmpx__scroll" id="cmpxScroll">' + cmpxCardsHTML() + "</div>" + CMPX_SPECS;
+  return cmpxBarHTML() + (typeof bondGaugeHTML === "function" ? bondGaugeHTML() : "") + '<div class="sc-cmpx__scroll" id="cmpxScroll">' + cmpxCardsHTML() + "</div>" + CMPX_SPECS;
 }
 /* THE ONE PAINTER of #cohCompare. Only the cards are redrawn, and the list keeps where it was scrolled to: a feed tick
    must not throw the reader back to the first card. The replay handle and PAGE SPECS are left standing (a scrub in
@@ -9549,6 +9715,7 @@ function paintRsiCell(t, v) {
   if (cell.setAttribute) cell.setAttribute("data-v", Math.round(v));   /* SLOW1 — the glow is a copy of the number (see .sc-rsi.is-xt::after) */
   cell.style.color = rsiGradColor(v);
   if (cell.classList) cell.classList.toggle("is-xt", rsiExtreme(v));   /* 27 Sep — an extreme breathes, softly */
+  if (typeof scheduleRsiOutliers === "function") scheduleRsiOutliers();   /* 22 Nov — RSI lands late: ring its outliers once the board has them */
 }
 
 /* ============================================================================
@@ -31491,7 +31658,7 @@ body.gwx-motion .gwx-pct{opacity:1}
          afford to lose width - it truncates gracefully and says nothing the pair does not. */
       ".ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr) minmax(0,12fr) minmax(0,12fr)"+
       " minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,7fr) minmax(0,9fr) minmax(0,9fr)"+
-      " minmax(0,10fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) !important;gap:5px}"+   /* 27 Sep — 14 tracks: USUAL DAY left the board */
+      " minmax(0,10fr) minmax(0,13fr) minmax(0,8fr) minmax(0,5fr) minmax(0,0fr) !important;gap:5px}"+   /* 27 Sep — 14 tracks: USUAL DAY left the board; 22 Nov — a 15th, zero wide, for GROWTH (drawn only where a layout makes room for it) */
       ".ch > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
       "@media(max-width:900px){.ch{grid-template-columns:minmax(0,9fr) minmax(0,10fr)"+
       " minmax(0,11fr) minmax(0,11fr) minmax(0,10fr) minmax(0,10fr) minmax(0,9fr) minmax(0,7fr)"+

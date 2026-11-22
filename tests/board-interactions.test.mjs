@@ -19,12 +19,16 @@ test("board header has one cell per row cell, relative volume labelled, and the 
   // (H-FRONT, 25 Sep, added REVENUE after MKT CAP; M52 added the
   // usual-day column after CHG). Trend/Mom/Read are part of
   // the static model and the row template (tests/dashboard-cold-load.test.mjs counts the rendered cells); they are no longer injected.
-  assert.equal(labels.length, 14, "14 header cells for 14 row cells (was 9: no volume header; then 10 + 3 injected after first paint; M52 added USUAL DAY; H-FRONT added REVENUE; 27 Sep moved USUAL DAY to its own room)");
+  assert.equal(labels.length, 15, "15 header cells for 15 row cells (was 9: no volume header; then 10 + 3 injected after first paint; M52 added USUAL DAY; H-FRONT added REVENUE; 27 Sep moved USUAL DAY to its own room; 22 Nov added GROWTH)");
   assert.equal(labels[labels.indexOf("Mkt Cap") + 1], "Revenue", "REVENUE sits beside the other size column");
   assert.ok(!labels.includes("Usual day"), "27 Sep — the usual day has its own room now, not a board column");
   assert.equal(labels[labels.indexOf("Chg") + 1], "F P/E");
   assert.equal(labels[labels.indexOf("Geiger") + 1], "RVol", "relative-volume header sits over the volume cell");
-  assert.equal(labels.at(-1), "Mkt", "Mkt stays over the market dot");
+  /* 22 Nov — GROWTH is last in the model and in the DOM, and is DRAWN after REVENUE by CSS order (cells 8-14 order:1), so
+     the market dot is still the last cell on screen and Mkt still sits over it */
+  assert.equal(labels.at(-1), "Growth", "GROWTH is the 15th cell of the model");
+  assert.equal(labels.at(-2), "Mkt", "Mkt stays over the market dot");
+  assert.match(page, /#boardPanel \.ch > :nth-child\(n\+8\):not\(\.sc-grow\)\{ order:1; \}/, "GROWTH is drawn after REVENUE, the dot stays last");
   assert.match(page, /\.sc-board__row, \.ch\.hdr\{padding-right:18px\}/, "header and rows share one geometry");
 });
 
