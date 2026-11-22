@@ -27,22 +27,23 @@ test("GROWTH is the last column of the model and the last cell of every row, dra
   assert.ok(fs15); assert.equal(fs15[1].match(/minmax/g).length, 15, "full screen: 14 cells + GROWTH");
 });
 
-test("the strip: eight quarters, revenue on top and EPS under it, up green and down red, 13 px tall, a dash with no data", () => {
+test("the strip (second pass): four quarters of revenue, a labelled bar each, 24 px tall, a dash with no data", () => {
   const src = cut("let GROWQ = {}", "/* 22 Nov 2026 — OUTLIERS INSIDE THE COHORT.");
   const api = new Function("pg", "esc", "SC_PENDING", src + "\nreturn { set: (m, r) => { GROWQ = m; GROWQ_READ = r; }, growCellHTML, grVal };")(() => Promise.resolve([]), esc, "…");
   api.set({ LLY: { q: ["2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-30", "2026-09-30"],
     rev: [0.4468, 0.4518, 0.3765, 0.5387, 0.4256, 0.5554, 0.4767, 0.3861], eps: [1.0165, 0.2339, 0.9177, 4.8037, 0.5143, 1.6993, 0.2623, -0.1207] } }, true);
   const h = api.growCellHTML({ t: "LLY" });
-  assert.equal((h.match(/<rect /g) || []).length, 16);
-  assert.match(h, /height="13"/);
-  assert.equal((h.match(/var\(--bear\)/g) || []).length, 1, "one falling quarter, drawn red");
-  assert.match(h, /revenue: Dec '24 \+45% .* Sep '26 \+39%/);
+  assert.equal((h.match(/<rect /g) || []).length, 4, "the last four quarters");
+  assert.match(h, /height="24"/);
+  assert.deepEqual([...h.matchAll(/class="sc-grow__n" fill="[^"]+">([^<]+)</g)].map((m) => m[1]), ["43", "56", "48", "39"]);
+  assert.match(h, /Dec '25 \+43% · Mar '26 \+56% · Jun '26 \+48% · Sep '26 \+39%/);
+  assert.match(h, /EPS \(reported\): Dec '25 \+51%/, "EPS in the hover");
   assert.equal(+api.grVal("LLY").toFixed(2), 38.61, "the column sorts by the newest quarter's revenue growth");
   assert.match(api.growCellHTML({ t: "SPY" }), />—</, "a fund: a dash");
 });
 
-test("outliers: against the board's own middle; multiples on their log at 2.5 spreads, the Geiger and RSI at 3; six readings or none", () => {
-  const src = cut("const OUT_K = 3;", "let RSI_OUT_T = 0;");
+test("outliers: against the board's own middle; multiples on their log at 2.5 spreads, the Geiger at 3; six readings or none; RSI is never ringed", () => {
+  const src = cut("const OUT_K = 3;", "/* 22 Nov 2026 — THE GROWTH-SCARE GAUGE");
   const api = new Function(src + "\nreturn { outlierStats, outlierMark, boardOutlierStats };")();
   const fpe = [20, 21, 19, 22, 18, 20.5, 23, 17, 21, 48, 9.2];
   const st = api.outlierStats(fpe, true);
@@ -55,7 +56,8 @@ test("outliers: against the board's own middle; multiples on their log at 2.5 sp
   assert.ok(b.fpe && b.fpe.log); assert.equal(b.g, null);
   assert.match(HUB, /'<span class="sc-fpe' \+ oMark\(OS\.fpe, d\.fpe\)/);
   assert.match(HUB, /'<span class="sc-gcell' \+ oMark\(OS\.g, d\.g\)/);
-  assert.match(HUB, /if \(typeof scheduleRsiOutliers === "function"\) scheduleRsiOutliers\(\);/, "the late RSI is ringed when it lands");
+  assert.doesNotMatch(HUB, /oMark\(OS\.rsi/, "second pass: RSI flashes at its extremes instead of a ring");
+  assert.equal("rsi" in b, false);
 });
 
 test("the bonds gauge: TLT ÷ SHY against its 200-day, its month and its year, in plain words", () => {
