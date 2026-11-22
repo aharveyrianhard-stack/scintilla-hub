@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <base href="/">
-<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 466c466) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
+<!-- TRIAL COPY (27 Sep): company view round 3 (R3, candidate/company-view-r3-20260927, built from 9a6d27b) served beside the live Hub for Alan to try. The live page at / is unchanged. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SCINTILLA</title>
@@ -245,6 +245,10 @@ body.exp .bands, body.exp .sc-helm{ display:none; }
 /* a STORED market cap older than MCAP_MAX_AGE_MS (or with no source time) keeps its number but is drawn muted and
    dotted-underlined; a current one is drawn exactly as before. Either way the cell title carries the source date. */
 .sc-mcap.is-aged{ color:var(--mute); text-decoration:underline dotted; text-underline-offset:2px; }
+/* 21 Nov — P/E and YIELD on the DEFENSIVES / DIVIDEND boards: the same cell as MKT CAP, in its place */
+.sc-pe, .sc-dy{ text-align:center; font-family:var(--mono); font-size:10px;
+  font-variant-numeric:tabular-nums; color:var(--ink2); white-space:nowrap; overflow:hidden; }
+.sc-dy.is-none{ color:var(--mute); }
 
 /* SCINTILLA · Room 2 · CohortBoard — assembly frame   [APPROVED 2026-06-10] */
 .sc-board{ display:flex; flex-direction:column; min-height:0;
@@ -1990,10 +1994,10 @@ body.feed-down .sc-head__logo{ --crk:var(--bear);
    .cohtabstrip scrolls, so the right-hand .cohtabctrls (search + ⛶) stay pinned
    and visible regardless of how many cohort tabs there are. */
 .sc-ihead.cohtabs{ gap:0; padding:0 6px; overflow:hidden; border-bottom:1px solid var(--line); align-items:stretch; }
-.sc-ihead.cohtabs .cohtabstrip{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:3px; overflow-x:auto; }
+.sc-ihead.cohtabs .cohtabstrip{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:1px; overflow-x:auto; }   /* 21 Nov — gap 3px -> 1px and the tabs' side padding 4px -> 3px: with DEFENSIVES and DIVIDEND the row needed 726 px of 664-676; its scroll bar is hidden, so an overflowing tab was simply out of sight */
 .sc-ihead.cohtabs .cohtabstrip::-webkit-scrollbar{ display:none; }
 .sc-ihead.cohtabs .cohtabctrls{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding-left:8px; }
-.sc-ihead.cohtabs .sc-coh{ flex:0 0 auto; padding:9px 4px; font-size:7px; letter-spacing:.02em; text-transform:uppercase; white-space:nowrap; }   /* FIX 1 (R33) — match left ptabs .sc-it type (7px/.02em/pad 4px) so both strips read as one coherent system */
+.sc-ihead.cohtabs .sc-coh{ flex:0 0 auto; padding:9px 3px; font-size:7px; letter-spacing:.02em; text-transform:uppercase; white-space:nowrap; }   /* FIX 1 (R33) — match left ptabs .sc-it type (7px/.02em/pad 4px) so both strips read as one coherent system */
 .sc-ihead.cohtabs .sc-coh.is-active{ color:var(--crk); box-shadow:inset 0 -2px 0 var(--crk); }
 /* H2 — an active list tab keeps its own ink (the cyan underline still marks it as the active one) */
 .sc-ihead.cohtabs .sc-coh--radar.is-active{ color:var(--ink-radar); }
@@ -4524,6 +4528,8 @@ body.vidfs .sc-ytm__x, body.vidfs .sc-ytm__seek, body.vidfs .sc-fsclose{ display
 @media(max-width:820px){.sc-cohstrip{grid-template-columns:repeat(var(--coh-half,5),minmax(0,1fr)) !important}}
 .sc-cohstrip__read{white-space:normal !important;text-overflow:clip !important;height:16px !important;line-height:8px !important;hyphens:manual;overflow-wrap:normal}
 .sc-cohstrip__lbl{font-size:8px !important;letter-spacing:0 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 21 Nov — fourteen cohorts (DEFENSIVES, DIVIDEND) in a card as wide as twelve were: the widest name, GROWTH, read "GRO…" at 8px */
+.sc-cohstrip.is-dense .sc-cohstrip__lbl{font-size:7px !important}
 .gwx-tm{font-family:var(--mono);font-size:9.5px;text-align:right;font-variant-numeric:tabular-nums}
 .gwx-div{color:var(--warn,#e0a24a);margin-left:3px}
 /* the rewind bar's box, so the slot the board template reserves for it has the bar's own height from the first paint */
@@ -6176,7 +6182,7 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
      Individually optional, individually bounded, last-known-good on failure. No entry here can
      fail the board. live_quotes and composite_staged remain ONLY as non-equity enrichment: they
      are no longer the equity price or Geiger authority and no longer gate boot. */
-  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows, geoRows] = await Promise.all([
+  const [members, quotes, geiger, profiles, ribbons, fpeEst, fpeTtm, socSent, socDetail, boardVol, ntmRows, geoRows, divAnn] = await Promise.all([
     scOpt('cohorts',          pg("cohorts?select=ticker,cohort"), []),
     scOpt('live_quotes',      pg("live_quotes?select=ticker,price,change,chg_pct,prev_close,updated_ts").then(scCoherentRetainedQuotes), []),
     scOpt('composite_staged', pg("composite_staged?select=ticker,composite,trend,momentum,updated_ts&tf=eq.D&order=updated_ts.desc"), []),
@@ -6192,6 +6198,8 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
     scOpt('fwd_eps_ntm',      pg("fwd_eps_ntm?select=ticker,ntm_eps,updated_ts"), []),
     /* admission v2: the tier. One try, no retry: before the role column exists this is a 400, and it must cost nothing. */
     scOpt('tickers_role',     pg("tickers?select=ticker&role=eq.geiger_only", 1).catch(() => []), []),
+    /* 21 Nov — the yield on the DEFENSIVES / DIVIDEND boards; cached six hours, so this is a read only a few times a day */
+    scOpt('dividend_annual',  typeof divAnnLoad === "function" ? divAnnLoad() : null, {}),
   ]);
   applyEstimates(fpeEst);                                      // 29 Sep — one place, shared with a late answer (loadEstimates)
   for (const r of fpeTtm) {
@@ -6365,6 +6373,8 @@ async function fetchBoardRows(cohort = "ALL", fav = []) {
                           : num(px[m.ticker] && px[m.ticker].change);
                })(),
         fpe:   fpeVal(m.ticker, price),                                 // R26 FIX 6 — fwd P/E (guarded)
+        pe:    typeof peVal === "function" ? peVal(m.ticker, price) : null,   // 21 Nov — P/E (live price ÷ eps_ttm), shown on DEFENSIVES / DIVIDEND
+        dy:    typeof dyVal === "function" ? dyVal(m.ticker, price) : null,   // 21 Nov — dividend yield %, shown on DEFENSIVES / DIVIDEND
         rsi:   null,                                                    // FIX A — filled by loadBoardRsi() after render (lazy, per-ticker chunks)
         hb:    null,                                                    // M52 — the stored heartbeat row, filled by loadBoardHeartbeat()
         g:     num(gg[m.ticker] && gg[m.ticker].composite),
@@ -6666,6 +6676,13 @@ const COHORTS = [
      UTILITIES, GEV is INDUSTRIAL - which is exactly what two dimensions are for.
      NextEra came OUT: Alan, "NextEra Energy is a utility completely", and XLU agrees. */
   ["AI POWER", "AI_POWERTRAIN"],
+  /* DEFENSIVES + DIVIDEND (21 Nov 2026). Alan, through the markets session: "where money hides in a sell-off" - on Friday
+     20 Nov XLP +0.7%, WMT +1.5%, TLT +1.4% while SMH -10.6%. DEFENSIVES = the staples, the drug makers and health names, the
+     utilities; DIVIDEND = high-yield, cash-backed payers. BLUE CHIP keeps its large quality names (Boeing and Nike stay
+     there: blue chips, not a safety bucket) - the safety bucket is DEFENSIVES, and neither is in it. Both boards show P/E,
+     F P/E and YIELD (MULT_COHS). General Mills, Hershey and Kraft Heinz are not on the Hub: light rows under DEFENSIVES
+     (COH_LITE). Membership is data (ticker_membership, source 'hub-cohorts-20261121'). */
+  ["DEFENSIVES", "DEFENSIVE"], ["DIVIDEND", "DIVIDEND"],
 ];
 /* ★ THE SECTORS ARE NOT COHORT TABS. Alan, on seeing 22 of them: "the fact that we have
    twenty two tabs now just says to me that we need a different structure. Cohorts and
@@ -7863,6 +7880,17 @@ const ADDCHART_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none
 /* F1 (1 Oct; Alan on relative volume: "I've been begging for it") — RVOL carries a sort key too (rv): the PACE, board_volume.
    rvol_at_time, the number beside the battery. A name with no current reading (rv null: stale or no row) sorts last either way. */
 const BOARD_COLS = [["", null], ["Ticker","t"], ["Last","price"], ["Chg","c"], ["F P/E","fpe"], ["Mkt Cap","mc"], ["Revenue","rev"], ["RSI","rsi"], ["Trend","tr"], ["Momentum","mo"], ["Read", null], ["Geiger","g"], ["RVol","rv"], ["Mkt", null]];   // FIX 4 — RSI col after FPE · R42 §3 — MKT CAP col between F P/E and RSI (sortable via mc; width paid for by the wider board)
+/* 21 Nov 2026 — THE MULTIPLES BOARDS. Alan asked that every name on DEFENSIVES and DIVIDEND show its P/E, forward P/E and
+   dividend yield beside the Geigers. On those two boards only, MKT CAP and REVENUE give their two places (same tracks, same
+   widths, nothing else moves) to P/E - the live price over the last twelve months' reported EPS (fundamentals.eps_ttm, the
+   STATS tab's basis) - and YIELD - the latest regular dividend times its payments a year over the live price
+   (dividend_annual, from FMP's dividends). Every other board keeps MKT CAP and REVENUE. */
+const MULT_COHS = { DEFENSIVE: 1, DIVIDEND: 1 };
+function multBoard() { return typeof S !== "undefined" && !!S && !!MULT_COHS[S.coh]; }
+function boardCols() {
+  if (!multBoard()) return BOARD_COLS;
+  return BOARD_COLS.map((c) => (c[1] === "mc" ? ["P/E", "pe"] : c[1] === "rev" ? ["Yield", "dy"] : c));
+}
 /* the three component cells, in the classes paintTM() already updates in place. They are born PENDING ("…"), never as a
    dash: on this board a dash means "unavailable", and nothing is known to be unavailable before the first read lands. */
 function boardTMCellsHTML() {
@@ -7946,6 +7974,52 @@ function mcapCellHTML(t, mc, asOf, nowMs) {
   const a = scCapAge(asOf, nowMs);
   return '<span class="sc-mcap' + (has && a.aged ? " is-aged" : "") + '" id="lmc_' + esc(t) + '"' +
     (has ? ' title="' + esc(scCapTitle(asOf, nowMs)) + '"' + (a.date ? ' data-sc-mcap-asof="' + esc(a.date) + '"' : "") : "") + ">" + fmtCap(mc) + "</span>";
+}
+/* 21 Nov 2026 — P/E AND YIELD for the multiples boards (MULT_COHS). P/E = live price ÷ EPS of the last twelve months as
+   reported (fundamentals.eps_ttm), only for a company that reports in dollars and earned money (the STATS tab's rule: at or
+   below zero there is no multiple). YIELD = the latest regular dividend × its payments a year ÷ the live price
+   (public.dividend_annual over FMP's dividends: specials, irregular and daily payments left out; a raise already declared
+   counts). Read once, then every six hours - dividends do not move intraday. */
+let DIVANN = {}, DIVANN_READ = false, DIVANN_AT = 0, DIVANN_FLIGHT = null;
+const DIV_PER_YEAR = { Weekly: 52, Monthly: 12, Quarterly: 4, "Semi-Annual": 2, Annual: 1 };
+function divAnnLoad() {
+  if (DIVANN_READ && Date.now() - DIVANN_AT < 6 * 3600e3) return Promise.resolve(DIVANN);
+  if (DIVANN_FLIGHT) return DIVANN_FLIGHT;
+  DIVANN_FLIGHT = pg("dividend_annual?select=ticker,ex_date,amount,frequency,annual").then((rows) => {
+    const m = {};
+    for (const r of rows || []) m[String(r.ticker).toUpperCase()] = { ex: r.ex_date || null, amount: num(r.amount), frequency: r.frequency || "", annual: num(r.annual) };
+    DIVANN = m; DIVANN_READ = true; DIVANN_AT = Date.now(); DIVANN_FLIGHT = null; return DIVANN;
+  }).catch(() => { DIVANN_FLIGHT = null; return DIVANN; });
+  return DIVANN_FLIGHT;
+}
+function peVal(t, price) {
+  const e = typeof EPSTTM !== "undefined" ? EPSTTM[t] : null;
+  if (price == null || !(price > 0) || e == null || !(e > 0)) return null;
+  if (typeof estNonUsd === "function" && estNonUsd(t)) return null;   /* EPS in another currency: never divided into a dollar price */
+  return price / e;
+}
+function dyVal(t, price) {
+  const a = DIVANN[t];
+  if (price == null || !(price > 0) || !a || !(a.annual > 0)) return null;
+  return a.annual / price * 100;
+}
+function peCellHTML(d) {
+  const e = typeof EPSTTM !== "undefined" ? EPSTTM[d.t] : null, v = d.pe;
+  const title = v != null ? "P/E " + v.toFixed(1) + "× = the live price ÷ " + (+e).toFixed(2) + ", the EPS of the last twelve months as reported · fundamentals.eps_ttm"
+    : e != null && !(e > 0) ? "no P/E: the last twelve months' EPS is at or below zero (" + (+e).toFixed(2) + ")"
+    : "no P/E: no twelve-month EPS in dollars on record";
+  return '<span class="sc-pe" title="' + esc(title) + '">' + (v != null ? (v >= 100 ? Math.round(v) : v.toFixed(1)) + "×" : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>";
+}
+function yieldCellHTML(d) {
+  const a = DIVANN[d.t], v = d.dy;
+  if (v != null) {
+    const per = DIV_PER_YEAR[a.frequency] || 0;
+    const title = "yield " + v.toFixed(2) + "% = " + a.frequency.toLowerCase() + " dividend " + a.amount + " × " + per + " a year = " + a.annual +
+      " ÷ the live price · latest ex-date " + (a.ex || "?") + " · dividend_annual (FMP dividends)";
+    return '<span class="sc-dy" title="' + esc(title) + '">' + v.toFixed(2) + "%</span>";
+  }
+  if (!DIVANN_READ) return '<span class="sc-dy">' + SC_PENDING + "</span>";
+  return '<span class="sc-dy is-none" title="no regular dividend on record">none</span>';
 }
 /* ── M52 HEARTBEAT ─────────────────────────────────────────────────────────────────────────
    THE USUAL DAY. The size of a typical daily move for one name: the spread (standard deviation)
@@ -8054,7 +8128,7 @@ function shownRows() {
 }
 
 function boardHeaderHTML() {
-  return '<div class="ch hdr">' + BOARD_COLS.map(([label, key]) =>
+  return '<div class="ch hdr">' + (typeof boardCols === "function" ? boardCols() : BOARD_COLS).map(([label, key]) =>
     key
       ? '<button class="sc-hcell ' + (S.sort.key === key ? "is-sorted" : "") + '" data-act="sort" data-key="' + key + '">' +
         label + (S.sort.key === key ? (S.sort.dir < 0 ? " ▼" : " ▲") : "") + "</button>"
@@ -8111,6 +8185,9 @@ function volCellHTML(at, sess, asOf) {
    the SAME order and updates values in place. With the market closed and values static
    the board therefore does not move at all after the user sorts. */
 function computeBoardOrder() {
+  /* 21 Nov — a sort on a column this board does not show (P/E or YIELD off the multiples boards, MKT CAP or REVENUE on them)
+     goes back to the default (Geiger, highest first), so the order always matches a column on screen */
+  if (S.sort.key && typeof boardCols === "function" && !boardCols().some((c) => c[1] === S.sort.key)) S.sort = { key: "g", dir: -1 };
   const key = S.sort.key, dir = S.sort.dir;
   /* NO DYNAMIC COLUMN IS RANKED BEFORE ONE COMPLETE AUTHORITATIVE PROVIDER SNAPSHOT HAS LANDED.
      This is the single choke point: seedBoardFromCache, mergeBoardRows, the header click and the
@@ -8143,7 +8220,7 @@ function computeBoardOrder() {
 function boardSortNumber(r, key) {
   const v = boardSortValue(r, key);
   if (v == null || v === "" || !isFinite(v)) return null;
-  if ((key === "mc" || key === "rev") && !(+v > 0)) return null;
+  if ((key === "mc" || key === "rev" || key === "pe" || key === "dy") && !(+v > 0)) return null;
   return +v;
 }
 /* H4 — TREND (tr) and MOMENTUM (mo) are not on the row: they are the values the board is SHOWING for that name
@@ -8318,8 +8395,9 @@ function boardRowsHTML() {
       /* 27 Sep — USUAL DAY left the board for its own room (Alan: "move out of the dashboard table into their own
          tab"). The heartbeat is still read and stashed on the row: the cohort line and the header title use it. */
       '<span class="sc-fpe" id="lf_' + esc(d.t) + '" title="' + esc(fpeTitle(d.t)) + '">' + (d.fpe != null ? (typeof fpeCellText === "function" ? fpeCellText(d.t, d.fpe) : d.fpe.toFixed(1) + "×") : d.state === "CONNECTING" ? SC_PENDING : fpeWithheldText(d.t)) + "</span>" +   /* R26 FIX 6 · R27 — × marks the multiple; title = basis + source date */
-      mcapCellHTML(d.t, d.mc, d.mcAsOf) +
-      revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
+      (typeof multBoard === "function" && multBoard() ? peCellHTML(d) + yieldCellHTML(d)   /* 21 Nov — DEFENSIVES / DIVIDEND: P/E and YIELD in MKT CAP's and REVENUE's places */
+        : mcapCellHTML(d.t, d.mc, d.mcAsOf) +
+      revCellHTML(d.t, d.rev, d.revAsOf, d.revCcy, d.revLocal, d.revZero)) +   /* H-FRONT — REVENUE (TTM) beside MKT CAP */
       /* R42 §3 — MKT CAP (company_profile market_cap already on the row) · title = its source date */
       '<span class="sc-rsi' + (typeof rsiExtreme === "function" && rsiExtreme(d.rsi) ? " is-xt" : "") + '" id="lr_' + esc(d.t) + '"' + (d.rsi != null ? ' style="color:' + rsiGradColor(d.rsi) + '" data-v="' + Math.round(d.rsi) + '"' : "") + ">" +   /* FIX (Alan: gradated, not a hard 29/30 flip) — rsiGradColor(); id=lr_<t> for lazy loadBoardRsi() */
         (d.rsi != null ? Math.round(d.rsi) : d.state === "CONNECTING" ? SC_PENDING : "—") + "</span>" +
@@ -8341,6 +8419,10 @@ function boardRowsHTML() {
    row - not in the order, the count, the cohort mean or the universe. Price and day % come from FMP through the house's own
    door (Supabase function fund-lite-quotes: one batch call for the rows on screen, at most once a minute). */
 const FUND_LITE_MAX = 25;
+/* 21 Nov 2026 — a cohort's own off-Hub names, drawn the same light way under its board: Alan listed General Mills, Hershey and
+   Kraft Heinz among the DEFENSIVES; they are not on the Hub (no tickers row), so they are never board rows - daily Geiger,
+   live price and day %, as under a fund. */
+const COH_LITE = { DEFENSIVE: { label: "DEFENSIVES", h: [["GIS"], ["HSY"], ["KHC"]] } };
 const FUND_NAMES_URL = "/deliverables/20261118/fund-lite/names.json";
 let FUND_NAMES = null, fundNamesReady = null, FUND_LITE_IX = null, FUND_NAMES_FAIL_AT = 0;
 let FUND_LITE_Q = { key: "", at: 0, map: {}, busy: false, failAt: 0 };
@@ -8391,15 +8473,17 @@ const fundLiteNum = (v) => v == null || !Number.isFinite(v) ? "—" : '<span cla
 function fundLiteHTML(coh) {
   if (!coh || coh === "ALL" || (typeof isListCoh === "function" && isListCoh(coh))) return "";
   const empty = '<div class="sc-lite" id="fundLite" data-fund="' + esc(coh) + '"></div>';
+  const cl = typeof COH_LITE !== "undefined" && COH_LITE[coh] ? COH_LITE[coh] : null;   /* 21 Nov — a cohort's own off-Hub names */
   /* a read that failed waits a minute before the next try - a paint never starts a loop of reads */
-  if (!FUND_HOLD) { if (Date.now() - FUND_HOLD_FAIL_AT > 60000) fundSetsLoad().then(() => { if (FUND_HOLD) fundLitePaint(); }); return empty; }
-  const d = FUND_HOLD.data; if (!d || !(d[coh] || d[FUND_HOLD_ALIAS[coh]])) return "";
+  if (!cl && !FUND_HOLD) { if (Date.now() - FUND_HOLD_FAIL_AT > 60000) fundSetsLoad().then(() => { if (FUND_HOLD) fundLitePaint(); }); return empty; }
+  const d = cl ? { [coh]: { h: cl.h } } : FUND_HOLD.data; if (!d || !(d[coh] || d[FUND_HOLD_ALIAS[coh]])) return "";
   const scout = typeof SC_BLEND !== "undefined" ? SC_BLEND.scout : null;
   if (!scout) { const p = typeof scBlendLoad === "function" ? scBlendLoad() : null; if (p && p.then) p.then(() => { if (SC_BLEND.scout) fundLitePaint(); }); return empty; }
   const onHub = window.SC_DECLARED_SET;
   if (!onHub || !onHub.size) return empty;   /* without the Hub's own set every holding would look "off the Hub" */
   if (!FUND_NAMES && Date.now() - FUND_NAMES_FAIL_AT > 60000) fundNamesLoad().then(() => { if (FUND_NAMES) fundLitePaint(); });
-  const L = fundLiteRows(coh, FUND_HOLD, scout, onHub, FUND_LITE_MAX);
+  const L = fundLiteRows(coh, cl ? { data: d } : FUND_HOLD, scout, onHub, FUND_LITE_MAX);
+  const lab = cl ? cl.label : coh;
   if (!L || !L.rows.length) return empty;
   const names = FUND_NAMES || {};
   const syms = L.rows.map((r) => r.t); fundLiteQuotesLoad(syms);
@@ -8408,12 +8492,12 @@ function fundLiteHTML(coh) {
   const chOf = (t) => { const q = Q[t], c = q && q.change_pct != null ? +q.change_pct : NaN; if (!Number.isFinite(c)) return '<span class="sc-lite__c na">—</span>';
     return '<span class="sc-lite__c ' + (c >= 0 ? "up" : "dn") + '">' + (typeof fmtC === "function" ? fmtC(c) : (c >= 0 ? "+" : "−") + Math.abs(c).toFixed(2) + "%") + "</span>"; };
   return '<div class="sc-lite" id="fundLite" data-fund="' + esc(coh) + '" role="list" aria-label="' + esc(coh) + ' holdings not on the Hub">' +
-    '<div class="sc-lite__hd"><b>also in ' + esc(coh) + '</b><span>not on the Hub · daily Geiger' + (L.session ? " · " + esc(fundLiteSess(L.session)) : "") +
+    '<div class="sc-lite__hd"><b>also in ' + esc(lab) + '</b><span>not on the Hub · daily Geiger' + (L.session ? " · " + esc(fundLiteSess(L.session)) : "") +
       (L.alias ? " · its own list is not on file, " + esc(L.alias) + " stands in" : "") + '</span><span class="sc-lite__n">' + L.rows.length + " of " + L.off + "</span></div>" +
     L.rows.map((r) => {
       const nm = names[r.t] ? String(names[r.t][0] || "") : "";
-      return '<div class="sc-lite__row" role="listitem" data-t="' + esc(r.t) + '" title="' + esc(r.t + (nm ? " · " + nm : "") + " · " + r.w.toFixed(2) + "% of " + coh) + '">' +
-        '<span class="sc-lite__tk">' + esc(r.t) + '</span><span class="sc-lite__nm">' + esc(nm) + '</span><span class="sc-lite__w">' + r.w.toFixed(1) + "%</span>" +
+      return '<div class="sc-lite__row" role="listitem" data-t="' + esc(r.t) + '" title="' + esc(r.t + (nm ? " · " + nm : "") + (cl ? " · on " + lab + ", not on the Hub" : " · " + r.w.toFixed(2) + "% of " + coh)) + '">' +
+        '<span class="sc-lite__tk">' + esc(r.t) + '</span><span class="sc-lite__nm">' + esc(nm) + '</span><span class="sc-lite__w">' + (cl ? "" : r.w.toFixed(1) + "%") + "</span>" +
         '<span class="sc-lite__px">' + pxOf(r.t) + "</span>" + chOf(r.t) +
         geigerMiniHTML(r.g, 1, true) + '<span class="sc-lite__tm">trend ' + fundLiteNum(r.tr) + " · mom " + fundLiteNum(r.mo) + "</span></div>";
     }).join("") + "</div>";
@@ -8602,7 +8686,8 @@ const COH_ABBR = { FAV:"LIKED", AI_HARDWARE:"AI HW", AI_SOFTWARE:"AI SW", MEGACA
                    GROWTH:"GROWTH", CRYPTO:"CRYPTO", INTL:"INTL", MACRO:"MACRO",
                    INDEXES:"INDEX", THEMATIC:"THEME", METALS:"METALS",
                    MATERIALS:"MATRLS", UTILITIES:"UTILS", STAPLES:"STAPLE",
-                   REAL_ESTATE:"REALES", COMMS:"COMMS", AI_POWERTRAIN:"AI PWR" };
+                   REAL_ESTATE:"REALES", COMMS:"COMMS", AI_POWERTRAIN:"AI PWR",
+                   DEFENSIVE:"DEFENS", DIVIDEND:"DIVS" };
 /* R46 added quarter-scale gridlines to this track. R50 §1 REMOVES them (Alan: "I don't
    like those lines, that shading in the tickers — it's not necessary, the visuals say
    everything"). The CENTRE ZERO LINE stays: it is the one rule that carries meaning —
@@ -8875,7 +8960,7 @@ function cohortCompareStripHTML() {
   return '<div class="sc-cohstrip__hd">' + (scCmpMode() === "SECTORS" ? (idxFam ? "INDEX FUND" : "SECTOR") : "COHORT") + ' COMPARE · geiger composite · ' +
            (ourNames ? "OUR NAMES in each sector, averaged (not the funds) · the number under each column = how many of our names · " : "") + 'bull ◂ ▸ bear · scale ±' +
            span.toFixed(2) + cmpBtns + "</div>" +
-         '<div class="sc-cohstrip" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
+         '<div class="sc-cohstrip' + (scCmpMode() !== "SECTORS" && list.length > 12 ? " is-dense" : "") + '" id="cohStrip" style="--coh-n:' + list.length + ';--coh-half:' + Math.ceil(list.length / 2) + '">' + cols + "</div>";
 }
 /* ══ HC1 (6 Oct) — EVERY COMPARE VIEW ON ONE SCREEN ══════════════════════════════════════════════════════════════════
    Alan, 6 Oct ~17:20 ET: "these cohort and sector compare tabs — instead of seeing them as tabs, we show them all
@@ -8982,7 +9067,7 @@ function cmpxCardHTML(v) {
           (exp ? "fold back to the bars" : "unfold: the word and the trend / momentum pair under each bar") + '">' + (exp ? "⤡" : "⤢") + "</button>" : "") +
       "</header>" +
       (have && !wait
-        ? '<div class="sc-cohstrip' + (id === "BOWTIE" ? " sc-cohstrip--bowtie" : "") + '" style="--coh-n:' + list.length + ";--coh-half:" + cmpxPerRow(list.length, exp) + '">' +
+        ? '<div class="sc-cohstrip' + (id === "BOWTIE" ? " sc-cohstrip--bowtie" : "") + (id === "COHORTS" && list.length > 12 ? " is-dense" : "") + '" style="--coh-n:' + list.length + ";--coh-half:" + cmpxPerRow(list.length, exp) + '">' +
             cohStripColsHTML(list, span, !exp) + "</div>"
         : '<div class="sc-cmpx__none">' + esc(cmpxNoneText(id, scRewindAsof())) + "</div>") +
     "</section>";
@@ -15942,6 +16027,8 @@ const ERC_COH_COLOR = {
   AI_HARDWARE:  "#FF8A00",   /* volume orange */
   AI_SOFTWARE:  "#FF3DBE",   /* volatility pink */
   AI_POWERTRAIN:"#C8FF00",   /* lime */
+  DEFENSIVE:    "#2FD3B5",   /* teal - 21 Nov */
+  DIVIDEND:     "#E8B74A",   /* gold - 21 Nov */
   GROWTH:       "#FFE500",   /* structure yellow */
   INTL:         "#2D9CFF",   /* trend blue */
   CRYPTO:       "#8B5CF6",   /* violet — crypto, as everywhere else in the cockpit */
