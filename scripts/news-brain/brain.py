@@ -23,6 +23,8 @@ DESK = {"reuters.com","cnbc.com","wsj.com","barrons.com","marketwatch.com","benz
 LAWYERS = re.compile(r"(class action|lead plaintiff|securities (fraud|litigation|investigation|class)|shareholder (alert|investigation|rights|class)|investor (alert|deadline|notice)|investors? (have|has|face|should|are encouraged|who (lost|suffered|purchased|bought))|law (firm|offices)|\bLLP\b|encourages? .{0,80}(investors|shareholders)|on behalf of (investors|shareholders)|fraud investigation|deadline (alert|reminder))", re.I)
 
 def log(*a): print(datetime.datetime.now().strftime("%m-%d %H:%M:%S"), *a, flush=True)
+def iso(s):   # this Mac's /usr/bin/python3 is 3.9: it reads only 3 or 6 digits after the seconds, and the database drops trailing zeros ("29.57304"). From 9 to 22 Nov such a time stopped the video step 670 times.
+    return datetime.datetime.fromisoformat(re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], str(s).replace("Z", "+00:00"), count=1))
 def http(url, data=None, headers=None, timeout=25):
     r = urllib.request.Request(url, data=data, headers=headers or {}); return urllib.request.urlopen(r, timeout=timeout).read()
 PG = {"apikey": ANON, "Authorization": "Bearer " + ANON, "Content-Type": "application/json"}
@@ -58,7 +60,7 @@ def run_worker(job_id, folder, task, out_name, timeout=720):
                 before = kimi_meter()
                 if before and before["used"] >= KIMI_STOP_AT:
                     when = ""
-                    try: when = " until " + datetime.datetime.fromisoformat(before["resets"].replace("Z", "+00:00")).astimezone(NY).strftime("%-I:%M %p")
+                    try: when = " until " + iso(before["resets"]).astimezone(NY).strftime("%-I:%M %p")
                     except Exception: pass
                     notify(title="Kimi is at %d%% of his 5-hour limit: reads go to ChatGPT%s" % (before["used"], when), kind="ops", level=1, key="ops|kimi-limit|" + str(before["resets"]), source="News brain")
                     log("kimi at", before["used"], "so", job_id, "skips him"); continue
@@ -165,7 +167,7 @@ def videos(limit=MAX_VIDEOS_PER_TICK, hours=48):
         if v in done or n >= limit: continue
         st = state.get(v)
         if st and st["status"] == "none":
-            age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(st["fetched_at"].replace("Z", "+00:00"))
+            age = datetime.datetime.now(datetime.timezone.utc) - iso(st["fetched_at"])
             if age < datetime.timedelta(minutes=55): continue
         n += 1
         channel = (deep["ids"].get(r["channel_id"]) or r.get("channel") or "").strip()
