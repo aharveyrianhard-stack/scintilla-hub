@@ -85,11 +85,26 @@ def _json_ok(p):
 
 # ---- the house report, read only. Alan: "you've seen the .com analysis that we've hosted ... the tone of that is important to track ... the tracking of things that support certain scenarios"; "Kimmy should be aware of the .com analysis too". The markets session owns it; we only read it. ----
 SCOREBOARD_URL = "https://volume-pulse-pied.vercel.app/data/lab/story/scoreboard.json"   # the markets session's own record of each test, live since 1 Nov, refreshed at 6:50 AM and 4:35 PM on weekdays and 9:05 AM on Saturday. We only quote it, never decide a test.
+# Alan, 22 Nov (relayed by the markets session): the path the scoreboard stores as "Expected" is called "Base case" wherever a person reads it; the stored
+# key stays "Expected". The readers would echo the key into his cards and notes, so the summary they see says "Base case", keys and text, the report's own
+# words. Same rules as volume-pulse scripts/story/theme.py base_case(), copied (that folder is never edited from here); an id is never touched; lowercase
+# "expected" is plain English and stays.
+_BC = [(r'\bEXPECTED PATH\b', 'BASE CASE'), (r'\bEXPECTED\b', 'BASE CASE'), (r'\b([Oo]ur|[Tt]he) Expected path\b', r'\1 Base case'),
+       (r'\bExpected path\b', 'Base case'), (r'\b(on|On|than|of|under|inside) Expected\b', r'\1 the Base case'), (r'\bExpected\b', 'Base case')]
+def base_case(s):
+    if not isinstance(s, str) or ("Expected" not in s and "EXPECTED" not in s): return s
+    for a, b in _BC: s = re.sub(a, b, s)
+    return s
+def base_case_all(x):
+    if isinstance(x, str): return base_case(x)
+    if isinstance(x, list): return [base_case_all(i) for i in x]
+    if isinstance(x, dict): return {base_case(k): (v if k == "id" else base_case_all(v)) for k, v in x.items()}
+    return x
 def scoreboard():   # the whole file is 80 KB; the reads need each test's id, date, question, state and what would move the odds
     try:
         d = json.loads(http(SCOREBOARD_URL, timeout=15).decode("utf-8", "replace")); c = d.get("counts") or {}
         tests = [{"id": t.get("id"), "date": t.get("date"), "question": t.get("question"), "state": t.get("state"), "would_move": t.get("threshold_wording")} for t in d.get("tests") or []]
-        return "\n\n## SCOREBOARD (the markets session's own record; quote it, never change it)\n" + json.dumps({"as_of": d.get("as_of"), "tests_fired": c.get("fired"), "tests_in_all": c.get("tests"), "published_odds": (d.get("published_odds") or {}).get("odds"), "implied_odds": (d.get("implied_odds") or {}).get("odds"), "odds_differ": d.get("odds_differ_in_words"), "judgment": d.get("judgment"), "fired_events": d.get("events"), "tests": tests}, ensure_ascii=False)[:14000]
+        return "\n\n## SCOREBOARD (the markets session's own record; quote it, never change it)\n" + json.dumps(base_case_all({"as_of": d.get("as_of"), "tests_fired": c.get("fired"), "tests_in_all": c.get("tests"), "published_odds": (d.get("published_odds") or {}).get("odds"), "implied_odds": (d.get("implied_odds") or {}).get("odds"), "odds_differ": d.get("odds_differ_in_words"), "judgment": d.get("judgment"), "fired_events": d.get("events"), "tests": tests}), ensure_ascii=False)[:14000]
     except Exception as e: log("no scoreboard", str(e)[:120]); return ""
 def report_context(limit=9000):
     try: return _report_context(limit) + scoreboard()
