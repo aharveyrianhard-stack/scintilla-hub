@@ -87,10 +87,10 @@ def _json_ok(p):
 
 # ---- the house report, read only. Alan: "you've seen the .com analysis that we've hosted ... the tone of that is important to track ... the tracking of things that support certain scenarios"; "Kimmy should be aware of the .com analysis too". The markets session owns it; we only read it. ----
 SCOREBOARD_URL = "https://volume-pulse-pied.vercel.app/data/lab/story/scoreboard.json"   # the markets session's own record of each test, live since 1 Nov, refreshed at 6:50 AM and 4:35 PM on weekdays and 9:05 AM on Saturday. We only quote it, never decide a test.
-# Alan, 22 Nov (relayed by the markets session): the path the scoreboard stores as "Expected" is called "Base case" wherever a person reads it; the stored
-# key stays "Expected". The readers would echo the key into his cards and notes, so the summary they see says "Base case", keys and text, the report's own
-# words. Same rules as volume-pulse scripts/story/theme.py base_case(), copied (that folder is never edited from here); an id is never touched; lowercase
-# "expected" is plain English and stays.
+# Alan, 22 Nov: the path once stored as "Expected" is called "Base case". The markets session first renamed it for readers only (the scoreboard kept the
+# key "Expected" and his cards echoed it), then in the stored data too (volume-pulse 3cef720, 22 Nov evening): scoreboard.json now says "Base case" in its
+# keys and its text, so this mapping changes nothing in today's file. It stays as a guard for any field or older copy that still says "Expected". Same rules
+# as volume-pulse scripts/story/theme.py base_case(), copied (that folder is never edited from here); an id is never touched; lowercase "expected" stays.
 _BC = [(r'\bEXPECTED PATH\b', 'BASE CASE'), (r'\bEXPECTED\b', 'BASE CASE'), (r'\b([Oo]ur|[Tt]he) Expected path\b', r'\1 Base case'),
        (r'\bExpected path\b', 'Base case'), (r'\b(on|On|than|of|under|inside) Expected\b', r'\1 the Base case'), (r'\bExpected\b', 'Base case')]
 def base_case(s):
