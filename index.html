@@ -3095,6 +3095,24 @@ circle.rg-cmp3{ fill:var(--mute); } circle.rg-cmp4{ fill:var(--line2); }
    for each other.
    Weeks start MONDAY here, exactly as the band's "WEEK OF" does.
    ---------------------------------------------------------------------------- */
+.sup-lk{ display:inline-block; font:700 9px/1 var(--mono); letter-spacing:.06em; color:#ff3060; border:1px solid #ff3060; border-radius:3px; padding:2px 4px; margin:2px 0 2px 4px; background:rgba(255,48,96,.10); white-space:nowrap; }
+.sup-strip{ margin:12px 0 6px; border:.6px solid var(--line2); border-radius:6px; background:rgba(255,48,96,.03); padding:10px 12px; }
+.sup-strip header{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; margin-bottom:8px; }
+.sup-strip header .t{ font:700 12px var(--mono); letter-spacing:.14em; color:var(--ink); }
+.sup-strip header .s{ font:11px var(--mono); color:var(--ink3); }
+.sup-cols{ display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:18px; }
+@media (max-width:760px){ .sup-cols{ grid-template-columns:1fr; } }
+.sup-h{ font:700 10px var(--mono); letter-spacing:.1em; color:var(--ink3); margin-bottom:6px; }
+.sup-strip table{ border-collapse:collapse; width:100%; font-size:13px; }
+.sup-strip td{ padding:4px 6px; border-bottom:.5px solid var(--line); color:var(--ink2); vertical-align:top; }
+.sup-strip td.d{ font-family:var(--mono); white-space:nowrap; color:var(--ink); } .sup-strip td.d.est{ color:#F59E0B; }
+.sup-strip td.t{ font:700 13px var(--mono); color:var(--ink); } .sup-strip td.n{ font-family:var(--mono); text-align:right; white-space:nowrap; }
+.sup-strip tr.big td{ background:rgba(255,48,96,.09); } .sup-strip tr.big td.n{ color:#ff3060; font-weight:700; }
+.sup-more{ display:inline-block; margin-top:6px; font:11px var(--mono); color:var(--crk); cursor:pointer; }
+.sup-rws{ display:flex; flex-wrap:wrap; gap:6px; }
+.sup-rw{ font:12px var(--mono); padding:3px 8px; border-radius:999px; border:1px solid; cursor:help; }
+.sup-rw.r3{ color:#ff3060; border-color:#ff3060; } .sup-rw.r2{ color:#F59E0B; border-color:#F59E0B; }
+.sup-note{ font-size:11.5px; color:var(--ink3); margin-top:8px; }
 .se-bar{ display:flex; align-items:center; gap:9px; padding:7px 10px 8px; font-family:var(--mono);
   border-bottom:.5px solid var(--line); }
 .se-nav{ background:none; border:.6px solid var(--line2); color:var(--ink3); cursor:pointer;
@@ -16199,6 +16217,42 @@ function renderEvents(cohort) {
   if (ernTab() === "OLD") { list.innerHTML = ercOldListHTML(cohort); evFillExtras(ercOldUpcoming(cohort), null); return; }
   ercRenderGrid(list, cohort);
 }
+/* ---- SUPPLY · LOCK-UPS AND DILUTION (24 Nov 2026) ---------------------------
+   Alan: "lock ups and dilutions need to happen before thinking of moving ... we need a calendar of the lockups. SpaceX and ANT.
+   Don't build another page. Let's put it in the earnings calendar." Reads supply.json, built daily by volume-pulse
+   scripts/build_supply.py (lock-up dates from the 424B4 prospectuses; cash runway from FMP). A red LOCK-UP badge sits on
+   every dated release in MONTH and WEEK; the strip under the grid lists the releases (value at today's price, days of normal
+   volume to absorb) and the names that burn cash and will have to raise money. Remove: the three supLockBadge/supStripHTML
+   calls and this block. */
+const SUP_URL = "https://volume-pulse-pied.vercel.app/data/lab/story/supply.json";
+let SUP = null, SUP_AT = 0, SUP_OPEN = false;
+function supLoad() {
+  if (SUP_AT && Date.now() - SUP_AT < 600000) return; SUP_AT = Date.now();
+  fetch(SUP_URL + "?v=" + Math.floor(Date.now() / 600000), { cache: "no-store" }).then((r) => r.json()).then((j) => {
+    SUP = j; try { const l = document.querySelector(".se-grid"); if (l && typeof renderEvents === "function") renderEvents(S.coh); } catch (e) {}
+  }).catch(() => {});
+}
+function supByDay() { const m = {}; ((SUP && SUP.lockups) || []).forEach((l) => { const d = /^\d{4}-\d{2}-\d{2}/.exec(l.date || ""); if (d && !l.estimate) (m[d[0]] = m[d[0]] || []).push(l); }); return m; }
+function supLockBadge(d) {
+  supLoad(); const L = supByDay()[d]; if (!L) return "";
+  return L.map((l) => '<span class="sup-lk" title="' + esc(l.ticker + " lock-up release · " + (l.shares || "") + (l.value_b != null ? " · about $" + l.value_b.toFixed(1) + "B at today's price" : "") + (l.days_vol != null ? " · " + l.days_vol.toFixed(1) + " days of normal volume" : "") + " · " + (l.who || "")) + '">' + esc(l.ticker) + " LOCK-UP</span>").join("");
+}
+function supStripHTML() {
+  supLoad(); if (!SUP) return "";
+  const B = (v) => v == null ? "—" : Math.abs(v) >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : "$" + Math.round(v / 1e6) + "M";
+  const lk = (SUP.lockups || []).slice(0, SUP_OPEN ? 99 : 6).map((l) =>
+    '<tr class="' + (l.days_vol != null && l.days_vol >= 3 ? "big" : "") + '"><td class="d' + (l.estimate ? " est" : "") + '">' + esc(l.date) + '</td><td class="t">' + esc(l.ticker) + '</td><td title="' + esc((l.shares || "") + " · " + (l.who || "")) + '">' + (l.shares_m != null ? (l.shares_m >= 1000 ? (l.shares_m / 1000).toFixed(1) + "B" : Math.round(l.shares_m) + "M") + " shares" : esc(String(l.shares || "").slice(0, 40))) +
+    '</td><td class="n">' + (l.value_b != null ? "$" + l.value_b.toFixed(1) + "B" : "—") + '</td><td class="n">' + (l.days_vol != null ? l.days_vol.toFixed(1) + " d" : "—") + "</td></tr>").join("");
+  const rw = (SUP.runway || []).filter((r) => r.risk >= 2).map((r) =>
+    '<span class="sup-rw r' + (r.risk >= 3 ? 3 : 2) + '" title="' + esc((r.name || r.ticker) + " · cash " + B(r.cash) + " · burns " + (r.fcf_q != null && r.fcf_q < 0 ? B(-r.fcf_q) : "—") + " a quarter · shares +" + (r.shares_yoy != null ? Math.round(r.shares_yoy) : "?") + "% in a year" + (r.note ? " · " + r.note : "")) + '">' +
+    esc(r.ticker) + " <b>" + (r.runway_m != null ? Math.round(r.runway_m) + " mo" : "?") + "</b></span>").join("");
+  return '<section class="sup-strip"><header><span class="t">SUPPLY · LOCK-UPS AND DILUTION</span><span class="s">new shares the market has to absorb · updated ' + esc(SUP.built || "") + "</span></header>" +
+    '<div class="sup-cols"><div><div class="sup-h">LOCK-UP RELEASES · up to, at today\'s price · days = days of normal volume to absorb</div><table>' + lk + "</table>" +
+    '<span class="sup-more" data-act="supmore">' + (SUP_OPEN ? "show fewer" : "show all " + (SUP.lockups || []).length) + "</span></div>" +
+    '<div><div class="sup-h">MUST OR LIKELY TO RAISE MONEY · months of cash left at the current burn</div><div class="sup-rws">' + rw + "</div>" +
+    '<div class="sup-note">Red = under about a year, or flagged data. Neoclouds often borrow against GPUs, so a raise can be debt, not only new shares.</div></div></div></section>';
+}
+document.addEventListener("click", (e) => { const t = e.target.closest && e.target.closest('[data-act="supmore"]'); if (!t) return; SUP_OPEN = !SUP_OPEN; try { renderEvents(S.coh); } catch (x) {} });
 /* ---- THE GRID: the day, the week and the month, as three squares -------------
    Alan: "the month week day view below the timeline are not readjusting to their
    spaces, there's a lot of black on the weekly, it makes me scroll and maybe a grid
@@ -16246,7 +16300,7 @@ function ercRenderGrid(list, cohort) {
       sq("DAY", ernWeekday(ercAnchor()) + " " + ernMonthDay(ercAnchor()), nDay, ercDayHTML(rows)) +
       sq("WEEK", "WEEK OF " + ernMonthDay(wk[0]), nWeek, ercWeekHTML(byDay)) +
       sq("MONTH", ERC_MONTH_NAME[+mo.slice(5, 7) - 1] + " " + mo.slice(0, 4), nMonth, ercMonthHTML(byDay)) +
-    "</div>" + ercKeyHTML(rows) + ercNoteHTML(rows);
+    "</div>" + supStripHTML() + ercKeyHTML(rows) + ercNoteHTML(rows);
   /* M40 — the names with a result on screen, so "unusual" can be measured against
      each name's own history, and the unusual ones glow once. */
   ernStatsEnsure(rows.filter((r) => num(r.surprise_pct) != null).slice(0, 60).map((r) => r.ticker));
@@ -16626,7 +16680,7 @@ function ercMonthHTML(byDay) {
     return '<div class="se-cell' + (d.slice(0, 7) === mo ? "" : " out") + '" data-act="ernday" data-d="' + d + '" title="' + esc(ttl) + '">' +
       '<div class="se-dnum' + (d === today ? " is-today" : "") + '"><span class="d">' + (+d.slice(8)) + "</span>" +
       (n ? '<span class="se-load' + (n >= 25 ? " hot" : n >= 12 ? " warm" : "") + '">' + n + "</span>" : "") + "</div>" +
-      bars + names + more + "</div>";
+      supLockBadge(d) + bars + names + more + "</div>";
   }).join("");
   return '<div class="se-cal">' + dow + cells + "</div>";
 }
@@ -16672,7 +16726,7 @@ function ercWeekHTML(byDay) {
     /* E1 (15 Oct) — the picked card sits ABOVE its day, not under thirty chips (see ercDayHTML) */
     return (open ? ercCardHTML(open) : "") + '<div class="se-day' + (d === today ? " is-today" : d < today ? " is-past" : "") + '">' +
         '<div class="se-dlbl">' + esc(ernWeekday(d)) + "<b>" + esc(ernMonthDay(d)) + "</b>" +
-        (list.length ? '<span class="cnt">' + list.length + " reporting</span>" : "") + "</div>" +
+        (list.length ? '<span class="cnt">' + list.length + " reporting</span>" : "") + supLockBadge(d) + "</div>" +
         "<div>" + body + "</div>" +
       "</div>";
   }).join("") + "</div>";
