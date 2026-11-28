@@ -321,6 +321,60 @@ html = TPL.replace("/*__DATA__*/null", json.dumps(DATA, ensure_ascii=False, sepa
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 open(OUT, "w", encoding="utf-8").write(html)
 
+# ---------- per-ticker file for the Hub's company pages (REPORT tab) ------------------------------------------------
+# Alan, 28 Nov: "into the companies, like when you click on the ticker ... ticker specific pages". The Hub reads
+# reports/ai-chain-visual/data.json (same site) and shows a REPORT tab on the page of every listed name the report covers.
+SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"(])")
+
+
+def report_lines(name, limit=3):
+    """The report's own sentences that name the company, the most concrete first (numbers, dates), in report order."""
+    pat = re.compile(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])")
+    found = []
+    for ch in S["chapters"]:
+        if ch["id"] == "notes": continue
+        for b in ch["blocks"]:
+            if b[0] not in ("p", "q", "b"): continue
+            texts = b[1] if isinstance(b[1], list) else [b[1]]
+            for tx in texts:
+                for s in SENT.split(clean(tx)):
+                    m0 = pat.search(s)
+                    if not m0 or len(s) < 40 or m0.start() > 240: continue
+                    first = m0.start()
+                    if len(s) > 280: s = s[:277].rsplit(" ", 1)[0] + "…"
+                    others = sum(1 for o in COMP if o != name and re.search(r"(?<![A-Za-z])" + re.escape(o) + r"(?![A-Za-z])", s))
+                    score = (2 if re.search(r"\d", s) else 0) + (1 if re.search(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)", s) else 0) \
+                        + (2 if first < 40 else 0) - min(4, others)
+                    if not any(f["t"] == s for f in found): found.append({"t": s, "ch": ch["id"], "score": score, "i": len(found)})
+    best = sorted(found, key=lambda f: (-f["score"], f["i"]))[:limit]
+    return [{"t": f["t"], "ch": f["ch"]} for f in sorted(best, key=lambda f: f["i"])]
+
+
+BY_T = {}
+for c in COMP.values():
+    t = c.get("t")
+    if not t or "." in t: continue                     # foreign listings are not Hub tickers
+    m = next((x for x in MARGINS if x["name"] == c["name"]), None)
+    st = next((x for x in STAND if x["name"] == c["name"]), None)
+    nx = next((x for x in NEXT if x["who"] == c["name"]), None)
+    rn = next((x for x in RENT if x["name"] == c["name"]), None)
+    BY_T[t] = {"name": c["name"], "layer": c["layer"], "layer_name": dict(LAYERS).get(c["layer"]), "events": c["events"],
+               "margin": m, "stand": st, "next": nx,
+               "buyer": {"q": BUY_Q.get(c["name"]), "path": BUY_PATH.get(c["name"]), "cloud": CLOUD.get(c["name"])} if c["name"] in BUY_Q else None,
+               "renter": rn, "funding": FUND.get(c["name"]), "says": report_lines(c["name"]),
+               "ours_next": (TRACK.get(t) or {}).get("next_date")}
+for m in MARGINS:   # names with a margin line but no dated marks (Astera Labs)
+    t = TICK.get(m["name"])
+    if t and "." not in t and t not in BY_T:
+        BY_T[t] = {"name": m["name"], "layer": m["layer"], "layer_name": dict(LAYERS).get(m["layer"]), "events": [], "margin": m,
+                   "stand": None, "next": None, "buyer": None, "renter": None, "funding": None, "says": report_lines(m["name"]),
+                   "ours_next": (TRACK.get(t) or {}).get("next_date")}
+PER = {"what": "The AI Chain report, per Hub ticker, for the company pages' REPORT tab. Built by scripts/report-visuals/build.py.",
+       "built": DATA["built"], "as_of": S["numbers_as_of"], "report_built": S["built"], "report_url": REPORT_URL,
+       "picture_url": "/reports/ai-chain-visual/", "kinds_order": ["first_bad", "lowest_sales", "worst_cash", "lowest_margin", "sales_peak", "turns_up", "sales_rise", "cash_pos"],
+       "by_ticker": BY_T}
+open(os.path.join(os.path.dirname(OUT), "data.json"), "w", encoding="utf-8").write(json.dumps(PER, ensure_ascii=False, separators=(",", ":")))
+
 # ---------- what was read (printed so a rebuild can be checked at a glance) -----------------------------------------
 n_ev = sum(len(v) for v in EVENTS.values())
 print(f"report {S['numbers_as_of']} (built {S['built']}) -> {os.path.relpath(OUT, ROOT)} {len(html):,} bytes")
