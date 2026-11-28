@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark only">
+<meta name="theme-color" content="#0A0A0F">
+<title>AI Chain in Pictures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Scintilla dark only (the Hub and the report are dark-only). Chart colours were validated with the dataviz
+   validator against the panel surface #0D1118: paths and event palettes both pass every check. */
+:root{color-scheme:dark;
+ --bg:#0A0A0F;--panel:#0D1118;--panel2:#0F151E;--tile:#0B0F16;--line:#1A2230;--line2:#252538;
+ --ink:#E8F0FB;--ink2:#A8B5C8;--ink3:#7A7A95;--dim:#4A4A6A;--crk:#00D4FF;
+ --red:#D30046;--orange:#DB7504;--amber:#BA7904;--purple:#743ED8;--green:#02AD6D;--blue:#207FE8;
+ --up:#00C27A;--down:#FF4D6D;
+ --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
+ --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:0 16px}
+a{color:var(--crk);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1480px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.wordmark{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.28em;color:var(--ink);text-shadow:0 0 6px rgba(0,212,255,.32)}
+.htitle{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2)}
+.hlinks{margin-left:auto;display:flex;gap:14px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.hero{padding:22px 0 8px}
+.hero h1{font-family:var(--mono);font-size:24px;letter-spacing:.06em;margin:0 0 8px;text-transform:uppercase;text-wrap:balance}
+.hero p{margin:0;color:var(--ink2);max-width:980px;font-size:16px}
+.stamp{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin-top:10px}
+.stamp b{color:var(--ink2);font-weight:600}
+nav.chips{position:sticky;top:0;z-index:20;background:rgba(10,10,15,.94);backdrop-filter:blur(6px);display:flex;gap:6px;overflow-x:auto;padding:10px 0;margin:8px 0 4px;border-bottom:1px solid var(--line);scrollbar-width:none}
+nav.chips::-webkit-scrollbar{display:none}
+nav.chips a{flex:none;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);padding:6px 10px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--line2)}
+nav.chips a:hover{color:var(--ink);box-shadow:inset 0 0 0 1px rgba(0,212,255,.45);text-decoration:none}
+section.panel{background:var(--panel);border-radius:6px;padding:18px 18px 16px;margin:16px 0;box-shadow:inset 0 0 0 1px var(--line);scroll-margin-top:56px}
+.sec-k{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.3em;color:var(--crk);text-transform:uppercase}
+h2{font-family:var(--sans);font-size:19px;line-height:1.3;margin:4px 0 6px;font-weight:650;text-wrap:balance}
+.desc{color:var(--ink2);margin:0 0 12px;max-width:1000px}
+.src{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink3);margin-top:10px}
+.src a{color:var(--ink3);text-decoration:underline}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-family:var(--mono);font-size:11px;color:var(--ink2);margin:2px 0 10px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.scrollx{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+svg text{font-family:var(--mono);paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#tip{position:fixed;z-index:50;pointer-events:none;max-width:320px;background:#121A26;color:var(--ink);font-family:var(--mono);font-size:11.5px;line-height:1.45;padding:8px 10px;border-radius:4px;box-shadow:0 0 0 1px rgba(0,212,255,.35),0 8px 24px rgba(0,0,0,.5);white-space:pre-line;opacity:0;transition:opacity .08s}
+#tip.on{opacity:1}
+[data-tip]{cursor:default}
+
+/* paths */
+.paths{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.prow{display:grid;grid-template-columns:minmax(150px,230px) minmax(0,1fr);gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.pname{display:flex;align-items:baseline;gap:8px;font-weight:650}
+.pname i{flex:none;width:10px;height:10px;border-radius:2px;display:inline-block;transform:translateY(1px)}
+.podds{font-family:var(--mono);font-size:22px;font-weight:700}
+.ptext{color:var(--ink2);font-size:13.5px;line-height:1.45}
+/* next tests */
+.agenda{display:grid;gap:6px}
+.arow{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 10px;border-radius:4px;background:var(--tile)}
+.adate{font-family:var(--mono);text-align:center;line-height:1.1}
+.adate b{display:block;font-size:20px}
+.adate span{font-size:10px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+.awho{font-weight:650}
+.awhy{color:var(--ink2);font-size:13px}
+.ain{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right;white-space:nowrap}
+.flag{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;padding:2px 6px;border-radius:3px;margin-left:6px;white-space:nowrap}
+.flag.warn{color:#F2C14E;box-shadow:inset 0 0 0 1px rgba(242,193,78,.5)}
+.flag.ok{color:var(--up);box-shadow:inset 0 0 0 1px rgba(0,194,122,.45)}
+.flag.est{color:var(--ink3);box-shadow:inset 0 0 0 1px var(--line2)}
+/* cards */
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.filters button{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);background:none;border:0;padding:7px 11px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--line2);cursor:pointer}
+.filters button.on{color:var(--ink);box-shadow:inset 0 0 0 1px rgba(0,212,255,.6);background:rgba(0,212,255,.06)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.card{background:var(--tile);border-radius:6px;padding:12px 12px 10px;box-shadow:inset 0 0 0 1px var(--line);min-width:0}
+.card.flash{box-shadow:inset 0 0 0 1px var(--crk),0 0 0 2px rgba(0,212,255,.25)}
+.chead{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.cname{font-weight:700;font-size:16px}
+.ctk{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.badge{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.badge.hub{color:var(--crk);box-shadow:inset 0 0 0 1px rgba(0,212,255,.45)}
+.badge.off{color:var(--ink3);box-shadow:inset 0 0 0 1px var(--line2)}
+.cprice{font-family:var(--mono);font-size:13px;color:var(--ink2);margin:6px 0 8px;min-height:19px}
+.cprice b{color:var(--ink);font-size:15px}
+.up{color:var(--up)} .down{color:var(--down)}
+.blk{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.blk-k{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.22em;color:var(--ink3);text-transform:uppercase;margin-bottom:6px}
+.kv{display:grid;grid-template-columns:118px minmax(0,1fr);gap:4px 10px;font-size:13px;align-items:center}
+.kv dt{color:var(--ink3);font-family:var(--mono);font-size:11px}
+.kv dd{margin:0;min-width:0}
+.board{min-width:1200px}
+.brow{display:grid;grid-template-columns:190px 150px 150px 104px 128px 150px minmax(250px,1fr) 170px;gap:0 14px;align-items:center;padding:7px 8px;border-top:1px solid var(--line);cursor:pointer;font-size:13px}
+.brow:hover,.brow.open{background:rgba(0,212,255,.05)}
+.brow.bhead{cursor:default;background:none;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase;border-top:0;padding-bottom:4px;align-items:end}
+.bhead .half{color:var(--crk);letter-spacing:.2em;font-weight:700}
+.bgroup{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.2em;color:var(--ink3);text-transform:uppercase;padding:14px 8px 5px}
+.bco{display:flex;align-items:baseline;gap:7px;min-width:0}
+.bco b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bco .ctk{font-size:10.5px}
+.bdot{flex:none;width:7px;height:7px;border-radius:50%;display:inline-block;transform:translateY(-1px)}
+.bcell{min-width:0;font-size:12.5px;line-height:1.35}
+.bcell small{display:block;color:var(--ink3);font-size:10.5px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bsplit{border-left:1px solid var(--line2);padding-left:14px}
+.bdetail{padding:6px 8px 16px;border-top:1px solid var(--line)}
+.bdetail .card{max-width:720px}
+.tobtn{margin-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--crk);background:none;border:0;padding:4px 0;cursor:pointer}
+.chapters{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.chapters a{display:block;background:var(--tile);border-radius:5px;padding:10px 12px;box-shadow:inset 0 0 0 1px var(--line);color:var(--ink)}
+.chapters a b{display:block;font-size:14px;margin-bottom:3px}
+.chapters a span{display:block;color:var(--ink2);font-size:12.5px;line-height:1.4}
+.chapters a:hover{box-shadow:inset 0 0 0 1px rgba(0,212,255,.45);text-decoration:none}
+footer{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--dim);padding:18px 0 40px;line-height:1.7}
+@media (max-width:1100px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+ .paths{grid-template-columns:minmax(0,1fr)} .prow{grid-template-columns:minmax(0,1fr)}
+ .hero h1{font-size:19px} h2{font-size:17px} .hlinks{margin-left:0}
+ .arow{grid-template-columns:54px minmax(0,1fr)} .ain{grid-column:2;text-align:left}
+ .cards{grid-template-columns:minmax(0,1fr)} section.panel{padding:14px 12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <span class="wordmark">SCINTILLA</span>
+  <span class="htitle">Reports · the AI chain in pictures</span>
+  <span class="hlinks"><a id="fullLink" href="#" target="_blank" rel="noopener">Full report ↗</a><a href="https://scintillahub.ai/">Hub ↗</a></span>
+</header>
+<div class="hero">
+  <h1>The AI chain, in pictures</h1>
+  <p id="heroLead"></p>
+  <div class="stamp" id="stamp"></div>
+</div>
+<nav class="chips" aria-label="Sections">
+  <a href="#paths">Four paths</a><a href="#stand">Where we stand</a><a href="#next">Next tests</a>
+  <a href="#timeline">When bad news lands</a><a href="#margins">Margins</a><a href="#buyers">Big buyers</a>
+  <a href="#renters">GPU renters</a><a href="#companies">Company by company</a><a href="#chapters">Read more</a>
+</nav>
+
+<section class="panel" id="paths">
+  <div class="sec-k">01 · The four paths</div>
+  <h2>Our odds on where the Nasdaq-100 goes from here</h2>
+  <p class="desc">The pie is the odds the report gives each path. Next to it, each path's range for the Nasdaq-100 at its low and in December 2028, against Friday's close and the record.</p>
+  <div class="paths"><div id="donut"></div><div id="pathRows"></div></div>
+  <div class="src" id="srcPaths"></div>
+</section>
+
+<div class="grid2">
+<section class="panel" id="stand" style="margin:0">
+  <div class="sec-k">02 · Where we stand</div>
+  <h2 id="standH">How far each one is below its record</h2>
+  <p class="desc">Each bar is the fall from its highest close. The line under the bar is the distance from its 200-day average, the long-term trend line. For US stocks, <b>now</b> is today's live price.</p>
+  <div id="standChart"></div>
+  <div class="src" id="srcStand"></div>
+</section>
+<section class="panel" id="next" style="margin:0">
+  <div class="sec-k">03 · Next tests</div>
+  <h2 id="nextH">The reports and numbers that decide the next move</h2>
+  <p class="desc">In date order. An outlined row is the report's estimate; a filled row is a confirmed date. Where we follow the company, the report's date is checked against Scintilla's own earnings calendar.</p>
+  <div id="nextRuler" class="scrollx"></div>
+  <div class="agenda" id="agenda"></div>
+  <div class="src" id="srcNext"></div>
+</section>
+</div>
+
+<section class="panel" id="timeline">
+  <div class="sec-k">04 · Company by company</div>
+  <h2>When the bad news lands, and when it turns</h2>
+  <p class="desc">Each mark sits on the day the news becomes public. <b>Red</b> is bad news, <b>amber</b> is the margin low, <b>purple</b> is a peak, <b>green</b> is a turn up. A hollow mark is the tougher path, where it differs. The strip on top counts the marks each month: red bad, green good.</p>
+  <div class="legend" id="tlLegend"></div>
+  <div class="scrollx" id="tlWrap"><div id="tlChart"></div></div>
+  <div class="src" id="srcTimeline"></div>
+</section>
+
+<section class="panel" id="margins">
+  <div class="sec-k">05 · Gross margin</div>
+  <h2 id="marginH"></h2>
+  <p class="desc">Gross margin is the share of each sales dollar left after the cost of making the product. The tick is the company's high since 2019, the dot is the latest report and the ring is its next guide. A red line means the latest is below the high.</p>
+  <div class="paths" style="grid-template-columns:230px minmax(0,1fr)"><div id="marginDonut"></div><div class="scrollx"><div id="marginChart"></div></div></div>
+  <div class="src" id="srcMargins"></div>
+</section>
+
+<section class="panel" id="buyers">
+  <div class="sec-k">06 · The big buyers</div>
+  <h2>The five big buyers keep growing on analysts' numbers</h2>
+  <p class="desc">Sales growth against a year earlier, each quarter: solid bars are reported, outlined bars are analysts' average. Under each: 2027 sales growth on three paths, and how much of the added sales came from the cloud business.</p>
+  <div class="legend" id="buyLegend"></div>
+  <div id="buyGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px"></div>
+  <div class="src" id="srcBuyers"></div>
+</section>
+
+<section class="panel" id="renters">
+  <div class="sec-k">07 · GPU renters</div>
+  <h2 id="rentH"></h2>
+  <p class="desc">Each bar is the report's odds that the company restructures its debt by the end of 2028. The ring is the same odds on the Fed-hike path. The four lights say whether its stated plans are funded on each path.</p>
+  <div class="legend" id="rentLegend"></div>
+  <div class="scrollx"><div id="rentChart"></div></div>
+  <div class="src" id="srcRenters"></div>
+</section>
+
+<section class="panel" id="companies">
+  <div class="sec-k">08 · The report against what we track</div>
+  <h2>Every company in the report, beside what Scintilla tracks</h2>
+  <p class="desc">One row per company. The left half is what <b>Scintilla tracks</b>: the Geiger (−1 to +1), how far the live price is below its 1-year high, analysts' average target against today's price, and the last four quarters of sales growth. The right half is what <b>the report says</b>: the margin, its next dated mark, the turn, and the next report date checked against our calendar. Click a row for the full detail.</p>
+  <div class="filters" id="filters"></div>
+  <div class="scrollx"><div class="board" id="board"></div></div>
+  <div class="src" id="srcCards"></div>
+</section>
+
+<section class="panel" id="chapters">
+  <div class="sec-k">09 · Read more</div>
+  <h2>The full report, chapter by chapter</h2>
+  <p class="desc">Each chapter opens in the full report, with every table behind the pictures above.</p>
+  <div class="chapters" id="chapterList"></div>
+</section>
+
+<footer id="foot"></footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const DATA = {"built":"2026-11-28T06:31Z","report":{"title":"The AI chain: where we stand, and what comes next","updated":"27 Nov 2026","as_of":"2026-11-27","built":"2026-11-27T16:39","url":"https://volume-pulse-pied.vercel.app/story.html","lead":"AI spending is the engine, storage memory is where the first price crack shows, and the cost of money decides how long the pain lasts. Bad news peaks from late January to March 2027, relief comes in April and May, a second wave hits the big buyers' cash in the second half of 2027, and their 2028 spending plans decide the ending."},"layers":[["MEM","Memory and storage"],["DEV","Phones and PCs"],["AI","AI chips and hardware"],["BUY","Big buyers"],["RENT","GPU renters"]],"companies":[{"name":"Micron","t":"MU","layer":"MEM","events":[{"k":"lowest_sales","d":"2027-03-24","est":true},{"k":"lowest_margin","d":"2026-12-23","est":true,"tough":{"d":"2027-03-24","est":true}},{"k":"turns_up","d":"2027-03-24","est":true},{"k":"sales_rise","d":"2027-06-30","est":true},{"k":"first_bad","d":"2026-12-23","est":true},{"k":"sales_peak","d":"2028-09-27","est":true,"tough":{"d":"2027-12-22","est":true}}]},{"name":"SK hynix","t":"000660.KS","layer":"MEM","events":[{"k":"lowest_sales","d":"2027-04-22","est":true},{"k":"lowest_margin","d":"2027-04-22","est":true},{"k":"turns_up","d":"2027-04-22","est":true},{"k":"sales_rise","d":"2027-07-29","est":true},{"k":"first_bad","d":"2027-01-28","est":true},{"k":"sales_peak","d":"2028-10-26","est":true,"tough":{"d":"2028-01-27","est":true}}]},{"name":"Samsung","t":"005930.KS","layer":"MEM","events":[{"k":"lowest_sales","d":"2027-04-07","est":true},{"k":"lowest_margin","d":"2027-04-07","est":true},{"k":"turns_up","d":"2027-04-29","est":true},{"k":"sales_rise","d":"2027-07-07","est":true},{"k":"first_bad","d":"2027-01-28","est":true},{"k":"sales_peak","d":"2028-01-27","est":true,"tough":{"d":"2027-10-28","est":true}}]},{"name":"SanDisk","t":"SNDK","layer":"MEM","events":[{"k":"lowest_sales","d":"2027-04-29","est":true},{"k":"lowest_margin","d":"2027-04-29","est":true},{"k":"turns_up","d":"2027-04-29","est":true},{"k":"sales_rise","d":"2027-08-04","est":true},{"k":"first_bad","d":"2027-01-28","est":true},{"k":"sales_peak","none":true,"tough":{"d":"2028-01-27","est":true}}]},{"name":"Kioxia","t":"285A.T","layer":"MEM","events":[{"k":"lowest_sales","d":"2027-02-12","est":true,"tough":{"d":"2027-05-14","est":true}},{"k":"lowest_margin","none":true,"tough":{"d":"2027-05-14","est":true}},{"k":"turns_up","d":"2027-02-12","est":true,"tough":{"d":"2027-05-14","est":true}},{"k":"sales_rise","d":"2027-05-14","est":true,"tough":{"d":"2027-07-30","est":true}},{"k":"first_bad","d":"2026-10-30","est":false},{"k":"sales_peak","none":true,"tough":{"d":"2027-10-29","est":true}}]},{"name":"Western Digital","t":"WDC","layer":"MEM","events":[{"k":"lowest_margin","d":"2027-01-28","est":true},{"k":"first_bad","none":true,"tough":{"d":"2027-08-04","est":true}}]},{"name":"Seagate","t":"STX","layer":"MEM","events":[{"k":"lowest_margin","d":"2027-01-26","est":true},{"k":"first_bad","none":true,"tough":{"d":"2027-07-27","est":true}}]},{"name":"Apple","t":"AAPL","layer":"DEV","events":[{"k":"lowest_sales","none":true,"tough":{"d":"2028-01-27","est":true}},{"k":"lowest_margin","d":"2026-11-02","est":false,"tough":{"d":"2027-04-29","est":true}},{"k":"first_bad","none":true,"tough":{"d":"2027-01-28","est":true}}]},{"name":"Qualcomm","t":"QCOM","layer":"DEV","events":[{"k":"lowest_sales","none":true,"tough":{"d":"2027-04-28","est":true}},{"k":"lowest_margin","d":"2028-04-26","est":true},{"k":"turns_up","none":true,"tough":{"d":"2027-04-28","est":true}},{"k":"sales_rise","d":"2026-11-04","est":false,"tough":{"d":"2027-07-28","est":true}},{"k":"first_bad","d":"2026-02-04","est":false}]},{"name":"MediaTek","t":"2454.TW","layer":"DEV","events":[{"k":"lowest_margin","d":"2027-02-03","est":true},{"k":"first_bad","d":"2026-02-04","est":true}]},{"name":"Intel","t":"INTC","layer":"DEV","events":[{"k":"lowest_sales","d":"2027-04-22","est":true},{"k":"lowest_margin","d":"2027-01-21","est":true},{"k":"turns_up","d":"2027-04-22","est":true},{"k":"sales_rise","d":"2027-07-22","est":true},{"k":"first_bad","d":"2026-10-29","est":false}]},{"name":"Lenovo","t":"0992.HK","layer":"DEV","events":[{"k":"lowest_sales","d":"2027-05-20","est":true},{"k":"lowest_margin","d":"2026-11-19","est":false,"tough":{"d":"2027-08-12","est":true}},{"k":"turns_up","d":"2027-05-20","est":true},{"k":"sales_rise","d":"2027-08-12","est":true},{"k":"first_bad","d":"2026-08-13","est":false}]},{"name":"HP","t":"HPQ","layer":"DEV","events":[{"k":"lowest_sales","d":"2027-05-26","est":true},{"k":"lowest_margin","d":"2026-11-24","est":true,"tough":{"d":"2027-08-25","est":true}},{"k":"first_bad","d":"2025-11-25","est":false},{"k":"sales_peak","d":"2026-08-26","est":false}]},{"name":"Dell","t":"DELL","layer":"DEV","events":[{"k":"lowest_sales","none":true,"tough":{"d":"2027-05-27","est":true}},{"k":"lowest_margin","d":"2028-02-24","est":true},{"k":"turns_up","none":true,"tough":{"d":"2027-05-27","est":true}},{"k":"sales_rise","none":true,"tough":{"d":"2027-08-31","est":true}},{"k":"first_bad","none":true,"tough":{"d":"2027-02-25","est":true}}]},{"name":"Nvidia","t":"NVDA","layer":"AI","events":[{"k":"lowest_margin","d":"2027-02-24","est":true},{"k":"first_bad","none":true,"tough":{"d":"2027-08-25","est":true}}]},{"name":"AMD","t":"AMD","layer":"AI","events":[{"k":"lowest_margin","d":"2026-11-03","est":false},{"k":"first_bad","none":true,"tough":{"d":"2027-02-02","est":true}}]},{"name":"Broadcom","t":"AVGO","layer":"AI","events":[{"k":"first_bad","none":true,"tough":{"d":"2027-09-01","est":true}}]},{"name":"TSMC","t":"TSM","layer":"AI","events":[{"k":"lowest_sales","none":true,"tough":{"d":"2027-04-15","est":true}},{"k":"lowest_margin","d":"2027-01-14","est":true},{"k":"turns_up","none":true,"tough":{"d":"2027-04-15","est":true}},{"k":"sales_rise","none":true,"tough":{"d":"2027-07-15","est":true}},{"k":"first_bad","none":true,"tough":{"d":"2027-01-14","est":true}}]},{"name":"Marvell","t":"MRVL","layer":"AI","events":[{"k":"lowest_margin","d":"2027-05-26","est":true},{"k":"first_bad","none":true,"tough":{"d":"2027-08-26","est":true}}]},{"name":"Arista","t":"ANET","layer":"AI","events":[{"k":"lowest_sales","none":true,"tough":{"d":"2027-02-11","est":true}},{"k":"lowest_margin","d":"2027-05-04","est":true},{"k":"turns_up","none":true,"tough":{"d":"2027-02-11","est":true}},{"k":"first_bad","none":true,"tough":{"d":"2026-11-03","est":false}}]},{"name":"Arm","t":"ARM","layer":"AI","events":[{"k":"lowest_margin","d":"2028-05-03","est":true},{"k":"first_bad","none":true,"tough":{"d":"2027-02-03","est":true}}]},{"name":"Supermicro","t":"SMCI","layer":"AI","events":[{"k":"lowest_sales","d":"2027-05-04","est":true,"tough":{"d":"2027-02-02","est":true}},{"k":"lowest_margin","d":"2027-02-02","est":true},{"k":"turns_up","d":"2027-05-04","est":true,"tough":{"d":"2027-02-02","est":true}},{"k":"sales_rise","d":"2027-08-10","est":true,"tough":{"d":"2027-05-04","est":true}},{"k":"first_bad","d":"2026-11-03","est":false}]},{"name":"Microsoft","t":"MSFT","layer":"BUY","events":[{"k":"lowest_margin","d":"2027-07-28","est":true},{"k":"worst_cash","d":"2028-01-26","est":true},{"k":"cash_pos","never":true,"text":"never goes negative"}]},{"name":"Alphabet","t":"GOOGL","layer":"BUY","events":[{"k":"lowest_margin","d":"2027-02-03","est":true},{"k":"worst_cash","d":"2027-07-22","est":true,"end":"2027-10-27"},{"k":"cash_pos","d":"2031-02-01","est":true,"tough":{"d":"2029-01-31","est":true}}]},{"name":"Amazon","t":"AMZN","layer":"BUY","events":[{"k":"lowest_margin","d":"2027-02-04","est":true},{"k":"worst_cash","d":"2026-10-29","est":false},{"k":"cash_pos","d":"2029-07-27","est":true,"tough":{"d":"2028-02-03","est":true}}]},{"name":"Meta","t":"META","layer":"BUY","events":[{"k":"lowest_margin","d":"2028-07-26","est":true},{"k":"worst_cash","d":"2027-10-20","est":true,"end":"2027-10-27"},{"k":"cash_pos","d":"2030-04-26","est":true}]},{"name":"Oracle","t":"ORCL","layer":"BUY","events":[{"k":"worst_cash","d":"2026-12-10","est":true},{"k":"cash_pos","d":"2028-12-07","est":true,"tough":{"d":"2028-09-07","est":true}}]},{"name":"SpaceX/xAI","t":null,"layer":"RENT","events":[{"k":"worst_cash","d":"2027-10-21","est":true,"note":"worst single quarter"}],"private":true},{"name":"CoreWeave","t":"CRWV","layer":"RENT","events":[{"k":"worst_cash","d":"2026-11-10","est":false,"note":"worst single quarter"}],"private":false},{"name":"Nebius","t":"NBIS","layer":"RENT","events":[{"k":"worst_cash","d":"2028-05-11","est":true,"note":"worst single quarter"}],"private":false},{"name":"IREN","t":"IREN","layer":"RENT","events":[{"k":"worst_cash","d":"2027-05-06","est":true,"note":"worst single quarter"}],"private":false},{"name":"Astera Labs","t":"ALAB","layer":"AI","events":[]},{"name":"Applied Digital","t":"APLD","layer":"RENT","events":[],"private":false},{"name":"Core Scientific","t":"CORZ","layer":"RENT","events":[],"private":false},{"name":"Hut 8","t":"HUT","layer":"RENT","events":[],"private":false},{"name":"TeraWulf","t":"WULF","layer":"RENT","events":[],"private":false},{"name":"Cipher","t":"CIFR","layer":"RENT","events":[],"private":false},{"name":"Galaxy","t":"GLXY","layer":"RENT","events":[]},{"name":"Nscale","t":null,"layer":"RENT","private":true},{"name":"Lambda","t":null,"layer":"RENT","private":true},{"name":"Crusoe","t":null,"layer":"RENT","private":true},{"name":"Anthropic","t":null,"layer":"RENT","private":true},{"name":"OpenAI","t":null,"layer":"RENT","private":true}],"margins":[{"name":"Micron","layer":"MEM","high":{"v":87.0,"adj":true,"d":"2026-09-30"},"latest":{"v":87.0,"adj":true,"d":"2026-09-30"},"next":{"lo":86.25,"hi":86.25,"est":true,"text":"about 86.25%, ~23 Dec 26"},"past":"No"},{"name":"SK hynix","layer":"MEM","high":{"v":83.0,"adj":false,"d":"2026-07-29"},"latest":{"v":83.0,"adj":false,"d":"2026-07-29"},"next":null,"past":"No"},{"name":"Samsung","layer":"MEM","high":{"v":69.6,"adj":false,"d":"2026-07-29"},"latest":{"v":69.6,"adj":false,"d":"2026-07-29"},"next":null,"past":"No"},{"name":"SanDisk","layer":"MEM","high":{"v":85.1,"adj":true,"d":"2026-10-29"},"latest":{"v":85.1,"adj":true,"d":"2026-10-29"},"next":{"lo":84.5,"hi":85.5,"est":true,"text":"84.5-85.5%, ~28 Jan 27"},"past":"No"},{"name":"Kioxia","layer":"MEM","high":{"v":82.8,"adj":false,"d":"2026-10-30"},"latest":{"v":82.8,"adj":false,"d":"2026-10-30"},"next":null,"past":"No"},{"name":"Western Digital","layer":"MEM","high":{"v":58.1,"adj":true,"d":"2026-10-22"},"latest":{"v":58.1,"adj":true,"d":"2026-10-22"},"next":{"lo":60.0,"hi":61.0,"est":true,"text":"60-61%, ~28 Jan 27"},"past":"No"},{"name":"Seagate","layer":"MEM","high":{"v":57.8,"adj":true,"d":"2026-10-27"},"latest":{"v":57.8,"adj":true,"d":"2026-10-27"},"next":{"lo":61.0,"hi":61.0,"est":true,"text":"about 61%, we estimate, ~26 Jan 27"},"past":"No"},{"name":"Nvidia","layer":"AI","high":{"v":78.9,"adj":true,"d":"2024-05-22"},"latest":{"v":75.0,"adj":true,"d":"2026-08-26"},"next":{"lo":74.0,"hi":74.0,"est":true,"text":"74%, 17 Nov 26; then 71-72%, ~24 Feb 27"},"past":"Yes"},{"name":"Broadcom","layer":"AI","high":{"v":79.4,"adj":true,"d":"2025-06-05"},"latest":{"v":75.0,"adj":true,"d":"2026-09-02"},"next":{"lo":73.0,"hi":73.0,"est":false,"text":"about 73%, 9 Dec 26"},"past":"Yes"},{"name":"AMD","layer":"AI","high":{"v":57.0,"adj":true,"d":"2026-02-03"},"latest":{"v":55.9,"adj":true,"d":"2026-08-04"},"next":{"lo":56.0,"hi":56.0,"est":false,"text":"about 56%, 3 Nov 26"},"past":"No"},{"name":"TSMC","layer":"AI","high":{"v":67.7,"adj":false,"d":"2026-07-16"},"latest":{"v":66.4,"adj":false,"d":"2026-10-15"},"next":{"lo":65.0,"hi":67.0,"est":true,"text":"65-67%, ~14 Jan 27"},"past":"Yes"},{"name":"Marvell","layer":"AI","high":{"v":65.5,"adj":true,"d":"2022-05-26"},"latest":{"v":58.9,"adj":true,"d":"2026-08-27"},"next":{"lo":57.5,"hi":58.5,"est":false,"text":"57.5-58.5%, 1 Dec 26"},"past":"Yes"},{"name":"Arista","layer":"AI","high":{"v":65.6,"adj":true,"d":"2020-05-05"},"latest":{"v":63.4,"adj":true,"d":"2026-08-04"},"next":{"lo":63.0,"hi":63.0,"est":false,"text":"about 63%, 3 Nov 26"},"past":"Yes"},{"name":"Astera Labs","layer":"AI","high":{"v":78.2,"adj":true,"d":"2024-05-07"},"latest":{"v":73.7,"adj":true,"d":"2026-08-04"},"next":{"lo":72.0,"hi":72.0,"est":false,"text":"about 72%, 3 Nov 26"},"past":"Yes"},{"name":"Arm","layer":"AI","high":{"v":97.4,"adj":false,"d":"2025-11-05"},"latest":{"v":97.2,"adj":false,"d":"2026-07-29"},"next":null,"past":"No cycle"},{"name":"Supermicro","layer":"AI","high":{"v":18.8,"adj":true,"d":"2022-11-01"},"latest":{"v":17.6,"adj":true,"d":"2026-08-11"},"next":{"lo":12.0,"hi":12.5,"est":false,"text":"12.0-12.5%, 3 Nov 26"},"past":"Yes"},{"name":"Apple","layer":"DEV","high":{"v":50.1,"adj":false,"d":"2026-07-30"},"latest":{"v":50.1,"adj":false,"d":"2026-07-30"},"next":{"lo":47.0,"hi":48.0,"est":false,"text":"47-48%, 2 Nov 26"},"past":"Not clear"},{"name":"Qualcomm","layer":"DEV","high":{"v":78.1,"adj":false,"d":"2019-07-31"},"latest":{"v":53.1,"adj":false,"d":"2026-07-29"},"next":null,"past":"Yes"},{"name":"MediaTek","layer":"DEV","high":{"v":49.1,"adj":false,"d":"2025-07-29"},"latest":{"v":46.3,"adj":false,"d":"2026-10-30"},"next":{"lo":43.5,"hi":46.5,"est":true,"text":"43.5-46.5%, ~3 Feb 27"},"past":"Yes"},{"name":"Intel","layer":"DEV","high":{"v":60.6,"adj":false,"d":"2020-04-23"},"latest":{"v":43.0,"adj":false,"d":"2026-10-29"},"next":{"lo":38.0,"hi":38.0,"est":true,"text":"38%, ~21 Jan 27"},"past":"Yes"},{"name":"Dell","layer":"DEV","high":{"v":32.0,"adj":false,"d":"2020-02-27"},"latest":{"v":20.9,"adj":false,"d":"2026-09-01"},"next":null,"past":"Yes"},{"name":"HP","layer":"DEV","high":{"v":23.6,"adj":false,"d":"2024-05-29"},"latest":{"v":18.8,"adj":false,"d":"2026-08-26"},"next":null,"past":"Yes"},{"name":"Lenovo","layer":"DEV","high":{"v":17.6,"adj":false,"d":"2020-05-20"},"latest":{"v":15.9,"adj":false,"d":"2026-08-13"},"next":null,"past":"Yes"},{"name":"Microsoft","layer":"BUY","high":{"v":71.2,"adj":false,"d":"2023-10-24"},"latest":{"v":67.8,"adj":false,"d":"2026-10-28"},"next":{"lo":66.0,"hi":66.0,"est":true,"text":"about 66%, we estimate, ~27 Jan 27"},"past":"Yes"},{"name":"Alphabet","layer":"BUY","high":{"v":62.4,"adj":false,"d":"2026-04-29"},"latest":{"v":59.7,"adj":false,"d":"2026-10-28"},"next":null,"past":"Yes"},{"name":"Amazon","layer":"BUY","high":{"v":53.2,"adj":false,"d":"2026-10-29"},"latest":{"v":53.2,"adj":false,"d":"2026-10-29"},"next":null,"past":"No"},{"name":"Meta","layer":"BUY","high":{"v":83.4,"adj":false,"d":"2020-01-29"},"latest":{"v":79.3,"adj":false,"d":"2026-10-21"},"next":null,"past":"Yes"},{"name":"Oracle","layer":"BUY","high":{"v":81.5,"adj":false,"d":"2019-06-19"},"latest":{"v":60.0,"adj":false,"d":"2026-09-10"},"next":{"text":"A step-down this year, then flat, with no number"},"past":"Yes"},{"name":"CoreWeave","layer":"RENT","high":{"v":74.2,"adj":false,"d":"2025-08-12"},"latest":{"v":65.9,"adj":false,"d":"2026-08-11"},"next":null,"past":"Yes"},{"name":"Nebius","layer":"RENT","high":{"v":77.1,"adj":false,"d":"2026-08-12"},"latest":{"v":77.1,"adj":false,"d":"2026-08-12"},"next":null,"past":"Too early"},{"name":"IREN","layer":"RENT","high":{"v":92.0,"adj":false,"d":"2024-05-15"},"latest":{"v":75.7,"adj":false,"d":"2026-08-27"},"next":null,"past":"Too early"},{"name":"Applied Digital","layer":"RENT","high":{"v":59.5,"adj":false,"d":"2024-08-28"},"latest":{"v":15.3,"adj":false,"d":"2026-10-07"},"next":null,"past":"Too early"},{"name":"Core Scientific","layer":"RENT","high":{"v":43.3,"adj":false,"d":"2024-05-08"},"latest":{"v":42.7,"adj":false,"d":"2026-07-28"},"next":null,"past":"Too early"},{"name":"Hut 8","layer":"RENT","high":{"v":94.0,"adj":false,"d":"2025-03-03"},"latest":{"v":64.1,"adj":false,"d":"2026-08-04"},"next":null,"past":"Too early"},{"name":"TeraWulf","layer":"RENT","high":{"v":93.1,"adj":false,"d":"2026-05-08"},"latest":{"v":72.3,"adj":false,"d":"2026-08-05"},"next":null,"past":"Too early"},{"name":"Cipher","layer":"RENT","high":{"v":69.4,"adj":false,"d":"2024-03-05"},"latest":{"v":-131.1,"adj":false,"d":"2026-08-04"},"next":null,"past":"Too early"},{"name":"Galaxy","layer":"RENT","high":{"v":7.7,"adj":false,"d":"2026-10-27"},"latest":{"v":7.7,"adj":false,"d":"2026-10-27"},"next":null,"past":"Too early"}],"margin_head":"Gross margin is past its high at 18 of 29 companies; memory makers, AMD and Amazon have not peaked","buy_q":{"Microsoft":[{"d":"2026-01-28","est":false,"q":"Oct-Dec 25","sales":81.3,"yoy":16.7,"reported":true},{"d":"2026-04-29","est":false,"q":"Jan-Mar 26","sales":82.9,"yoy":18.3,"reported":true},{"d":"2026-07-29","est":false,"q":"Apr-Jun 26","sales":90.0,"yoy":17.7,"reported":true},{"d":"2026-10-28","est":false,"q":"Jul-Sep 26","sales":92.3,"yoy":18.8,"reported":true},{"d":"2027-01-27","est":true,"q":"Oct-Dec 26","sales":96.5,"yoy":18.8,"reported":false},{"d":"2027-04-28","est":true,"q":"Jan-Mar 27","sales":99.1,"yoy":19.6,"reported":false},{"d":"2027-07-28","est":true,"q":"Apr-Jun 27","sales":107.3,"yoy":19.2,"reported":false},{"d":"2027-10-27","est":true,"q":"Jul-Sep 27","sales":110.4,"yoy":19.7,"reported":false},{"d":"2028-01-26","est":true,"q":"Oct-Dec 27","sales":115.9,"yoy":20.0,"reported":false}],"Alphabet":[{"d":"2026-02-04","est":false,"q":"Oct-Dec 25","sales":113.8,"yoy":18.0,"reported":true},{"d":"2026-04-29","est":false,"q":"Jan-Mar 26","sales":109.9,"yoy":21.8,"reported":true},{"d":"2026-07-22","est":false,"q":"Apr-Jun 26","sales":119.8,"yoy":24.2,"reported":true},{"d":"2026-10-28","est":false,"q":"Jul-Sep 26","sales":127.6,"yoy":24.7,"reported":true},{"d":"2027-02-03","est":true,"q":"Oct-Dec 26","sales":142.4,"yoy":25.1,"reported":false},{"d":"2027-04-28","est":true,"q":"Jan-Mar 27","sales":140.9,"yoy":28.2,"reported":false},{"d":"2027-07-22","est":true,"q":"Apr-Jun 27","sales":152.9,"yoy":27.6,"reported":false},{"d":"2027-10-27","est":true,"q":"Jul-Sep 27","sales":163.4,"yoy":28.1,"reported":false},{"d":"2028-02-02","est":true,"q":"Oct-Dec 27","sales":178.8,"yoy":25.6,"reported":false}],"Amazon":[{"d":"2026-02-05","est":false,"q":"Oct-Dec 25","sales":213.4,"yoy":13.6,"reported":true},{"d":"2026-04-29","est":false,"q":"Jan-Mar 26","sales":181.5,"yoy":16.6,"reported":true},{"d":"2026-07-30","est":false,"q":"Apr-Jun 26","sales":200.6,"yoy":19.6,"reported":true},{"d":"2026-10-29","est":false,"q":"Jul-Sep 26","sales":201.9,"yoy":12.1,"reported":true},{"d":"2027-02-04","est":true,"q":"Oct-Dec 26","sales":244.7,"yoy":14.7,"reported":false},{"d":"2027-04-29","est":true,"q":"Jan-Mar 27","sales":209.5,"yoy":15.4,"reported":false},{"d":"2027-07-29","est":true,"q":"Apr-Jun 27","sales":230.6,"yoy":15.0,"reported":false},{"d":"2027-10-28","est":true,"q":"Jul-Sep 27","sales":236.5,"yoy":17.1,"reported":false},{"d":"2028-02-03","est":true,"q":"Oct-Dec 27","sales":283.1,"yoy":15.7,"reported":false}],"Meta":[{"d":"2026-01-28","est":false,"q":"Oct-Dec 25","sales":59.9,"yoy":23.8,"reported":true},{"d":"2026-04-29","est":false,"q":"Jan-Mar 26","sales":56.3,"yoy":33.1,"reported":true},{"d":"2026-07-29","est":false,"q":"Apr-Jun 26","sales":60.8,"yoy":28.0,"reported":true},{"d":"2026-10-21","est":false,"q":"Jul-Sep 26","sales":64.6,"yoy":26.1,"reported":true},{"d":"2027-01-27","est":true,"q":"Oct-Dec 26","sales":75.0,"yoy":25.2,"reported":false},{"d":"2027-04-28","est":true,"q":"Jan-Mar 27","sales":68.4,"yoy":21.5,"reported":false},{"d":"2027-07-28","est":true,"q":"Apr-Jun 27","sales":73.9,"yoy":21.5,"reported":false},{"d":"2027-10-27","est":true,"q":"Jul-Sep 27","sales":78.3,"yoy":21.1,"reported":false},{"d":"2028-01-26","est":true,"q":"Oct-Dec 27","sales":90.9,"yoy":21.3,"reported":false}],"Oracle":[{"d":"2025-12-10","est":false,"q":"Sep-Nov 25","sales":16.1,"yoy":14.2,"reported":true},{"d":"2026-03-10","est":false,"q":"Dec-Feb 26","sales":17.2,"yoy":21.7,"reported":true},{"d":"2026-06-10","est":false,"q":"Mar-May 26","sales":19.2,"yoy":20.6,"reported":true},{"d":"2026-09-10","est":false,"q":"Jun-Aug 26","sales":19.3,"yoy":29.6,"reported":true},{"d":"2026-12-10","est":true,"q":"Sep-Nov 26","sales":21.3,"yoy":32.8,"reported":false},{"d":"2027-03-10","est":true,"q":"Dec-Feb 27","sales":23.4,"yoy":36.0,"reported":false},{"d":"2027-06-10","est":true,"q":"Mar-May 27","sales":26.4,"yoy":37.8,"reported":false},{"d":"2027-09-10","est":true,"q":"Jun-Aug 27","sales":27.6,"yoy":42.7,"reported":false},{"d":"2027-12-14","est":true,"q":"Sep-Nov 27","sales":31.0,"yoy":45.2,"reported":false}]},"buy_path":{"Microsoft":{"base":[19.6,20.5],"fed":[14.0,13.9],"up":[25.3,26.0]},"Alphabet":{"base":[27.3,21.8],"fed":[18.8,17.1],"up":[33.5,30.5]},"Amazon":{"base":[15.8,18.4],"fed":[11.5,15.6],"up":[20.2,23.5]},"Meta":{"base":[21.3,20.6],"fed":[8.2,14.2],"up":[25.6,27.4]},"Oracle":{"base":[40.7,46.8],"fed":[30.5,36.5],"up":[46.4,53.3]}},"cloud":{"Microsoft":{"segment":"Microsoft Cloud, $63.9bn","share_sales":69.0,"share_added":101.0,"if_cloud_flat":"+9.3%, against +18.8%"},"Alphabet":{"segment":"Google Cloud, $30.7bn","share_sales":24.0,"share_added":62.0,"if_cloud_flat":"+17.1%, against +24.7%"},"Amazon":{"segment":"AWS, $46.0bn","share_sales":23.0,"share_added":60.0,"if_cloud_flat":"+8.5%, against +12.1%"},"Oracle":{"segment":"cloud, $11.6bn","share_sales":60.0,"share_added":100.0,"if_cloud_flat":"+14.8%, against +29.6%"}},"buy_head":{"quarters":"Quarter by quarter, analysts have all five growing on a year earlier through 2027","paths":"The Fed-hike path cuts 2027 sales growth most at Meta, to +8.2% from +21.3%","cloud":"Cloud supplied 60% to about 100% of the added sales dollars at the four big buyers that have one"},"renters":[{"name":"CoreWeave","t":"CRWV","private":false,"dries":18.0,"delays":42.0,"restructure":21.0,"restructure_fed":50.0},{"name":"Nebius","t":"NBIS","private":false,"dries":12.0,"delays":43.0,"restructure":8.0,"restructure_fed":20.0},{"name":"IREN","t":"IREN","private":false,"dries":24.0,"delays":53.0,"restructure":13.0,"restructure_fed":30.0},{"name":"Applied Digital","t":"APLD","private":false,"dries":18.0,"delays":38.0,"restructure":13.0,"restructure_fed":30.0},{"name":"Core Scientific","t":"CORZ","private":false,"dries":12.0,"delays":33.0,"restructure":12.0,"restructure_fed":30.0},{"name":"TeraWulf","t":"WULF","private":false,"dries":12.0,"delays":33.0,"restructure":7.0,"restructure_fed":15.0},{"name":"Cipher","t":"CIFR","private":false,"dries":9.0,"delays":29.0,"restructure":6.0,"restructure_fed":12.0},{"name":"Hut 8","t":"HUT","private":false,"dries":6.0,"delays":24.0,"restructure":2.0,"restructure_fed":7.0},{"name":"Nscale","t":null,"private":true,"dries":34.0,"delays":37.0,"restructure":32.0,"restructure_fed":60.0},{"name":"Lambda","t":null,"private":true,"dries":29.0,"delays":37.0,"restructure":24.0,"restructure_fed":50.0},{"name":"Crusoe","t":null,"private":true,"dries":18.0,"delays":38.0,"restructure":14.0,"restructure_fed":30.0},{"name":"SpaceX/xAI","t":null,"private":true,"dries":2.0,"delays":49.0,"restructure":1.0,"restructure_fed":3.0},{"name":"Anthropic","t":null,"private":true,"dries":4.0,"delays":24.0,"restructure":1.0,"restructure_fed":4.0},{"name":"OpenAI","t":null,"private":true,"dries":10.0,"delays":49.0,"restructure":5.0,"restructure_fed":12.0}],"funding":{"CoreWeave":{"base":["tight","Signed $32.9bn: tight. Plan $72.0bn, using 91%: tight."],"measured":["tight","Signed $33.0bn, with up to $4.2bn late: tight. Plan trimmed to $60.3bn, using 120%, so up to $8.7bn comes late: tight."],"fed":["short","Signed $34.8bn: falls short, with $19.0-23.4bn missing at the worst moment and about 510-630 MW late. A plan kept whole would need $89.1bn and falls short, so it is cut to $37.1bn and about 52% gets built."],"up":["tight","Signed $32.2bn: can do. Plan $73.9bn, using 72%: tight."]},"IREN":{"base":["tight","Signed work paid for. Plan $40.3bn, using 111%, so it slips: tight."],"measured":["tight","Signed work paid for. Plan trimmed to $35.3bn, using 146%, so up to $8.2bn comes late: tight."],"fed":["short","Signed work paid for. A plan kept whole would need $46.8bn and falls short, so it is cut to $15.1bn and about 42% gets built."],"up":["tight","Signed work paid for. Plan $43.3bn, using 90%: tight."]},"Nebius":{"base":["ok","Signed $0.6bn: can do. Plan $39.2bn, using 61%: can do."],"measured":["tight","Signed $0.6bn: can do. Plan trimmed to $31.1bn, using 81%: tight."],"fed":["short","Signed $1.1bn, which must be raised before July 2027: tight. A plan kept whole would need $53.6bn and falls short, so it is cut to $15.9bn and about 49% gets built. The $3.5bn Citi loan falls due on 16 October 2027, inside the shut window."],"up":["ok","Signed $0.4bn: can do. Plan $42.2bn, using 52%: can do."]},"Applied Digital":{"base":["tight","Signed work is its whole plan, $12.9bn, using 78%: tight."],"measured":["tight","About $12-13bn, using 102%, so up to $0.8bn comes late: tight."],"fed":["short","Signed $13.7bn: falls short, with $5.3-8.3bn missing at the worst moment and about 440-690 MW late. The plan is cut to $7.5bn and about 59% gets built."],"up":["tight","Signed $12.8bn and plan $13.9bn, using 64%: tight."]},"Core Scientific":{"base":["tight","Signed $5.6bn: can do. Plan $9.3bn, using 49%: tight."],"measured":["tight","Signed $5.6bn: can do. Plan trimmed to $8.2bn, using 64%: tight."],"fed":["short","Signed $6.0bn: falls short, with $0.7-2.8bn missing and about 60-230 MW late, or tight if investment-grade project loans stay open. The plan is cut to $6.7bn and about 71% gets built."],"up":["tight","Signed $5.6bn: can do. Plan $9.9bn, using 37%: tight."]},"Hut 8":{"base":["ok","Signed $3.0bn: can do. Plan $7.3bn, using 8%: can do."],"measured":["ok","Signed $3.0bn: can do. Plan $6.0bn, using 10%: can do."],"fed":["tight","Signed $3.3bn, which must be raised before July 2027: tight. The plan is cut to $4.1bn."],"up":["ok","Signed $3.0bn: can do. Plan $8.1bn, using 6%: can do."]},"TeraWulf":{"base":["ok","Signed $1.2bn: can do. Plan $6.0bn, using 17%: can do."],"measured":["ok","Signed $1.2bn: can do. Plan $5.0bn, using 22%: can do."],"fed":["tight","Signed $1.3bn, which must be raised before July 2027: tight. The plan is cut to $1.9bn."],"up":["ok","Signed $1.2bn: can do. Plan $7.0bn, using 15%: can do."]},"Cipher":{"base":["ok","Signed work paid for. Plan $3.8bn, using 10%: can do."],"measured":["ok","Signed work paid for. Plan $2.9bn, using 13%: can do."],"fed":["tight","Signed work paid for. A plan kept whole would need $4.2bn and is tight, so it is cut to $0.2bn."],"up":["tight","Signed work paid for. Plan $4.7bn, which is above 150% of its stock market value: tight."]},"Galaxy":{"base":["ok","Signed work paid for. Plan $1.0bn: can do."],"measured":["ok","Signed work paid for. Plan $0.2bn: can do."],"fed":["ok","Signed work paid for. No new money needed: can do."],"up":["ok","Signed work paid for. Plan $1.5bn: can do."]},"Nscale":{"base":["tight","About $22.6bn: tight."],"measured":["short","Falls short."],"fed":["short","Falls short."],"up":["tight","Tight."]},"Lambda":{"base":["tight","About $6.5bn: tight."],"measured":["tight","Tight."],"fed":["short","Falls short."],"up":["ok","Can do."]},"Crusoe":{"base":["ok","Can do."],"measured":["ok","Can do."],"fed":["tight","Tight."],"up":["ok","Can do."]},"SpaceX/xAI":{"base":["ok","Plan $113.9bn: can do."],"measured":["ok","Plan $58.2bn: can do."],"fed":["ok","Plan $6.3bn: can do."],"up":["ok","Plan $173.2bn: can do."]},"Oracle":{"base":["ok","Plan $12.2bn: can do."],"measured":["ok","Plan $12.2bn: can do."],"fed":["tight","Plan $6.0bn: tight."],"up":["ok","Plan $8.1bn: can do."]}},"rent_head":{"odds":"Our odds: about 44% that at least one large listed renter restructures by end-2028, and about 85% inside the Fed-hike path","funding":"On the likeliest path most aggressive names are tight: late and costly, but funded"},"stand":[{"name":"Nasdaq-100","close":"26,726","from_high":-14.4,"high":"31,225 (6 Oct)","vs200":-4.9,"day":10,"text200":"4.9% below, day 10 on this side"},{"name":"S&P 500","close":"7,304","from_high":-6.6,"high":"7,819 (6 Oct)","vs200":-0.7,"day":8,"text200":"0.7% below, day 8 on this side"},{"name":"Chip index (SOX)","close":"9,187","from_high":-37.2,"high":"14,635 (22 Jun)","vs200":-16.0,"day":20,"text200":"16.0% below, day 20 on this side"},{"name":"Micron","close":"$647","from_high":-46.7,"high":"$1,214 (25 Jun)","vs200":-16.8,"day":9,"text200":"16.8% below, day 9 on this side"},{"name":"SanDisk","close":"$85","from_high":-70.8,"high":"$292 (25 Jun)","vs200":-46.9,"day":20,"text200":"46.9% below, day 20 on this side"},{"name":"SK hynix","close":"₩1,110,000","from_high":-62.0,"high":"₩2,919,000 (22 Jun)","vs200":-27.7,"day":21,"text200":"27.7% below, day 21 on this side"},{"name":"Samsung","close":"₩179,100","from_high":-50.6,"high":"₩362,500 (18 Jun)","vs200":-26.0,"day":22,"text200":"26.0% below, day 22 on this side"},{"name":"Kioxia","close":"¥8,450","from_high":-76.7,"high":"¥36,233 (22 Jun)","vs200":-44.9,"day":30,"text200":"44.9% below, day 30 on this side"},{"name":"Nvidia","close":"$150","from_high":-37.1,"high":"$239 (6 Oct)","vs200":-25.7,"day":17,"text200":"25.7% below, day 17 on this side"},{"name":"AMD","close":"$425","from_high":-34.6,"high":"$649 (6 Oct)","vs200":-2.2,"day":3,"text200":"2.2% below, day 3 on this side"},{"name":"Broadcom","close":"$312","from_high":-35.1,"high":"$482 (2 Jun)","vs200":-14.9,"day":null,"text200":"14.9% below"},{"name":"Intel","close":"$57","from_high":-59.3,"high":"$141 (22 Jun)","vs200":-34.6,"day":20,"text200":"34.6% below, day 20 on this side"},{"name":"Gold","close":"3,668","from_high":-31.5,"high":"5,355 (29 Jan)","vs200":-15.5,"day":null,"text200":"15.5% below"},{"name":"Silver","close":"43.70","from_high":-62.2,"high":"115.50 (26 Jan)","vs200":-33.2,"day":null,"text200":"33.2% below"}],"stand_head":"","next":[{"d":"2026-12-01","est":false,"label":"Tue 1 Dec","who":"Marvell","why":"Custom AI chips and optics for the big buyers","t":"MRVL"},{"d":"2026-12-09","est":false,"label":"Wed 9 Dec","who":"Broadcom","why":"Custom AI chips and first words on fiscal 2027 and 2028","t":"AVGO"},{"d":"2026-12-09","est":false,"label":"Wed 9 Dec","who":"Fed decision and new forecasts (2 PM)","why":"Whether the Fed hikes again and how many more hikes its forecasts show","t":null},{"d":"2026-12-10","est":true,"label":"Thu 10 Dec (estimate)","who":"Oracle","why":"Debt and cash at the most stretched big buyer, and its exposure to OpenAI","t":"ORCL"},{"d":"2026-12-10","est":false,"label":"Thu 10 Dec","who":"November consumer prices (8:30 AM)","why":"Analysts expect about 0.2% on the month; a real-time gauge points to about 0.0% as gasoline falls","t":null},{"d":"2026-12-17","est":false,"label":"Thu 17 Dec","who":"Micron","why":"The first memory maker expected to guide down","t":"MU"},{"d":"2027-01-28","est":true,"label":"Thu 28 Jan (estimate)","who":"Apple","why":"iPhone and Mac sales, and what memory costs do to its margin","t":"AAPL"},{"d":"2027-02-02","est":true,"label":"Tue 2 Feb (estimate)","who":"AMD","why":"Its October-December guide: analysts expect $16.29bn of sales","t":"AMD"},{"d":"2027-02-03","est":true,"label":"Wed 3 Feb (estimate)","who":"Qualcomm","why":"Phone chip demand","t":"QCOM"},{"d":"2027-02-23","est":true,"label":"Tue 23 Feb (estimate)","who":"HP","why":"PCs and printers as memory costs bite","t":"HPQ"},{"d":"2027-02-24","est":true,"label":"Wed 24 Feb (estimate)","who":"Nvidia","why":"The AI chip bellwether; gross margin guided toward its low","t":"NVDA"},{"d":"2027-02-25","est":true,"label":"Thu 25 Feb (estimate)","who":"CoreWeave","why":"Whether the largest GPU renter can fund what it has signed","t":"CRWV"}],"next_head":"The next tests: the server makers, core inflation, the Fed on 9 December and November inflation on 10 December","ranges":[{"label":"Measured slowdown, first low, February-March 2027","lo":24800,"hi":28000,"text":"24,800-28,000","spx":"About 6,450-7,330"},{"label":"Measured slowdown, second and higher low, January 2028","lo":25900,"hi":29900,"text":"25,900-29,900","spx":"About 6,690-7,620"},{"label":"Base case, one low, February 2027","lo":26000,"hi":29500,"text":"26,000-29,500","spx":"About 6,710-7,560"},{"label":"Fed-hike path, main low window, October 2027 to April 2028","lo":19500,"hi":24000,"text":"19,500-24,000","spx":"About 5,320-6,730"},{"label":"AI upside","lo":null,"hi":null,"text":"Low possibly already in","spx":"8,000 reached early"},{"label":"Measured slowdown, December 2028","lo":31000,"hi":36500,"text":"31,000-36,500","spx":"About 7,770-8,940"},{"label":"Base case, December 2028","lo":36500,"hi":42500,"text":"36,500-42,500","spx":"About 8,610-10,220"},{"label":"Fed-hike path, December 2028","lo":25000,"hi":31000,"text":"25,000-31,000","spx":"About 6,490-7,770"}],"odds":[{"k":"Measured slowdown","v":"37%","s":"Low of 24,800-28,000 in February-March 2027, a rally to about August, then a second, higher low of 25,900-29,900 in January 2028. Friday's close of 26,726 is inside this range: its bottom is 7.2% lower and its top 4.8% higher.","c":"amber"},{"k":"Fed-hike path","v":"32%","s":"A first low of 22,500-26,000 in March 2027, then the main low of 19,500-24,000 between October 2027 and April 2028, with the centre about 21,000. That main low runs from 27.0% below to 10.2% below Friday's close, and the centre is 21.4% below.","c":"sv5"},{"k":"Base case","v":"16%","s":"One low of 26,000-29,500 in February 2027, and analysts' numbers hold. Friday's close of 26,726 is inside this range: its bottom is 2.7% lower and its top 10.4% higher.","c":"sv1"},{"k":"AI upside","v":"15%","s":"The low may already be in, with spending and sales above analysts. Friday's close of 26,726 is 14.4% below the record close this path regains.","c":"crk"}],"market":[{"k":"Nasdaq-100","v":"26,726","s":"14.4% below its record close","c":"sv5"},{"k":"S&P 500","v":"7,304","s":"6.6% below its record close","c":"sv3"},{"k":"Chip index","v":"9,187","s":"37.2% below its record close","c":"sv5"},{"k":"Memory stocks","v":"-47% / -71%","s":"Micron and SanDisk, from their highs","c":"sv5"}],"chapters":[{"id":"story","title":"The whole story on one page","lead":"AI spending is the engine, storage memory is where the first price crack shows, and the cost of money decides how long the pain lasts. Bad news peaks from late January to March 2027, relief comes in April and May, a second wave hits the big buyers' cash in the second half of 2027, and their 2028 spending plans decide the ending."},{"id":"today","title":"Where we stand: close of 27 November 2026","lead":"At the close of Friday 27 November 2026 the chip index was 37.2% below its June record, Nvidia 37.1% below its October record, and Micron, SanDisk and Kioxia 46.7%, 70.8% and 76.7% below their highs, while the Nasdaq-100 was 14.4% below its record and the S&P 500 6.6%. What began on 30 October as a rotation out of AI and technology has become a fall of the index itself."},{"id":"calendar","title":"Company by company: what lands when","lead":"On the Base case the most companies are inside a bad stretch from late January to March 2027, the most lowest-sales reports land in April and May with guides that mostly turn up in the same report, and Alphabet's and Meta's worst 12-month free cash follows from July to October 2027. Every mark sits on the day the news becomes public, not the quarter end, with the Nasdaq-100 and S&P 500 on every timeline."},{"id":"memory","title":"Memory: the storage wafer drop, and what it means","lead":"Storage memory (NAND) is cracking: the spot price of its benchmark uncut wafer fell 9.19% in one week to $16.88 on the survey of 26 October 2026, 27.0% below its March high and 10.8% below its July low, because phones and PCs stopped buying and module makers, the companies that turn wafers into finished drives, hold too much. That is one price on one product, and it matters as a signal of what contract prices do next. We expect contract prices to fall, which hurts SanDisk and Kioxia far more than Micron, Samsung or SK hynix, while AI memory stays sold out for 2027."},{"id":"technicals","title":"SanDisk, Micron and the 200-day average","lead":"SanDisk first closed under its 200-day average on 30 October, and at the close of Friday 27 November 2026 it stood 46.9% below that line while Micron stood 16.8% below its own. The further falls history suggests are about the same for SanDisk and Micron."},{"id":"devices","title":"Phones and PCs, and Apple on 2 November","lead":"This is where the bad news started and where it lasts longest, and much of it is already public. Most names turn on something other than a phone or PC recovery, and HP never turns."},{"id":"aichips","title":"AI chips: AMD, Nvidia, margin peaks and the 2028 test","lead":"Sales at the AI chip sellers need not peak in 2028 on analysts' numbers, but gross margins have mostly peaked already, past spending pauses did produce bad quarters, and we estimate analysts' chip numbers need about $818bn in 2028 from buyers outside the big five, money that is not guaranteed. AMD reports on 3 November, and its guide for October-December matters more than its July-September results."},{"id":"capex","title":"The big buyers' spending: 2027, 2028, and when they would say it","lead":"The four biggest buyers spend about $711bn in 2026 and about $1,018bn in 2027 on the Base case, and none has given a 2028 dollar number. Growth has to slow, and the limit that forces it is a debt ratio, which the rating agency S&P has written down for Meta and Oracle and which the bond market already charges for."},{"id":"cash","title":"The big buyers' cash, stock sales, debt and layoffs","lead":"Alphabet's and Meta's cash gets worst about 27 October 2027. The five big buyers' spending falls under 100% of the cash coming in during 2028 on three of the four paths and in 2029 on AI upside, and we estimate it settles at about 60-70% by the mid-2030s, about one and a half times the old normal of 41%. To pay for it Alphabet, Meta and Oracle sell new stock while Microsoft still buys its own, but stock is only about 23% of the outside money raised, so the bigger story is the rising price of borrowing, and layoffs are the smallest way they find cash."},{"id":"whohurts","title":"Who gets punished if spending slows, and who is safer","lead":"The most exposed if spending slows are GPU renters, one-customer part makers, rack builders, Nvidia and optical suppliers, and the safest are long-contract power producers, regulated utilities, multi-tenant landlords and software. Stocks usually fall long before the revenue does."},{"id":"renters","title":"GPU renters (neoclouds) and SpaceX: who can fund what","lead":"The big buyers and the chip and memory makers can fund what they have signed, but the neoclouds must raise it: of about $129bn still to build on signed work at the nine listed names, about 43% has no money behind it today, and 61% of that need lands in two tough windows, January-March 2027 and the second half of 2027. Markets shut completely only on the Fed-hike path; on the other three paths the money can be raised, late and at a cost, so the real question is how aggressive each stated plan is. On our judgment at least one of eight large listed renters restructures by end-2028 at about 40%, about 55-60% once private Nscale, Lambda and Crusoe count, and about 85% inside the Fed-hike path."},{"id":"scenarios","title":"The four paths, and the Fed-hike path month by month","lead":"The likeliest of the four paths, the Measured slowdown at 37%, has a Nasdaq-100 low in February-March 2027, a relief rally to about August 2027 and a second, higher low in January 2028, while the deep one, the Fed-hike path at 32%, takes the Nasdaq-100 to about 19,500-24,000 and the chip index to about 5,800-8,700, with the low around October 2027 to April 2028. At the close of Friday 27 November 2026 the Nasdaq-100 stood at 26,726 and the chip index at 9,187. A first Fed cut does not mean the low is in, and oil decides the timing."},{"id":"history","title":"How bottoms happen: 2018, 2019, COVID, 2022","lead":"Past lows follow an order: the outlook cut, another leg down, the low, a rally while reports get worse, a scare that does not break the low, and then the run, with the worst report usually met by a shrug. On the way down very little makes money, what holds up depends on what caused the fall, and what held up best then lags the rebound. The strongest leaders fall more than the market and then rebound more, and most rebounds go through their moving averages, with the two deep stalls both in 2022, when the Fed was hiking."},{"id":"metals","title":"Gold and silver against the analogs","lead":"House view, not advice: gold and silver are a real setup, with a bounce first, one more lower low around the stock low, and reward later that stops short of the January record closes on all four paths through December 2028. History does not say 30 October was the end, because the kind of short, sharp stock sell-off that did past damage has not happened yet."},{"id":"signs","title":"How we will know: the signs, and the next three weeks","lead":"We expect the turn to show as a chain of good news, the waterfall in reverse: prices and supply first, then stock reactions, then company words, then reported numbers. The first dated tests of the four paths are AMD's guide on 3 November, US core inflation and CoreWeave on 10 November, and Nvidia's guide on 17 November."}],"track":{"AAPL":{"active":true,"cohort":"MEGACAP","geiger":0.79,"g_trend":0.92,"g_mom":0.67,"tgt_avg":341.03,"tgt_lo":245,"tgt_hi":400,"tgt_at":"2026-11-27","q_end":["2025-12-27","2026-03-28","2026-06-27","2026-09-26"],"rev_yoy":[0.1565,0.166,0.1636,0.1172],"eps_yoy":[0.1833,0.2182,0.2866,0.1351],"next_date":"2027-02-04","next_time":null,"last_date":"2026-11-02","last_beat":"true","last_eps_surprise":3.02,"last_rev_surprise":0.95},"ALAB":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.32,"g_trend":-0.62,"g_mom":-0.02,"tgt_avg":370,"tgt_lo":275,"tgt_hi":500,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.9177,0.934,1.0445,1.5367],"eps_yoy":[0.7857,1.4444,1.8966,0.98],"next_date":"2027-02-09","next_time":null,"last_date":"2026-11-03","last_beat":"true","last_eps_surprise":10.92,"last_rev_surprise":6.19},"AMD":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.37,"g_trend":-0.45,"g_mom":-0.29,"tgt_avg":661.52,"tgt_lo":465,"tgt_hi":1250,"tgt_at":"2026-11-27","q_end":["2025-12-27","2026-03-28","2026-06-27","2026-09-26"],"rev_yoy":[0.3411,0.3785,0.5011,0.4468],"eps_yoy":[2.0667,0.9091,1.5556,0.9211],"next_date":"2027-02-02","next_time":null,"last_date":"2026-11-03","last_beat":"true","last_eps_surprise":7.18,"last_rev_surprise":2.13},"AMZN":{"active":true,"cohort":"MEGACAP","geiger":-0.01,"g_trend":-0.13,"g_mom":0.12,"tgt_avg":327.9,"tgt_lo":250,"tgt_hi":390,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.1363,0.1661,0.1962,0.1209],"eps_yoy":[0.0484,0.7484,2.4226,-0.0308],"next_date":"2027-02-04","next_time":null,"last_date":"2026-10-29","last_beat":"false","last_eps_surprise":-4.06,"last_rev_surprise":-0.14},"ANET":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.2,"g_trend":-0.38,"g_mom":-0.02,"tgt_avg":252.14,"tgt_lo":175,"tgt_hi":305,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.2887,0.3513,0.3769,0.5845],"eps_yoy":[0.2097,0.25,0.3571,0.8209],"next_date":"2027-02-11","next_time":null,"last_date":"2026-11-03","last_beat":"true","last_eps_surprise":11.11,"last_rev_surprise":9.68},"APLD":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.5,"g_trend":-0.71,"g_mom":-0.28,"tgt_avg":56.89,"tgt_lo":22,"tgt_hi":90,"tgt_at":"2026-11-27","q_end":["2025-11-30","2026-02-28","2026-05-31","2026-08-31"],"rev_yoy":[0.982,1.3929,4.0659,4.3238],"eps_yoy":[0.8939,-1.25,-0.625,-10.7143],"next_date":"2027-01-06","next_time":null,"last_date":"2026-10-08","last_beat":"true","last_eps_surprise":96.61,"last_rev_surprise":194.01},"ARM":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.34,"g_trend":-0.63,"g_mom":-0.06,"tgt_avg":326.63,"tgt_lo":160,"tgt_hi":641,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.2635,0.2006,0.2241,0.2714],"eps_yoy":[-0.125,0.45,1.0833,-0.4545],"next_date":"2027-02-03","next_time":null,"last_date":"2026-11-04","last_beat":"true","last_eps_surprise":8.33,"last_rev_surprise":4.48},"AVGO":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.34,"g_trend":-0.63,"g_mom":-0.05,"tgt_avg":512.67,"tgt_lo":350,"tgt_hi":600,"tgt_at":"2026-11-27","q_end":["2025-11-02","2026-02-01","2026-05-03","2026-08-02"],"rev_yoy":[0.2818,0.2947,0.4787,0.855],"eps_yoy":[0.9333,0.3158,0.8544,2.1529],"next_date":"2026-12-09","next_time":"AMC","last_date":"2026-09-02","last_beat":"true","last_eps_surprise":3.11,"last_rev_surprise":1.2},"CIFR":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.54,"g_trend":-0.73,"g_mom":-0.35,"tgt_avg":29.14,"tgt_lo":15,"tgt_hi":54,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-23","2026-06-30","2026-09-30"],"rev_yoy":[0.4142,-0.2884,-0.4299,-0.6276],"eps_yoy":[-36.6089,-1.5455,-4.4167,null],"next_date":"2027-02-23","next_time":null,"last_date":"2026-11-02","last_beat":"true","last_eps_surprise":12.03,"last_rev_surprise":-32.08},"CORZ":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.57,"g_trend":-0.8,"g_mom":-0.34,"tgt_avg":31.62,"tgt_lo":16,"tgt_hi":40,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[-0.1597,0.4492,1.0883,1.8712],"eps_yoy":[2.1167,-1.8548,-78.6163,6.4565],"next_date":"2027-03-01","next_time":null,"last_date":"2026-11-05","last_beat":"true","last_eps_surprise":1130.48,"last_rev_surprise":18.48},"CRWV":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.58,"g_trend":-0.88,"g_mom":-0.29,"tgt_avg":112.09,"tgt_lo":45,"tgt_hi":200,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[1.1031,1.1161,1.1246,1.6827],"eps_yoy":[-4.2353,0.0604,-0.9,-4.7727],"next_date":"2027-02-25","next_time":null,"last_date":"2026-11-10","last_beat":"false","last_eps_surprise":0,"last_rev_surprise":3.32},"DELL":{"active":true,"cohort":"BLUE_CHIP","geiger":-0.29,"g_trend":-0.4,"g_mom":-0.19,"tgt_avg":516.83,"tgt_lo":289,"tgt_hi":650,"tgt_at":"2026-11-27","q_end":["2025-10-31","2026-01-30","2026-05-01","2026-07-31"],"rev_yoy":[0.1083,0.3948,0.8754,0.5775],"eps_yoy":[0.443,0.486,2.8248,2.7294],"next_date":"2027-02-25","next_time":null,"last_date":"2026-11-24","last_beat":"true","last_eps_surprise":43.18,"last_rev_surprise":11.38},"GOOGL":{"active":true,"cohort":"MEGACAP","geiger":-0.52,"g_trend":-0.78,"g_mom":-0.27,"tgt_avg":402.77,"tgt_lo":325,"tgt_hi":485,"tgt_at":"2026-11-28","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.18,0.2179,0.2423,0.2465],"eps_yoy":[0.3116,0.8185,2.9437,-0.2613],"next_date":"2027-02-03","next_time":null,"last_date":"2026-10-28","last_beat":"false","last_eps_surprise":-29.8,"last_rev_surprise":-0.3},"HUT":{"active":true,"cohort":"CRYPTO","geiger":-0.32,"g_trend":-0.59,"g_mom":-0.05,"tgt_avg":158.31,"tgt_lo":96,"tgt_hi":275,"tgt_at":"2026-11-25","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[-0.965,2.2554,0.8144,-0.5561],"eps_yoy":[-2.6013,-0.5231,-2.4576,1.2791],"next_date":"2027-02-24","next_time":null,"last_date":"2026-11-04","last_beat":"false","last_eps_surprise":235.84,"last_rev_surprise":-6.22},"INTC":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.22,"g_trend":-0.44,"g_mom":0.0,"tgt_avg":111.76,"tgt_lo":70,"tgt_hi":200,"tgt_at":"2026-11-25","q_end":["2025-12-27","2026-03-28","2026-06-27","2026-09-26"],"rev_yoy":[-0.0411,0.0718,0.2542,0.2095],"eps_yoy":[-3.1678,-2.8421,-2.2239,-0.3333],"next_date":"2027-01-28","next_time":null,"last_date":"2026-10-29","last_beat":"true","last_eps_surprise":27.89,"last_rev_surprise":-0.25},"IREN":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.59,"g_trend":-0.8,"g_mom":-0.38,"tgt_avg":64.23,"tgt_lo":30,"tgt_hi":100,"tgt_at":"2026-11-25","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.5902,-0.0002,-0.2675,-0.0512],"eps_yoy":[-4.2,-9.0271,-3.3747,-1.6111],"next_date":"2027-02-04","next_time":null,"last_date":"2026-11-05","last_beat":"true","last_eps_surprise":14.39,"last_rev_surprise":-0.12},"META":{"active":true,"cohort":"MEGACAP","geiger":0.12,"g_trend":-0.17,"g_mom":0.41,"tgt_avg":832.92,"tgt_lo":595,"tgt_hi":1000,"tgt_at":"2026-11-25","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.2379,0.3308,0.2796,0.2607],"eps_yoy":[0.106,0.6236,-0.1345,2.6476],"next_date":"2027-01-27","next_time":null,"last_date":"2026-10-21","last_beat":"false","last_eps_surprise":13.15,"last_rev_surprise":1.99},"MRVL":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.27,"g_trend":-0.45,"g_mom":-0.09,"tgt_avg":314.93,"tgt_lo":175,"tgt_hi":450,"tgt_at":"2026-11-25","q_end":["2025-11-01","2026-01-31","2026-05-02","2026-08-01"],"rev_yoy":[0.3683,0.2208,0.2757,0.3655],"eps_yoy":[3.8205,1,-0.807,0.5],"next_date":"2026-12-01","next_time":"AMC","last_date":"2026-08-27","last_beat":"true","last_eps_surprise":0.64,"last_rev_surprise":0.74},"MSFT":{"active":true,"cohort":"MEGACAP","geiger":-0.22,"g_trend":-0.28,"g_mom":-0.15,"tgt_avg":617.36,"tgt_lo":440,"tgt_hi":750,"tgt_at":"2026-11-25","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.1672,0.183,0.1775,0.188],"eps_yoy":[0.5975,0.2341,0.3151,0.3226],"next_date":"2027-01-27","next_time":null,"last_date":"2026-10-28","last_beat":"true","last_eps_surprise":3.6,"last_rev_surprise":1.83},"MU":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.36,"g_trend":-0.55,"g_mom":-0.18,"tgt_avg":1588.85,"tgt_lo":1200,"tgt_hi":3000,"tgt_at":"2026-11-25","q_end":["2025-11-27","2026-02-26","2026-05-28","2026-09-03"],"rev_yoy":[0.5665,1.9629,3.4572,3.7927],"eps_yoy":[1.7545,7.5674,13.6845,10.6148],"next_date":"2026-12-23","next_time":null,"last_date":"2026-09-30","last_beat":"true","last_eps_surprise":5.19,"last_rev_surprise":5.64},"NBIS":{"active":true,"cohort":"AI_SOFTWARE","geiger":-0.56,"g_trend":-0.7,"g_mom":-0.42,"tgt_avg":286.56,"tgt_lo":175,"tgt_hi":410,"tgt_at":"2026-11-25","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[5.0079,6.2152,4.5404,5.7132],"eps_yoy":[-0.8448,5.1875,-1.2857,0.7234],"next_date":"2027-02-11","next_time":null,"last_date":"2026-11-12","last_beat":"true","last_eps_surprise":141.46,"last_rev_surprise":8.11},"NVDA":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.49,"g_trend":-0.72,"g_mom":-0.26,"tgt_avg":261.09,"tgt_lo":78,"tgt_hi":465,"tgt_at":"2026-11-26","q_end":["2026-01-25","2026-04-26","2026-07-26","2026-10-25"],"rev_yoy":[0.7321,0.8523,1.0585,1.0321],"eps_yoy":[0.9775,2.1447,1.2778,1.0769],"next_date":"2027-02-24","next_time":null,"last_date":"2026-11-17","last_beat":"true","last_eps_surprise":7.63,"last_rev_surprise":6.31},"ORCL":{"active":true,"cohort":"MEGACAP","geiger":-0.59,"g_trend":-0.87,"g_mom":-0.3,"tgt_avg":231.35,"tgt_lo":95,"tgt_hi":325,"tgt_at":"2026-11-26","q_end":["2025-11-30","2026-02-28","2026-05-31","2026-08-31"],"rev_yoy":[0.1422,0.2166,0.2063,0.2961],"eps_yoy":[0.9091,0.2451,0.2185,0.5446],"next_date":"2026-12-14","next_time":"AMC","last_date":"2026-09-10","last_beat":"true","last_eps_surprise":10.34,"last_rev_surprise":1.1},"QCOM":{"active":true,"cohort":"AI_HARDWARE","geiger":0.34,"g_trend":0.11,"g_mom":0.58,"tgt_avg":197.44,"tgt_lo":155,"tgt_hi":320,"tgt_at":"2026-11-26","q_end":["2025-12-28","2026-03-29","2026-06-28","2026-09-27"],"rev_yoy":[0.05,-0.0346,-0.0403,-0.0842],"eps_yoy":[-0.0177,1.7302,-0.2305,1.4224],"next_date":"2027-02-03","next_time":null,"last_date":"2026-11-04","last_beat":"true","last_eps_surprise":0.46,"last_rev_surprise":2.02},"SMCI":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.38,"g_trend":-0.52,"g_mom":-0.24,"tgt_avg":42.36,"tgt_lo":18,"tgt_hi":65,"tgt_at":"2026-11-26","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[1.2336,1.2268,0.9316,2.975],"eps_yoy":[0.2,3.2353,4.4194,5.7308],"next_date":"2027-02-02","next_time":null,"last_date":"2026-11-03","last_beat":"true","last_eps_surprise":41.41,"last_rev_surprise":13.76},"SNDK":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.45,"g_trend":-0.67,"g_mom":-0.23,"tgt_avg":283.93,"tgt_lo":193.75,"tgt_hi":381.25,"tgt_at":"2026-11-26","q_end":["2026-01-02","2026-04-03","2026-07-03","2026-10-02"],"rev_yoy":[0.6125,2.5103,3.7159,3.7795],"eps_yoy":[6.1528,2.7277,281.1875,69.1867],"next_date":"2027-02-04","next_time":null,"last_date":"2026-10-29","last_beat":"true","last_eps_surprise":6.17,"last_rev_surprise":2.92},"STX":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.24,"g_trend":-0.49,"g_mom":0.01,"tgt_avg":1105.53,"tgt_lo":750,"tgt_hi":1600,"tgt_at":"2026-11-26","q_end":["2026-01-02","2026-04-03","2026-07-03","2026-10-02"],"rev_yoy":[0.2151,0.4407,0.4849,0.6101],"eps_yoy":[0.6774,1.0828,1.5223,2.1235],"next_date":"2027-01-27","next_time":null,"last_date":"2026-10-27","last_beat":"true","last_eps_surprise":3.23,"last_rev_surprise":2.02},"TSM":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.35,"g_trend":-0.56,"g_mom":-0.14,"tgt_avg":582.38,"tgt_lo":500,"tgt_hi":700,"tgt_at":"2026-11-26","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.2045,0.3513,0.3605,0.5095],"eps_yoy":[0.3497,0.5693,0.7741,0.6875],"next_date":"2027-01-21","next_time":null,"last_date":"2026-10-15","last_beat":"true","last_eps_surprise":3.37,"last_rev_surprise":0.86},"WDC":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.21,"g_trend":-0.52,"g_mom":0.1,"tgt_avg":628.94,"tgt_lo":405,"tgt_hi":1050,"tgt_at":"2026-11-27","q_end":["2026-01-02","2026-04-03","2026-07-03","2026-10-02"],"rev_yoy":[0.2524,0.4547,0.4384,0.5546],"eps_yoy":[1.9018,4.7746,10.1842,0.5081],"next_date":"2027-02-04","next_time":null,"last_date":"2026-10-22","last_beat":"true","last_eps_surprise":12.9,"last_rev_surprise":5.72},"WULF":{"active":true,"cohort":"AI_HARDWARE","geiger":-0.39,"g_trend":-0.68,"g_mom":-0.11,"tgt_avg":33.21,"tgt_lo":15,"tgt_hi":72,"tgt_at":"2026-11-27","q_end":["2025-12-31","2026-03-31","2026-06-30","2026-09-30"],"rev_yoy":[0.0243,-0.0114,-0.0602,0.5072],"eps_yoy":[-3.4199,-5.3125,-39.8421,0.9735],"next_date":"2027-02-25","next_time":null,"last_date":"2026-11-06","last_beat":"true","last_eps_surprise":83.54,"last_rev_surprise":21.98},"HPQ":{"active":false},"GLXY":{"active":false}},"track_read_at":"2026-11-28T06:20:00Z","sources":{"calendar":["Most lowest-sales reports and outlook turns land from February to May 2027","Every first bad outlook on the Base case lands by late January 2027, and gross margin has mostly peaked"]}};
+const C = {red:'#D30046',orange:'#DB7504',amber:'#BA7904',purple:'#743ED8',green:'#02AD6D',blue:'#207FE8',
+  ink:'#E8F0FB',ink2:'#A8B5C8',ink3:'#7A7A95',dim:'#4A4A6A',line:'#1A2230',line2:'#252538',panel:'#0D1118',tile:'#0B0F16',crk:'#00D4FF',up:'#00C27A',down:'#FF4D6D'};
+const PATHC = {'Measured slowdown':C.orange,'Fed-hike path':C.red,'Base case':C.green,'AI upside':C.blue};
+const KINDS = {
+  first_bad:{label:'First bad outlook',c:C.red,shape:'down'},
+  lowest_sales:{label:'Lowest sales reported',c:C.red,shape:'circle'},
+  worst_cash:{label:'Worst cash reported',c:C.red,shape:'square'},
+  lowest_margin:{label:'Lowest margin reported',c:C.amber,shape:'circle'},
+  sales_peak:{label:'Sales peak',c:C.purple,shape:'up'},
+  turns_up:{label:'Outlook turns up',c:C.green,shape:'up'},
+  sales_rise:{label:'Sales rise again',c:C.green,shape:'circle'},
+  cash_pos:{label:'12-month cash positive again',c:C.green,shape:'square'}};
+const BAD = new Set(['first_bad','lowest_sales','worst_cash']), GOOD = new Set(['turns_up','sales_rise','cash_pos']);
+const LAYER_NAME = Object.fromEntries(DATA.layers);
+const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TODAY = new Date(); TODAY.setHours(12,0,0,0);
+const REPORT = DATA.report.url;
+
+/* ---------- helpers ---------- */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+const $ = id => document.getElementById(id);
+const iso2d = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d, 12); };
+const fmtD = (s, est) => { if (!s) return ''; const d = iso2d(s); return (est ? '~' : '') + d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear(); };
+const fmtDs = (s, est) => { if (!s) return ''; const d = iso2d(s); return (est ? '~' : '') + d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2); };
+const pct = (v, dp=1, plus=true) => v == null || isNaN(v) ? '—' : (v > 0 && plus ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(dp) + '%';
+const money = v => v == null ? '—' : '$' + (v >= 1000 ? v.toLocaleString('en-US', {maximumFractionDigits:0}) : v.toFixed(2));
+const daysTo = s => Math.round((iso2d(s) - TODAY) / 864e5);
+const tip = (text) => ' data-tip="' + esc(text) + '"';
+function W(el, fallback) { const w = el.clientWidth; return w > 40 ? w : fallback; }
+
+function mark(shape, x, y, col, size, hollow, extra='') {
+  const s = size || 9, h = s / 2, f = hollow ? 'none' : col, st = hollow ? col : C.panel, sw = hollow ? 1.6 : 2;
+  if (shape === 'circle') return `<circle cx="${x}" cy="${y}" r="${h}" fill="${f}" stroke="${st}" stroke-width="${sw}"${extra}/>`;
+  if (shape === 'square') return `<rect x="${x-h+0.5}" y="${y-h+0.5}" width="${s-1}" height="${s-1}" rx="1.5" fill="${f}" stroke="${st}" stroke-width="${sw}"${extra}/>`;
+  const t = s * 0.62;
+  const pts = shape === 'up' ? `${x},${y-t} ${x+t},${y+t*0.8} ${x-t},${y+t*0.8}` : `${x},${y+t} ${x+t},${y-t*0.8} ${x-t},${y-t*0.8}`;
+  return `<polygon points="${pts}" fill="${f}" stroke="${st}" stroke-width="${sw}" stroke-linejoin="round"${extra}/>`;
+}
+const legendItem = (shape, col, label, hollow) => `<span><svg width="14" height="14" aria-hidden="true">${mark(shape, 7, 7, col, 10, hollow)}</svg>${esc(label)}</span>`;
+
+/* ---------- live prices (chart service; completed daily bars) ---------- */
+const CHART_API = 'https://scintilla-massive-chart-api.fly.dev';
+const LIVE = {};
+async function liveFor(t) {
+  const r = await fetch(CHART_API + '/candles?symbol=' + encodeURIComponent(t) + '&tf=D&limit=260');
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json(); const s = (j && j.series) || [];
+  if (s.length < 30) throw new Error('short');
+  const closes = s.map(b => b.c), last = s[s.length-1], prev = s[s.length-2];
+  const hi = Math.max(...closes.slice(-252)), n200 = closes.slice(-200);
+  const avg200 = n200.reduce((a,b) => a+b, 0) / n200.length;
+  return {c: last.c, day: (last.c/prev.c - 1) * 100, fromHigh: (last.c/hi - 1) * 100, vs200: (last.c/avg200 - 1) * 100,
+          hi, at: new Date(last.t), closes: closes.slice(-60)};
+}
+async function loadLive(tickers) {
+  const q = [...tickers]; const out = [];
+  async function worker() { while (q.length) { const t = q.shift(); try { LIVE[t] = await liveFor(t); } catch (e) { LIVE[t] = null; } paintLive(t); } }
+  for (let i = 0; i < 6; i++) out.push(worker());
+  await Promise.all(out);
+}
+
+/* ---------- 01 paths ---------- */
+function donut(slices, size, center1, center2) {
+  const r = size/2 - 8, ri = r - 30, cx = size/2, cy = size/2, tot = slices.reduce((a,s) => a+s.v, 0);
+  let a0 = -Math.PI/2, out = '';
+  const gap = 0.012;
+  for (const s of slices) {
+    const a1 = a0 + s.v/tot * Math.PI*2, A = a0 + gap, B = a1 - gap, large = (B - A) > Math.PI ? 1 : 0;
+    const p = (rad, a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)];
+    const [x1,y1] = p(r,A), [x2,y2] = p(r,B), [x3,y3] = p(ri,B), [x4,y4] = p(ri,A);
+    out += `<path d="M${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${ri},${ri} 0 ${large} 0 ${x4},${y4} Z" fill="${s.c}"${tip(s.tip)}/>`;
+    const am = (A+B)/2, [lx,ly] = p((r+ri)/2, am);
+    if (s.v/tot > 0.07) out += `<text x="${lx}" y="${ly+4}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" pointer-events="none">${esc(s.label)}</text>`;
+    a0 = a1;
+  }
+  out += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="13" font-weight="700" fill="${C.ink}">${esc(center1)}</text>`;
+  out += `<text x="${cx}" y="${cy+13}" text-anchor="middle" font-size="10" letter-spacing="1.5" fill="${C.ink3}">${esc(center2)}</text>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(slices.map(s => s.name + ' ' + s.v + '%').join(', '))}">${out}</svg>`;
+}
+function renderPaths() {
+  const odds = DATA.odds.map(o => ({name: o.k, v: parseFloat(o.v), c: PATHC[o.k] || C.ink3, s: o.s, label: o.v, tip: o.k + ': ' + o.v + '\n' + o.s}));
+  $('donut').innerHTML = donut(odds, 240, 'FOUR PATHS', 'OUR ODDS');
+  const ndx = DATA.market.find(m => /Nasdaq/.test(m.k));
+  const close = ndx ? parseFloat(ndx.v.replace(/,/g, '')) : null;
+  const st = DATA.stand.find(s => /Nasdaq/.test(s.name));
+  const rec = st ? parseFloat((st.high.match(/[\d,]+/) || ['0'])[0].replace(/,/g, '')) : null;
+  const R = DATA.ranges;
+  const lo = 18000, hi = 44000;
+  const rows = odds.map(o => {
+    const mine = R.filter(r => r.label.startsWith(o.name));
+    const low = mine.filter(r => r.lo && !/December 2028/.test(r.label)), dec = mine.find(r => /December 2028/.test(r.label) && r.lo);
+    const text = mine.find(r => !r.lo);
+    return {o, low, dec, text};
+  });
+  const host = $('pathRows');
+  const draw = () => {
+    const w = Math.max(300, W(host, 700) - 0), narrow = w < 560, lab = narrow ? 0 : Math.min(250, Math.max(160, w * 0.28)), pw = w - lab - 10;
+    const X = v => lab + (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * pw;
+    let html = '';
+    rows.forEach((row, i) => {
+      const o = row.o, nb = row.low.length + (row.dec ? 1 : 0) + (row.text ? 1 : 0), h = Math.max(56, 12 + nb * 16 + 10);
+      let g = '';
+      // grid
+      for (let t = 20000; t <= 40000; t += 5000) g += `<line x1="${X(t)}" x2="${X(t)}" y1="4" y2="${h-14}" stroke="${C.line}" stroke-width="1"/>`;
+      const bar = (r, y, kind) => {
+        const x1 = X(r.lo), x2 = X(r.hi), ww = Math.max(3, x2 - x1);
+        const fill = kind === 'dec' ? 'none' : o.c, sw = kind === 'dec' ? 1.8 : 0;
+        const what = kind === 'dec' ? 'Dec 2028' : /second/.test(r.label) ? 'second low' : /main low/.test(r.label) ? 'main low' : 'low';
+        const lbl = esc(what + ' ' + r.text), lw = lbl.length * 6.4, right = x2 + 6 + lw < w;
+        return `<rect x="${x1}" y="${y}" width="${ww}" height="11" rx="4" fill="${fill}" stroke="${o.c}" stroke-width="${sw}"${tip(o.name + ' · ' + r.label + '\nNasdaq-100 ' + r.text + '\nS&P 500 ' + r.spx)}/>`
+          + `<text x="${right ? x2 + 6 : x1 - 6}" y="${y + 9.5}" text-anchor="${right ? 'start' : 'end'}" font-size="10.5" fill="${C.ink2}">${lbl}</text>`;
+      };
+      let y = 8;
+      if (row.low.length) { row.low.forEach(r => { g += bar(r, y, 'low'); y += 16; }); }
+      if (row.dec) { g += bar(row.dec, y, 'dec'); y += 16; }
+      if (row.text) g += `<text x="${lab}" y="${y + 9}" font-size="11" fill="${C.ink2}">${esc(row.text.text)} · S&P 500: ${esc(row.text.spx)}</text>`;
+      if (close) g += `<line x1="${X(close)}" x2="${X(close)}" y1="2" y2="${h-12}" stroke="${C.ink}" stroke-width="1.5"${tip('Friday\'s close ' + close.toLocaleString('en-US'))}/>`;
+      if (rec) g += `<line x1="${X(rec)}" x2="${X(rec)}" y1="2" y2="${h-12}" stroke="${C.ink3}" stroke-width="1.2" stroke-dasharray="3 3"${tip('Record close ' + rec.toLocaleString('en-US'))}/>`;
+      const label = narrow ? '' : `<foreignObject x="0" y="0" width="${lab - 8}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="font:650 14px var(--sans);color:${C.ink};display:flex;gap:8px;align-items:baseline;line-height:1.25"><i style="flex:none;width:10px;height:10px;border-radius:2px;background:${o.c};display:inline-block"></i><span>${esc(o.name)}<br><span style="font:700 20px var(--mono)">${esc(o.label)}</span></span></div></foreignObject>`;
+      const top = narrow ? `<div class="pname" style="margin:4px 0 2px"><i style="background:${o.c}"></i>${esc(o.name)} <span class="podds" style="font-size:17px">${esc(o.label)}</span></div>` : '';
+      html += `<div style="border-top:${i ? '1px solid ' + C.line : '0'};padding:6px 0">${top}<svg width="${w}" height="${h}" role="img" aria-label="${esc(o.name)} ranges">${label}${g}</svg><div class="ptext" style="margin:2px 0 0 18px">${esc(o.s)}</div></div>`;
+    });
+    // axis
+    let ax = '';
+    for (let t = 20000; t <= 40000; t += 5000) ax += `<text x="${X(t)}" y="12" text-anchor="middle" font-size="10" fill="${C.ink3}">${(t/1000)}k</text>`;
+    if (close) ax += `<text x="${X(close)}" y="26" text-anchor="middle" font-size="10" fill="${C.ink}">close ${close.toLocaleString('en-US')}</text>`;
+    if (rec) ax += `<text x="${X(rec)}" y="38" text-anchor="middle" font-size="10" fill="${C.ink3}">record ${rec.toLocaleString('en-US')}</text>`;
+    html += `<svg width="${w}" height="42" aria-hidden="true">${ax}</svg>`;
+    host.innerHTML = html;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcPaths').innerHTML = 'Source: the report\'s opening cards and the table "' + esc(findHead('ranges')) + '". Solid bar: the low; outlined bar: December 2028. <a href="' + REPORT + '#story" target="_blank" rel="noopener">Open in the report ↗</a>';
+}
+function findHead(k) { return k === 'ranges' ? 'S&P 500 at 8,000 is an AI upside number near term and a 2028 number…' : ''; }
+function debounce(f, ms) { let t; return () => { clearTimeout(t); t = setTimeout(f, ms); }; }
+
+/* ---------- 02 where we stand ---------- */
+const STAND_T = {'Micron':'MU','SanDisk':'SNDK','Nvidia':'NVDA','AMD':'AMD','Broadcom':'AVGO','Intel':'INTC'};
+function renderStand() {
+  const rows = [...DATA.stand].filter(s => s.from_high != null).sort((a,b) => a.from_high - b.from_high);
+  const host = $('standChart');
+  const draw = () => {
+    const w = Math.max(300, W(host, 640)), lab = 128, right = 92, pw = w - lab - right, rh = 30;
+    const X = v => lab + Math.min(1, Math.abs(v) / 80) * pw;
+    let g = '';
+    [0, 20, 40, 60, 80].forEach(t => { g += `<line x1="${X(-t)}" x2="${X(-t)}" y1="16" y2="${16 + rows.length*rh}" stroke="${C.line}"/><text x="${X(-t)}" y="11" text-anchor="middle" font-size="10" fill="${C.ink3}">${t ? '−' + t + '%' : '0'}</text>`; });
+    rows.forEach((s, i) => {
+      const y = 20 + i*rh, t = STAND_T[s.name], lv = t && LIVE[t];
+      g += `<text x="${lab - 8}" y="${y + 10}" text-anchor="end" font-size="11.5" fill="${C.ink}">${esc(s.name.replace(' (SOX)', ''))}</text>`;
+      g += `<rect x="${lab}" y="${y}" width="${Math.max(3, X(s.from_high) - lab)}" height="12" rx="4" fill="${C.red}"${tip(s.name + '\nClose 27 Nov: ' + s.close + '\nFrom its high: ' + pct(s.from_high) + ' (high ' + s.high + ')\n200-day average: ' + s.text200)}/>`;
+      if (s.vs200 != null) {
+        const x2 = lab + Math.min(1, Math.abs(Math.min(0, s.vs200)) / 80) * pw;
+        g += `<line x1="${lab}" x2="${Math.max(lab + 2, x2)}" y1="${y + 17}" y2="${y + 17}" stroke="${s.vs200 < 0 ? C.down : C.up}" stroke-width="2" stroke-linecap="round" opacity=".75"${tip(s.name + ': ' + s.text200)}/>`;
+      }
+      g += `<text x="${w - right + 6}" y="${y + 10}" font-size="11.5" fill="${C.ink}" class="num">${pct(s.from_high)}</text>`;
+      if (lv && Math.abs(lv.fromHigh - s.from_high) >= 0.1) g += `<text x="${w - right + 6}" y="${y + 23}" font-size="10" fill="${lv.fromHigh < s.from_high ? C.down : C.up}"${tip(s.name + ' now, live: ' + pct(lv.fromHigh) + ' from its highest close in a year')}>now ${pct(lv.fromHigh)}</text>`;
+    });
+    host.innerHTML = `<svg width="${w}" height="${26 + rows.length*rh}" role="img" aria-label="Fall from record">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150)); STAND_REDRAW = draw;
+  $('srcStand').innerHTML = 'Source: the report\'s table "Where we stand: close of ' + esc(fmtD(DATA.report.as_of)) + '". Red line: below the 200-day average. <a href="' + REPORT + '#today" target="_blank" rel="noopener">Open ↗</a>';
+}
+let STAND_REDRAW = null;
+
+/* ---------- 03 next tests ---------- */
+function renderNext() {
+  const items = DATA.next;
+  const ag = $('agenda');
+  ag.innerHTML = items.map(n => {
+    const d = iso2d(n.d), dd = daysTo(n.d), tr = n.t && DATA.track[n.t];
+    let cmp = '';
+    if (n.t && tr && tr.active) {
+      if (tr.next_date === n.d) cmp = '<span class="flag ok">✓ same as our calendar</span>';
+      else if (tr.next_date) cmp = '<span class="flag warn">our calendar: ' + esc(fmtDs(tr.next_date)) + '</span>';
+    } else if (n.t && tr && tr.active === false) cmp = '<span class="flag est">not on the Hub</span>';
+    return `<div class="arow"${n.est ? ' style="box-shadow:inset 0 0 0 1px ' + C.line2 + ';background:none"' : ''}>
+      <div class="adate"><b>${d.getDate()}</b><span>${MONS[d.getMonth()]}</span></div>
+      <div><div class="awho">${esc(n.who)}${n.est ? '<span class="flag est">estimate</span>' : ''}${cmp}</div><div class="awhy">${esc(n.why)}</div></div>
+      <div class="ain">${dd > 1 ? 'in ' + dd + ' days' : dd === 1 ? 'tomorrow' : dd === 0 ? 'today' : Math.abs(dd) + ' days ago'}</div></div>`;
+  }).join('');
+  // ruler
+  const host = $('nextRuler');
+  const draw = () => {
+    const w = Math.max(320, W(host, 600)), pad = 14;
+    const t0 = TODAY.getTime(), t1 = Math.max(...items.map(n => iso2d(n.d).getTime())) + 6*864e5;
+    const X = t => pad + (t - t0) / (t1 - t0) * (w - 2*pad);
+    let g = `<line x1="${pad}" x2="${w-pad}" y1="22" y2="22" stroke="${C.line2}" stroke-width="2"/>`;
+    const m = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 1, 12);
+    for (let d = m; d.getTime() < t1; d = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) {
+      g += `<line x1="${X(d.getTime())}" x2="${X(d.getTime())}" y1="14" y2="30" stroke="${C.line2}"/><text x="${X(d.getTime()) + 4}" y="40" font-size="10" fill="${C.ink3}">${MONS[d.getMonth()]}</text>`;
+    }
+    g += `<text x="${pad}" y="10" font-size="10" fill="${C.ink}">today</text>`;
+    items.forEach((n, i) => {
+      const x = X(iso2d(n.d).getTime());
+      const col = n.t ? C.crk : C.amber;
+      g += `<circle cx="${x}" cy="22" r="5" fill="${n.est ? 'none' : col}" stroke="${n.est ? col : C.panel}" stroke-width="${n.est ? 1.6 : 2}"${tip(fmtD(n.d, n.est) + ' · ' + n.who + '\n' + n.why)}/>`;
+    });
+    host.innerHTML = `<svg width="${w}" height="46" role="img" aria-label="Next tests on a time line">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcNext').innerHTML = 'Source: the report\'s table "' + esc(DATA.next_head) + '". Cyan: a company report, amber: an economic number; hollow: estimate. <a href="' + REPORT + '#story" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 04 timeline ---------- */
+const T_START = iso2d('2026-08-01'), T_END = iso2d('2029-01-01');
+function tlRows(filterNames) {
+  const order = DATA.layers.map(l => l[0]);
+  const comps = DATA.companies.filter(c => c.events && c.events.length && (!filterNames || filterNames.has(c.name)));
+  const rows = [];
+  order.forEach(L => {
+    const cs = comps.filter(c => c.layer === L);
+    if (!cs.length) return;
+    rows.push({group: LAYER_NAME[L]});
+    cs.forEach(c => rows.push({c}));
+  });
+  return rows;
+}
+function timelineSVG(rows, w, opts={}) {
+  const lab = opts.lab != null ? opts.lab : 150, gl = opts.gutter != null ? opts.gutter : 58, gr = gl, rh = opts.rh || 26, gh = opts.gh || 26, top = opts.top != null ? opts.top : 90;
+  const pw = w - lab - gl - gr;
+  const X = d => {
+    if (d < T_START) return lab + gl * 0.5;
+    if (d >= T_END) return lab + gl + pw + gr * 0.5;
+    return lab + gl + (d - T_START) / (T_END - T_START) * pw;
+  };
+  let y = top, g = '', H = top;
+  rows.forEach(r => { H += r.group ? gh : rh; });
+  H += opts.mini ? 14 : 8;
+  // background: gutters, quarter lines, years
+  g += `<rect x="${lab}" y="${top - 6}" width="${gl}" height="${H - top}" fill="${C.tile}"/><rect x="${lab + gl + pw}" y="${top - 6}" width="${gr}" height="${H - top}" fill="${C.tile}"/>`;
+  if (!opts.mini) {
+    g += `<text x="${lab + gl/2}" y="${top - 12}" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="${C.ink3}">EARLIER</text><text x="${lab + gl + pw + gr/2}" y="${top - 12}" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="${C.ink3}">LATER</text>`;
+  }
+  for (let yy = 2026; yy <= 2028; yy++) for (let q = 0; q < 12; q += 3) {
+    const d = new Date(yy, q, 1, 12); if (d < T_START || d >= T_END) continue;
+    const x = X(d);
+    g += `<line x1="${x}" x2="${x}" y1="${top - 6}" y2="${opts.mini ? H - 12 : H}" stroke="${q === 0 ? C.line2 : C.line}" stroke-width="${q === 0 ? 1.4 : 1}"/>`;
+    if (!opts.mini) g += `<text x="${x + 3}" y="${top - 12}" font-size="10" fill="${q === 0 ? C.ink2 : C.ink3}">${q === 0 ? yy : MONS[q]}</text>`;
+    else if (q === 0) g += `<text x="${x + 2}" y="${H - 2}" font-size="9" fill="${C.ink3}">${yy}</text>`;
+  }
+  // month density strip (bad above, good below)
+  if (!opts.mini) {
+    const bad = {}, good = {};
+    rows.forEach(r => (r.c ? r.c.events : []).forEach(e => { if (!e.d) return; const d = iso2d(e.d); if (d < T_START || d >= T_END) return; const k = d.getFullYear() + '-' + d.getMonth(); if (BAD.has(e.k)) bad[k] = (bad[k] || 0) + 1; if (GOOD.has(e.k)) good[k] = (good[k] || 0) + 1; }));
+    const mx = Math.max(1, ...Object.values(bad), ...Object.values(good)), sh = 17, base = top - 52;
+    g += `<text x="${lab + gl - 6}" y="${base - 4}" text-anchor="end" font-size="9.5" fill="${C.red}">bad news</text><text x="${lab + gl - 6}" y="${base + 12}" text-anchor="end" font-size="9.5" fill="${C.green}">good news</text>`;
+    g += `<line x1="${lab + gl}" x2="${lab + gl + pw}" y1="${base + 0.5}" y2="${base + 0.5}" stroke="${C.line2}"/>`;
+    for (let d = new Date(T_START); d < T_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) {
+      const k = d.getFullYear() + '-' + d.getMonth(), x1 = X(d) + 1, x2 = X(new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) - 1, bw = Math.max(2, x2 - x1);
+      const b = bad[k] || 0, gd = good[k] || 0, label = MONS[d.getMonth()] + ' ' + d.getFullYear() + ': ' + b + ' bad, ' + gd + ' good';
+      if (b) g += `<rect x="${x1}" y="${base - b/mx*sh}" width="${bw}" height="${b/mx*sh}" rx="2" fill="${C.red}"${tip(label)}/>`;
+      if (gd) g += `<rect x="${x1}" y="${base + 1}" width="${bw}" height="${gd/mx*sh}" rx="2" fill="${C.green}"${tip(label)}/>`;
+    }
+  }
+  // today
+  const tx = X(TODAY);
+  g += `<line x1="${tx}" x2="${tx}" y1="${top - 6}" y2="${opts.mini ? H - 12 : H}" stroke="${C.crk}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+  if (!opts.mini) g += `<text x="${tx + 4}" y="${H - 2}" font-size="9.5" fill="${C.crk}">today</text>`;
+  rows.forEach(r => {
+    if (r.group) {
+      if (!opts.mini) g += `<text x="0" y="${y + 17}" font-size="10" font-weight="700" letter-spacing="1.6" fill="${C.ink3}">${esc(r.group.toUpperCase())}</text>`;
+      y += gh; return;
+    }
+    const c = r.c, cy = y + rh/2;
+    g += `<g class="tlrow" data-name="${esc(c.name)}"><rect x="0" y="${y}" width="${w}" height="${rh}" fill="transparent"/>`;
+    if (!opts.mini) g += `<text x="0" y="${cy + 4}" font-size="11.5" fill="${C.ink}">${esc(c.name)}<tspan fill="${C.ink3}" font-size="10">  ${esc(c.t ? c.t.replace(/\..*$/, '') : (c.private ? 'private' : ''))}</tspan></text>`;
+    g += `<line x1="${lab + gl}" x2="${lab + gl + pw}" y1="${cy}" y2="${cy}" stroke="${C.line}" stroke-width="1"/>`;
+    // place marks with simple collision stacking
+    const placed = [];
+    const put = (x) => { let k = 0; while (placed.some(p => Math.abs(p.x - x) < 9 && p.k === k)) k++; placed.push({x, k}); return [0, -7, 7, -14, 14][k % 5]; };
+    const evs = [...c.events].sort((a,b) => (a.d || '').localeCompare(b.d || ''));
+    evs.forEach(e => {
+      const K = KINDS[e.k]; if (!K) return;
+      if (e.tough && e.tough.d) {
+        const xt = X(iso2d(e.tough.d)), dy = put(xt);
+        g += `<g${tip(c.name + ' · ' + K.label + '\nTougher path: ' + fmtD(e.tough.d, e.tough.est) + (e.tough.note ? ' (' + e.tough.note + ')' : '') + (e.d ? '\nBase case: ' + fmtD(e.d, e.est) : '\nBase case: none in the window'))}><circle cx="${xt}" cy="${cy + dy}" r="9" fill="transparent"/>${mark(K.shape, xt, cy + dy, K.c, 9, true)}</g>`;
+      }
+      if (e.never) { g += `<text x="${lab + gl + pw - 4}" y="${cy + 4}" text-anchor="end" font-size="10" fill="${C.green}"${tip(c.name + ' · ' + K.label + ': ' + e.text)}>${esc(e.text)}</text>`; return; }
+      if (!e.d) return;
+      const d = iso2d(e.d), x = X(d);
+      if (e.end) {
+        const x2 = X(iso2d(e.end));
+        g += `<rect x="${x}" y="${cy - 3.5}" width="${Math.max(4, x2 - x)}" height="7" rx="3.5" fill="${K.c}"${tip(c.name + ' · ' + K.label + '\n' + fmtD(e.d, e.est) + ' to ' + fmtD(e.end, e.est) + (e.note ? '\n' + e.note : ''))}/>`;
+        return;
+      }
+      const dy = put(x);
+      const when = d < T_START ? ' (before the chart starts)' : d >= T_END ? ' (after 2028)' : '';
+      g += `<g${tip(c.name + ' · ' + K.label + '\n' + fmtD(e.d, e.est) + (e.est ? ' (estimate)' : ' (public)') + when + (e.note ? '\n' + e.note : '') + (e.tough && e.tough.d ? '\nTougher path: ' + fmtD(e.tough.d, e.tough.est) : ''))}><circle cx="${x}" cy="${cy + dy}" r="9" fill="transparent"/>${mark(K.shape, x, cy + dy, K.c, opts.mini ? 8 : 9.5, false)}</g>`;
+    });
+    g += `</g>`;
+    y += rh;
+  });
+  return {svg: `<svg width="${w}" height="${H}" role="img" aria-label="When the bad news lands, company by company">${g}</svg>`, H};
+}
+function renderTimeline() {
+  $('tlLegend').innerHTML = Object.entries(KINDS).map(([k, K]) => legendItem(K.shape, K.c, K.label)).join('')
+    + legendItem('circle', C.ink2, 'tougher path', true) + `<span><svg width="18" height="14" aria-hidden="true"><line x1="9" x2="9" y1="0" y2="14" stroke="${C.crk}" stroke-dasharray="3 2"/></svg>today</span>`;
+  const host = $('tlChart'), wrap = $('tlWrap');
+  const draw = () => {
+    const w = Math.max(980, W(wrap, 1200));
+    host.innerHTML = timelineSVG(tlRows(), w).svg;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcTimeline').innerHTML = 'Source: the report\'s tables "' + esc(DATA.sources.calendar[0]) + '" and "' + esc(DATA.sources.calendar[1]) + '". The tougher path is the report\'s stress test (2028 spending about +3%). <a href="' + REPORT + '#calendar" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 05 margins ---------- */
+function marginStatus(m) {
+  const p = (m.past || '').toLowerCase();
+  if (p.startsWith('yes')) return {k: 'past', label: 'Past its high', c: C.red};
+  if (p.startsWith('not clear')) return {k: 'unclear', label: 'Not clear', c: C.amber};
+  if (p.startsWith('no cycle')) return {k: 'nocycle', label: 'No cycle', c: C.ink3};
+  if (p.startsWith('no')) return {k: 'at', label: 'At its high', c: C.green};
+  if (p.startsWith('too early')) return {k: 'early', label: 'Too early to say', c: C.purple};
+  return {k: 'unclear', label: 'Not clear', c: C.amber};
+}
+function renderMargins() {
+  $('marginH').textContent = DATA.margin_head;
+  const ms = DATA.margins;
+  const counts = {};
+  ms.forEach(m => { const s = marginStatus(m); counts[s.k] = counts[s.k] || {v: 0, ...s}; counts[s.k].v++; });
+  const order = ['past', 'at', 'unclear', 'nocycle', 'early'];
+  const slices = order.filter(k => counts[k]).map(k => ({name: counts[k].label, v: counts[k].v, c: counts[k].c, label: String(counts[k].v), tip: counts[k].label + ': ' + counts[k].v + ' companies\n' + ms.filter(m => marginStatus(m).k === k).map(m => m.name).join(', ')}));
+  const legend = slices.map(s => `<div style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:4px"><i style="width:10px;height:10px;border-radius:2px;background:${s.c};display:inline-block"></i><span>${esc(s.name)}</span><span class="num" style="margin-left:auto;color:${C.ink2}">${s.v}</span></div>`).join('');
+  $('marginDonut').innerHTML = donut(slices, 210, ms.length + ' COMPANIES', 'GROSS MARGIN') + `<div style="max-width:210px">${legend}</div>`;
+  const host = $('marginChart');
+  const draw = () => {
+    const w = Math.max(640, W(host.parentElement, 900)), lab = 140, right = 250, pw = w - lab - right, rh = 20, gh = 24;
+    const X = v => lab + Math.max(0, Math.min(100, v)) / 100 * pw;
+    let y = 22, g = '';
+    [0, 25, 50, 75, 100].forEach(t => g += `<text x="${X(t)}" y="12" text-anchor="middle" font-size="10" fill="${C.ink3}">${t}%</text>`);
+    const H0 = 22;
+    let rows = [];
+    DATA.layers.forEach(([L, name]) => { const xs = ms.filter(m => m.layer === L); if (xs.length) { rows.push({group: name}); xs.forEach(m => rows.push({m})); } });
+    const H = H0 + rows.reduce((a, r) => a + (r.group ? gh : rh), 0) + 6;
+    [0, 25, 50, 75, 100].forEach(t => g += `<line x1="${X(t)}" x2="${X(t)}" y1="16" y2="${H}" stroke="${C.line}"/>`);
+    rows.forEach(r => {
+      if (r.group) { g += `<text x="0" y="${y + 16}" font-size="10" font-weight="700" letter-spacing="1.6" fill="${C.ink3}">${esc(r.group.toUpperCase())}</text>`; y += gh; return; }
+      const m = r.m, s = marginStatus(m), cy = y + rh/2, hx = X(m.high.v), lx = X(m.latest.v);
+      const tipT = m.name + ' · gross margin\nHigh since 2019: ' + m.high.v + '%' + (m.high.adj ? ' adjusted' : '') + ' (' + fmtD(m.high.d) + ')\nLatest: ' + m.latest.v + '% (' + fmtD(m.latest.d) + ')' + (m.next ? '\nNext guide: ' + m.next.text : '') + '\nThe report: ' + m.past;
+      g += `<g${tip(tipT)}><rect x="0" y="${y}" width="${w}" height="${rh}" fill="transparent"/>`;
+      g += `<text x="0" y="${cy + 4}" font-size="11.5" fill="${C.ink}">${esc(m.name)}</text>`;
+      if (lx < hx - 1) g += `<line x1="${lx}" x2="${hx}" y1="${cy}" y2="${cy}" stroke="${C.red}" stroke-width="2.4" stroke-linecap="round"/>`;
+      g += `<line x1="${hx}" x2="${hx}" y1="${cy - 7}" y2="${cy + 7}" stroke="${C.ink}" stroke-width="2"/>`;
+      if (m.next && m.next.lo != null) { const nx = X((m.next.lo + m.next.hi) / 2); g += `<circle cx="${nx}" cy="${cy}" r="5.5" fill="none" stroke="${s.c}" stroke-width="1.6"/>`; }
+      if (m.latest.v < 0) g += mark('down', X(0) - 1, cy, s.c, 9, false).replace('<polygon', `<polygon transform="rotate(90 ${X(0) - 1} ${cy})"`);
+      else g += `<circle cx="${lx}" cy="${cy}" r="4.8" fill="${s.c}" stroke="${C.panel}" stroke-width="2"/>`;
+      const gap = m.latest.v - m.high.v;
+      g += `<text x="${w - right + 10}" y="${cy + 4}" font-size="11" fill="${C.ink2}" class="num">${m.latest.v.toFixed(1)}%  <tspan fill="${gap < -0.05 ? C.down : C.ink3}">${gap < -0.05 ? gap.toFixed(1) + ' pts' : 'at high'}</tspan>${m.next && m.next.lo != null ? `<tspan fill="${C.ink3}">  next ${m.next.lo === m.next.hi ? m.next.lo : m.next.lo + '–' + m.next.hi}%</tspan>` : ''}</text></g>`;
+      y += rh;
+    });
+    host.innerHTML = `<svg width="${w}" height="${H}" role="img" aria-label="Gross margin against its high">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcMargins').innerHTML = 'Source: the report\'s table "' + esc(DATA.margin_head) + '". Adjusted margins where the company reports them. <a href="' + REPORT + '#aichips" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 06 big buyers ---------- */
+const BUY_T = {Microsoft:'MSFT', Alphabet:'GOOGL', Amazon:'AMZN', Meta:'META', Oracle:'ORCL'};
+const CLOUDC = '#05A4C6';   /* one series of its own, kept apart from the AI-upside blue in the same panel */
+function renderBuyers() {
+  $('buyLegend').innerHTML = `<span><svg width="14" height="12"><rect x="1" y="1" width="12" height="10" rx="2" fill="${C.green}"/></svg>reported</span><span><svg width="14" height="12"><rect x="1.5" y="1.5" width="11" height="9" rx="2" fill="none" stroke="${C.green}" stroke-width="1.5"/></svg>analysts' average</span>`
+    + `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${C.red}"/></svg>Fed-hike path</span><span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${C.green}"/></svg>analysts (Base case)</span><span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${C.blue}"/></svg>AI upside</span>`
+    + `<span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="${CLOUDC}"/></svg>cloud share of the added sales</span>`;
+  const names = Object.keys(DATA.buy_q);
+  const maxY = Math.max(40, ...names.flatMap(n => DATA.buy_q[n].map(q => q.yoy || 0)));
+  const yTop = Math.ceil(maxY / 10) * 10;
+  $('buyGrid').innerHTML = names.map(n => {
+    const qs = DATA.buy_q[n], w = 250, h = 130, l = 26, b = 18, pw = w - l - 6, bw = pw / qs.length;
+    const Y = v => 8 + (1 - Math.max(0, v) / yTop) * (h - 8 - b);
+    let g = '';
+    [0, yTop/2, yTop].forEach(t => g += `<line x1="${l}" x2="${w - 4}" y1="${Y(t)}" y2="${Y(t)}" stroke="${C.line}"/><text x="${l - 4}" y="${Y(t) + 3}" text-anchor="end" font-size="9.5" fill="${C.ink3}">${t}%</text>`);
+    qs.forEach((q, i) => {
+      if (q.yoy == null) return;
+      const x = l + i*bw + 2, y = Y(q.yoy), hh = Y(0) - y, col = q.yoy >= 0 ? C.green : C.red;
+      const t = n + ' · ' + q.q + '\nSales $' + q.sales + 'bn, ' + pct(q.yoy) + ' on a year earlier\n' + (q.reported ? 'Reported ' + fmtD(q.d) : 'Analysts\' average; report ~' + fmtD(q.d));
+      g += q.reported ? `<rect x="${x}" y="${y}" width="${bw - 4}" height="${Math.max(1, hh)}" rx="3" fill="${col}"${tip(t)}/>`
+                      : `<rect x="${x + 0.75}" y="${y + 0.75}" width="${bw - 5.5}" height="${Math.max(1, hh - 1.5)}" rx="3" fill="rgba(2,173,109,.12)" stroke="${col}" stroke-width="1.5"${tip(t)}/>`;
+    });
+    const lastR = [...qs].reverse().find(q => q.reported), lastA = qs[qs.length - 1];
+    g += `<text x="${l}" y="${h - 4}" font-size="9.5" fill="${C.ink3}">${esc(qs[0].q)}</text><text x="${w - 4}" y="${h - 4}" text-anchor="end" font-size="9.5" fill="${C.ink3}">${esc(lastA.q)}</text>`;
+    // paths strip
+    const P = DATA.buy_path[n];
+    let strip = '';
+    if (P) {
+      const sw = 250, sl = 8, sp = sw - 16, SX = v => sl + Math.max(0, Math.min(60, v)) / 60 * sp;
+      strip += `<line x1="${sl}" x2="${sl + sp}" y1="16" y2="16" stroke="${C.line2}" stroke-width="2"/>`;
+      [0, 20, 40, 60].forEach(t => strip += `<text x="${SX(t)}" y="34" text-anchor="middle" font-size="9" fill="${C.ink3}">${t}%</text>`);
+      [['fed', C.red, 'Fed-hike path'], ['base', C.green, 'Analysts (Base case)'], ['up', C.blue, 'AI upside']].forEach(([k, col, lb]) => {
+        const v = P[k][0]; strip += `<circle cx="${SX(v)}" cy="16" r="6" fill="${col}" stroke="${C.panel}" stroke-width="2"${tip(n + ' · 2027 sales growth\n' + lb + ': ' + pct(v) + '\n2028: ' + pct(P[k][1]))}/>`;
+      });
+      strip = `<div class="blk-k" style="margin:8px 0 2px">2027 sales growth by path</div><svg width="250" height="38" role="img" aria-label="2027 growth by path">${strip}</svg>`;
+    }
+    // cloud pie
+    const CL = DATA.cloud[n];
+    let pie = '<div style="font-size:12.5px;color:' + C.ink3 + '">No cloud business</div>';
+    if (CL && CL.share_added != null) {
+      const v = Math.min(100, CL.share_added), r = 22, cx = 26, cy = 26, a = v / 100 * Math.PI * 2 - Math.PI/2;
+      const large = v > 50 ? 1 : 0, x2 = cx + r*Math.cos(a), y2 = cy + r*Math.sin(a);
+      const seg = v >= 99.9 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${CLOUDC}"/>` : `<path d="M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${CLOUDC}"/>`;
+      pie = `<div style="display:flex;gap:10px;align-items:center"${tip(n + ' · ' + CL.segment + '\nCloud is ' + CL.share_sales + '% of sales and brought ' + CL.share_added + '% of the added sales dollars\nTotal growth if cloud had not grown: ' + CL.if_cloud_flat)}><svg width="52" height="52" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${C.line2}"/>${seg}<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.panel}" stroke-width="1"/></svg><div style="font-size:12.5px;line-height:1.35"><b class="num">${CL.share_added}%</b> of the added sales came from the cloud${CL.share_added > 100 ? ': the rest shrank' : ''}<br><span style="color:${C.ink3}">${esc(CL.segment)}</span></div></div>`;
+    }
+    const t = BUY_T[n];
+    return `<div class="card" style="padding:12px"><div class="chead"><span class="cname">${esc(n)}</span><span class="ctk">${t}</span><span class="badge off" style="margin-left:auto">${lastR ? pct(lastR.yoy) + ' latest' : ''}</span></div>
+      <svg width="${w}" height="${h}" role="img" aria-label="${esc(n)} quarterly growth">${g}</svg>${strip}<div class="blk-k" style="margin:8px 0 4px">Cloud</div>${pie}</div>`;
+  }).join('');
+  $('srcBuyers').innerHTML = 'Source: the report\'s tables "' + esc(DATA.buy_head.quarters) + '", "' + esc(DATA.buy_head.paths) + '" and "' + esc(DATA.buy_head.cloud) + '". <a href="' + REPORT + '#calendar" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 07 renters ---------- */
+const FUNDC = {ok: C.green, tight: C.amber, short: C.red, unknown: C.ink3};
+const FUNDL = {ok: 'can do', tight: 'tight', short: 'falls short', unknown: '—'};
+function renderRenters() {
+  $('rentH').textContent = DATA.rent_head.odds;
+  $('rentLegend').innerHTML = `<span><svg width="14" height="12"><rect x="1" y="2" width="12" height="8" rx="3" fill="${C.red}"/></svg>restructuring by end-2028</span><span><svg width="12" height="12"><circle cx="6" cy="6" r="4.2" fill="none" stroke="${C.red}" stroke-width="1.6"/></svg>on the Fed-hike path</span>`
+    + ['ok', 'tight', 'short'].map(k => `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${FUNDC[k]}"/></svg>${FUNDL[k]}</span>`).join('')
+    + `<span style="color:${C.ink3}">lights: Base · Measured · Fed-hike · AI upside</span>`;
+  const rows = [...DATA.renters].sort((a, b) => (b.restructure || 0) - (a.restructure || 0));
+  const host = $('rentChart');
+  const draw = () => {
+    const w = Math.max(640, W(host.parentElement, 900)), lab = 150, lights = 96, right = 70, pw = w - lab - lights - right, rh = 24;
+    const X = v => lab + Math.min(60, v) / 60 * pw;
+    let g = '';
+    [0, 10, 20, 30, 40, 50, 60].forEach(t => g += `<line x1="${X(t)}" x2="${X(t)}" y1="16" y2="${20 + rows.length * rh}" stroke="${C.line}"/><text x="${X(t)}" y="11" text-anchor="middle" font-size="10" fill="${C.ink3}">${t}%</text>`);
+    g += `<text x="${w - lights - right + 64}" y="11" text-anchor="middle" font-size="9.5" fill="${C.ink3}" letter-spacing="1">FUNDED?</text>`;
+    rows.forEach((r, i) => {
+      const y = 20 + i * rh, cy = y + rh / 2;
+      g += `<text x="0" y="${cy + 4}" font-size="11.5" fill="${C.ink}">${esc(r.name)}<tspan fill="${C.ink3}" font-size="10">  ${esc(r.t || 'private')}</tspan></text>`;
+      const t = r.name + '\nRestructuring by end-2028: ' + r.restructure + '%\nOn the Fed-hike path: ' + r.restructure_fed + '%\nCapital fully dries up: ' + r.dries + '% · delays but survives: ' + r.delays + '%';
+      g += `<rect x="${lab}" y="${cy - 5}" width="${Math.max(3, X(r.restructure) - lab)}" height="10" rx="4" fill="${C.red}"${tip(t)}/>`;
+      const xb = X(r.restructure), xf = X(r.restructure_fed), apart = xf - xb > 44;
+      if (apart) {
+        g += `<text x="${xb + 6}" y="${cy + 4}" font-size="11" font-weight="700" fill="${C.ink}" class="num">${r.restructure}%</text>`;
+        g += `<line x1="${xb + 36}" x2="${xf - 6}" y1="${cy}" y2="${cy}" stroke="${C.red}" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>`;
+      }
+      g += `<circle cx="${xf}" cy="${cy}" r="5" fill="none" stroke="${C.red}" stroke-width="1.6"${tip(t)}/>`;
+      const flab = (apart ? '' : r.restructure + '% · ') + r.restructure_fed + '% Fed-hike', fits = xf + 9 + flab.length * 6.2 < w - lights - right;
+      g += `<text x="${fits ? xf + 9 : xf - 9}" text-anchor="${fits ? 'start' : 'end'}" y="${cy + (fits ? 4 : -7)}" font-size="10" fill="${C.ink3}" class="num">${apart ? '' : '<tspan font-size="11" font-weight="700" fill="' + C.ink + '">' + r.restructure + '%</tspan> · '}${r.restructure_fed}% Fed-hike</text>`;
+      const F = DATA.funding[r.name];
+      if (F) ['base', 'measured', 'fed', 'up'].forEach((p, j) => {
+        const [st, txt] = F[p], x = w - lights - right + 14 + j * 18;
+        g += `<circle cx="${x}" cy="${cy}" r="5.5" fill="${FUNDC[st]}" stroke="${C.panel}" stroke-width="2"${tip(r.name + ' · ' + ({base: 'Base case', measured: 'Measured slowdown', fed: 'Fed-hike path', up: 'AI upside'})[p] + '\n' + txt)}/>`;
+      });
+    });
+    host.innerHTML = `<svg width="${w}" height="${24 + rows.length * rh}" role="img" aria-label="GPU renters restructuring odds">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcRenters').innerHTML = 'Source: the report\'s tables "' + esc(DATA.rent_head.odds) + '" and "' + esc(DATA.rent_head.funding) + '". <a href="' + REPORT + '#renters" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 08 company cards ---------- */
+const COHORT = s => (s || '').replace(/_/g, ' ');
+function geigerBar(v, w = 120) {
+  if (v == null) return '—';
+  const mid = w / 2, x = mid + v * (mid - 2), col = v >= 0 ? C.up : C.down;
+  return `<span style="display:inline-flex;align-items:center;gap:8px"${tip('Geiger ' + (v > 0 ? '+' : '') + v.toFixed(2) + ' on a scale of −1 to +1\nScintilla\'s live read of trend and momentum across time frames')}><svg width="${w}" height="12" aria-hidden="true"><rect x="0" y="5" width="${w}" height="2" rx="1" fill="${C.line2}"/><line x1="${mid}" x2="${mid}" y1="1" y2="11" stroke="${C.ink3}"/><rect x="${Math.min(mid, x)}" y="3" width="${Math.max(2, Math.abs(x - mid))}" height="6" rx="3" fill="${col}"/></svg><b class="num" style="color:${col}">${(v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)}</b></span>`;
+}
+function growthBars(tr, bare) {
+  if (!tr || !tr.rev_yoy) return '—';
+  const vals = tr.rev_yoy.map(v => v == null ? null : v * 100), w = 70, h = 18;
+  const sq = v => Math.sqrt(Math.min(100, Math.abs(v)) / 100);
+  let g = `<line x1="0" x2="${w}" y1="${h/2}" y2="${h/2}" stroke="${C.line2}"/>`;
+  vals.forEach((v, i) => { if (v == null) return; const bh = Math.max(1.5, sq(v) * (h/2 - 1)), x = i * 17 + 2; g += v >= 0 ? `<rect x="${x}" y="${h/2 - bh}" width="13" height="${bh}" rx="2" fill="${C.green}"/>` : `<rect x="${x}" y="${h/2}" width="13" height="${bh}" rx="2" fill="${C.red}"/>`; });
+  const q = tr.q_end || [], lbl = q.map((d, i) => MONS[iso2d(d).getMonth()] + ' ' + String(iso2d(d).getFullYear()).slice(2) + ': ' + pct(vals[i], 0)).join('\n');
+  const last = vals[vals.length - 1];
+  return `<span style="display:inline-flex;align-items:center;gap:8px"${tip('Sales growth against a year earlier, last four quarters\n' + lbl)}><svg width="${w}" height="${h}" aria-hidden="true">${g}</svg><b class="num ${last >= 0 ? 'up' : 'down'}">${pct(last, 0)}</b>${bare ? '' : '<span style="color:' + C.ink3 + ';font-size:11px">last quarter</span>'}</span>`;
+}
+function evFind(c, k) { return (c.events || []).find(e => e.k === k); }
+function evText(e) {
+  if (!e) return null;
+  if (e.never) return e.text;
+  if (e.d) return fmtDs(e.d, e.est) + (e.end ? ' – ' + fmtDs(e.end, e.est) : '') + (e.tough && e.tough.d ? ' <span style="color:' + C.ink3 + '">(tougher ' + fmtDs(e.tough.d, e.tough.est) + ')</span>' : '');
+  if (e.tough && e.tough.d) return '<span style="color:' + C.ink3 + '">none · tougher path ' + fmtDs(e.tough.d, e.tough.est) + '</span>';
+  return null;
+}
+function card(c) {
+  const t = c.t, tr = t ? DATA.track[t] : null, onHub = tr && tr.active;
+  const m = DATA.margins.find(x => x.name === c.name), nx = DATA.next.find(n => n.who === c.name);
+  const badge = c.private ? '<span class="badge off">private</span>' : onHub ? `<span class="badge hub">on the Hub · ${esc(COHORT(tr.cohort))}</span>` : '<span class="badge off">not on the Hub</span>';
+  let we = '';
+  if (onHub) {
+    const lastB = tr.last_date ? (tr.last_beat === 'true' || tr.last_beat === 'beat' ? '<span class="up">beat</span>' : '<span class="down">missed</span>') + ' on ' + fmtDs(tr.last_date) + ' <span style="color:' + C.ink3 + '">(EPS ' + pct(tr.last_eps_surprise, 1) + ' vs analysts)</span>' : '—';
+    we = `<div class="blk"><div class="blk-k">We track</div><dl class="kv">
+      <dt>Geiger</dt><dd>${geigerBar(tr.geiger)}</dd>
+      <dt>Analysts' target</dt><dd class="tgt" data-t="${esc(t)}">${tr.tgt_avg ? money(tr.tgt_avg) + ' <span style="color:' + C.ink3 + ';font-size:11px">avg · range ' + money(tr.tgt_lo) + '–' + money(tr.tgt_hi) + '</span>' : '—'}</dd>
+      <dt>Sales growth</dt><dd>${growthBars(tr)}</dd>
+      <dt>Last report</dt><dd>${lastB}</dd>
+      <dt>Next report</dt><dd>${tr.next_date ? fmtD(tr.next_date) + (tr.next_time ? ' ' + tr.next_time : '') + ' <span style="color:' + C.ink3 + '">our calendar</span>' : '—'}</dd></dl></div>`;
+  } else {
+    we = `<div class="blk"><div class="blk-k">We track</div><div style="font-size:13px;color:${C.ink3}">${c.private ? 'Private company: no listed shares to track.' : 'Not on the Hub, so no Geiger or estimates. ' + esc(t || '')}</div></div>`;
+  }
+  // the report
+  const lines = [];
+  [['first_bad', 'First bad outlook'], ['lowest_sales', 'Lowest sales'], ['lowest_margin', 'Lowest margin'], ['turns_up', 'Outlook turns up'], ['sales_rise', 'Sales rise again'], ['worst_cash', 'Worst cash'], ['cash_pos', 'Cash positive again'], ['sales_peak', 'Sales peak']].forEach(([k, lb]) => {
+    const tx = evText(evFind(c, k)); if (tx) lines.push(`<dt>${lb}</dt><dd>${tx}</dd>`);
+  });
+  if (m) {
+    const s = marginStatus(m), gap = m.latest.v - m.high.v;
+    lines.push(`<dt>Gross margin</dt><dd><span style="color:${s.c}">●</span> ${m.latest.v.toFixed(1)}% · ${gap < -0.05 ? '<span class="down">' + gap.toFixed(1) + ' pts</span> from its high' : 'at its high'}${m.next && m.next.lo != null ? ' · next ' + (m.next.lo === m.next.hi ? m.next.lo : m.next.lo + '–' + m.next.hi) + '%' : ''}</dd>`);
+  }
+  const P = DATA.buy_path[c.name];
+  if (P) lines.push(`<dt>2027 sales growth</dt><dd>analysts <b class="num">${pct(P.base[0])}</b> · Fed-hike <b class="num">${pct(P.fed[0])}</b> · AI upside <b class="num">${pct(P.up[0])}</b></dd>`);
+  const R = DATA.renters.find(r => r.name === c.name);
+  if (R) lines.push(`<dt>Restructuring odds</dt><dd><b class="num">${R.restructure}%</b> by end-2028 · ${R.restructure_fed}% on the Fed-hike path</dd>`);
+  if (nx) {
+    let cmp = '';
+    if (onHub && tr.next_date && tr.next_date !== nx.d) cmp = ' <span class="flag warn">ours: ' + fmtDs(tr.next_date) + '</span>';
+    else if (onHub && tr.next_date === nx.d) cmp = ' <span class="flag ok">✓ matches</span>';
+    lines.push(`<dt>Next test</dt><dd>${fmtD(nx.d, nx.est)}${cmp}</dd>`);
+  }
+  const hasTl = c.events && c.events.length;
+  let mini = '';
+  if (hasTl) mini = '<div style="margin:2px 0 6px">' + timelineSVG([{c}], 306, {lab: 0, gutter: 14, rh: 22, top: 4, mini: true}).svg + '</div>';
+  const rep = `<div class="blk"><div class="blk-k">The report says</div>${mini}${lines.length ? '<dl class="kv">' + lines.join('') + '</dl>' : '<div style="font-size:13px;color:' + C.ink3 + '">Named in the report; no dated marks for it.</div>'}${hasTl ? '<button class="tobtn" data-goto="' + esc(c.name) + '">Show on the big timeline ↑</button>' : ''}</div>`;
+  return `<div class="card" data-layer="${c.layer}" data-name="${esc(c.name)}" id="card-${esc((t || c.name).replace(/[^A-Za-z0-9]/g, ''))}">
+    <div class="chead"><span class="cname">${esc(c.name)}</span><span class="ctk">${esc(t ? t : '')}</span>${badge}</div>
+    <div class="cprice" data-price="${esc(onHub ? t : '')}">${onHub ? '<span style="color:' + C.ink3 + '">reading the live price…</span>' : ''}</div>${we}${rep}</div>`;
+}
+function nextMark(c) {
+  const today = TODAY.toISOString().slice(0, 10);
+  const PRI = ['first_bad', 'lowest_sales', 'worst_cash', 'lowest_margin', 'sales_peak', 'turns_up', 'sales_rise', 'cash_pos'];
+  const evs = (c.events || []).filter(e => e.d && !e.end).sort((x, y) => x.d.localeCompare(y.d) || PRI.indexOf(x.k) - PRI.indexOf(y.k));
+  const ahead = evs.filter(e => e.d >= today), past = evs.filter(e => e.d < today);
+  const turn = evs.find(e => GOOD.has(e.k) && e.d >= today) || (c.events || []).find(e => e.never);
+  const range = (c.events || []).find(e => e.end && e.end >= today);
+  return {next: ahead[0] || null, last: past[past.length - 1] || null, turn, range};
+}
+function markHTML(e, prefix) {
+  const K = KINDS[e.k]; if (!K) return '';
+  return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><svg width="12" height="12" aria-hidden="true">${mark(K.shape, 6, 6, K.c, 9, false)}</svg>${esc(prefix || K.label)} <b class="num">${esc(fmtDs(e.d, e.est))}</b></span>`;
+}
+function boardRow(c) {
+  const t = c.t, tr = t ? DATA.track[t] : null, onHub = tr && tr.active;
+  const m = DATA.margins.find(x => x.name === c.name), nx = DATA.next.find(n => n.who === c.name), nm = nextMark(c);
+  const dot = c.private ? `<span class="bdot" style="box-shadow:inset 0 0 0 1.5px ${C.ink3}"${tip('Private company')}></span>` : onHub ? `<span class="bdot" style="background:${C.crk}"${tip('On the Hub · ' + COHORT(tr.cohort))}></span>` : `<span class="bdot" style="box-shadow:inset 0 0 0 1.5px ${C.ink3}"${tip('Not on the Hub')}></span>`;
+  const co = `<div class="bco">${dot}<b>${esc(c.name)}</b><span class="ctk">${esc(t ? t.replace(/\..*$/, '') : (c.private ? 'private' : ''))}</span></div>`;
+  const none = `<span style="color:${C.dim}">—</span>`;
+  const gg = onHub ? geigerBar(tr.geiger, 74) : none;
+  const hiCell = onHub ? `<span data-bhigh="${esc(t)}" style="color:${C.ink3}">…</span>` : none;
+  const tgCell = onHub && tr.tgt_avg ? `<span data-btgt="${esc(t)}"${tip('Analysts\' average target ' + money(tr.tgt_avg) + '\nRange ' + money(tr.tgt_lo) + ' to ' + money(tr.tgt_hi) + '\nFMP consensus, read ' + fmtD(tr.tgt_at))}>${money(tr.tgt_avg)}</span>` : none;
+  const grCell = onHub ? growthBars(tr, true) : none;
+  let mg = none;
+  if (m) { const s = marginStatus(m), gap = m.latest.v - m.high.v; mg = `<span${tip(m.name + ' · gross margin\nLatest ' + m.latest.v + '% · high ' + m.high.v + '%' + (m.next ? '\nNext guide: ' + m.next.text : '') + '\nThe report: ' + m.past)}><span style="color:${s.c}">●</span> <b class="num">${m.latest.v.toFixed(1)}%</b> <small style="display:inline;color:${gap < -0.05 ? C.down : C.ink3}">${gap < -0.05 ? gap.toFixed(1) + ' pts' : esc(s.label.toLowerCase())}</small></span>`; }
+  let rep = none;
+  if (nm.next || nm.last || nm.range) {
+    const a = nm.next ? markHTML(nm.next) : nm.range ? `<span style="white-space:nowrap"><svg width="12" height="12" aria-hidden="true">${mark(KINDS[nm.range.k].shape, 6, 6, KINDS[nm.range.k].c, 9, false)}</svg> ${esc(KINDS[nm.range.k].label)} <b class="num">${esc(fmtDs(nm.range.d, nm.range.est))}–${esc(fmtDs(nm.range.end, nm.range.est))}</b></span>` : markHTML(nm.last) + ` <small style="display:inline">already out</small>`;
+    const b = nm.turn ? (nm.turn.never ? `<small style="color:${C.green}">cash: ${esc(nm.turn.text)}</small>` : `<small>turn: ${esc(KINDS[nm.turn.k].label.toLowerCase())} ${esc(fmtDs(nm.turn.d, nm.turn.est))}</small>`) : `<small>no turn in the window</small>`;
+    rep = a + b;
+  } else if (DATA.renters.find(r => r.name === c.name)) {
+    const R = DATA.renters.find(r => r.name === c.name);
+    rep = `<span>restructuring odds <b class="num">${R.restructure}%</b></span><small>${R.restructure_fed}% on the Fed-hike path</small>`;
+  }
+  let nxt = none;
+  if (nx) {
+    const same = onHub && tr.next_date === nx.d, diff = onHub && tr.next_date && tr.next_date !== nx.d;
+    nxt = `<span class="num">${esc(fmtDs(nx.d, nx.est))}</span> <small style="display:inline">report</small>${diff ? `<small style="color:#F2C14E"${tip('The report has ' + fmtD(nx.d, nx.est) + (nx.est ? ' (its estimate)' : '') + '\nScintilla\'s earnings calendar has ' + fmtD(tr.next_date))}>≠ ours ${esc(fmtDs(tr.next_date))}</small>` : same ? `<small style="color:${C.up}">✓ same as ours</small>` : ''}`;
+  } else if (onHub && tr.next_date) nxt = `<span class="num">${esc(fmtDs(tr.next_date))}</span> <small style="display:inline">our calendar</small>`;
+  return `<div class="brow" data-layer="${c.layer}" data-name="${esc(c.name)}" tabindex="0">${co}<div class="bcell">${gg}</div><div class="bcell">${hiCell}</div><div class="bcell">${tgCell}</div><div class="bcell">${grCell}</div><div class="bcell bsplit">${mg}</div><div class="bcell">${rep}</div><div class="bcell">${nxt}</div></div>`;
+}
+let BOARD_FILTER = 'ALL';
+function renderBoard() {
+  const head = `<div class="brow bhead"><div><span class="half">Company</span></div><div><span class="half">We track</span><br>Geiger</div><div>below 1-yr high (live)</div><div>analysts' target</div><div>sales growth, 4 qtrs</div><div class="bsplit"><span class="half">The report says</span><br>gross margin</div><div>next mark · the turn</div><div>next report</div></div>`;
+  let html = head;
+  DATA.layers.forEach(([L, name]) => {
+    if (BOARD_FILTER !== 'ALL' && BOARD_FILTER !== L) return;
+    const cs = DATA.companies.filter(c => c.layer === L); if (!cs.length) return;
+    html += `<div class="bgroup">${esc(name)}</div>` + cs.map(boardRow).join('');
+  });
+  $('board').innerHTML = html;
+  Object.keys(LIVE).forEach(paintLive);
+}
+function renderCards() {
+  const comps = DATA.companies;
+  const f = [['ALL', 'All ' + comps.length]].concat(DATA.layers.map(([L, n]) => [L, n + ' ' + comps.filter(c => c.layer === L).length]));
+  $('filters').innerHTML = f.map(([k, lb], i) => `<button data-f="${k}" class="${i ? '' : 'on'}">${esc(lb)}</button>`).join('');
+  $('filters').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...$('filters').children].forEach(x => x.classList.toggle('on', x === b));
+    BOARD_FILTER = b.dataset.f; renderBoard();
+  });
+  renderBoard();
+  const toggle = row => {
+    const nxt = row.nextElementSibling;
+    if (nxt && nxt.classList.contains('bdetail')) { nxt.remove(); row.classList.remove('open'); return; }
+    const c = DATA.companies.find(x => x.name === row.dataset.name); if (!c) return;
+    row.insertAdjacentHTML('afterend', `<div class="bdetail">${card(c)}</div>`); row.classList.add('open');
+    if (c.t && LIVE[c.t] !== undefined) paintLive(c.t);
+  };
+  $('board').addEventListener('click', e => {
+    const go = e.target.closest('[data-goto]');
+    if (go) { const r = document.querySelector('#tlChart .tlrow[data-name="' + CSS.escape(go.dataset.goto) + '"]'); if (r) { r.scrollIntoView({behavior: 'smooth', block: 'center'}); flashRow(r); } return; }
+    const row = e.target.closest('.brow'); if (row && !row.classList.contains('bhead')) toggle(row);
+  });
+  $('board').addEventListener('keydown', e => { if (e.key === 'Enter') { const row = e.target.closest('.brow'); if (row) toggle(row); } });
+  const onHub = comps.filter(c => c.t && DATA.track[c.t] && DATA.track[c.t].active).length;
+  $('srcCards').innerHTML = esc(comps.length) + ' companies in the report; ' + onHub + ' are on the Hub (cyan dot). Scintilla figures read ' + esc(fmtD(DATA.track_read_at.slice(0, 10))) + ' (Geiger, targets, growth, calendar); prices live from the chart service. Report marks from the company calendar tables. <a href="' + REPORT + '#calendar" target="_blank" rel="noopener">Open ↗</a>';
+}
+function flashRow(row) {
+  const r = row.querySelector('rect'); if (!r) return;
+  r.setAttribute('fill', 'rgba(0,212,255,.10)'); setTimeout(() => r.setAttribute('fill', 'transparent'), 1800);
+}
+function paintLive(t) {
+  const lv = LIVE[t];
+  document.querySelectorAll('[data-price="' + CSS.escape(t) + '"]').forEach(el => {
+    if (!lv) { el.innerHTML = '<span style="color:' + C.ink3 + '">live price unavailable</span>'; return; }
+    const day = lv.day, fh = lv.fromHigh;
+    el.innerHTML = `<b class="num">${money(lv.c)}</b> <span class="num ${day >= 0 ? 'up' : 'down'}">${pct(day, 1)}</span> <span style="color:${C.ink3}">on the day</span> · <span class="num ${fh >= -0.05 ? 'up' : 'down'}">${pct(fh, 0)}</span> <span style="color:${C.ink3}">from its 1-year high close · ${lv.vs200 >= 0 ? 'above' : 'below'} its 200-day</span>`;
+  });
+  document.querySelectorAll('[data-bhigh="' + CSS.escape(t) + '"]').forEach(el => {
+    if (!lv) { el.textContent = '—'; return; }
+    const fh = lv.fromHigh, wv = Math.min(1, Math.abs(Math.min(0, fh)) / 80) * 70;
+    el.innerHTML = fh > -0.5 ? `<b class="num up">at its high</b>` : `<span style="display:inline-flex;align-items:center;gap:7px"><svg width="72" height="10" aria-hidden="true"><rect x="0" y="4" width="70" height="2" rx="1" fill="${C.line2}"/><rect x="0" y="2" width="${Math.max(2, wv)}" height="6" rx="3" fill="${C.down}"/></svg><b class="num down">${pct(fh, 0)}</b></span>`;
+    el.style.color = '';
+    el.setAttribute('data-tip', t + ' live ' + money(lv.c) + ' (' + pct(lv.day, 1) + ' on the day)\n' + pct(fh, 1) + ' below its highest close in a year (' + money(lv.hi) + ')\n' + pct(lv.vs200, 1) + ' against its 200-day average');
+  });
+  document.querySelectorAll('[data-btgt="' + CSS.escape(t) + '"]').forEach(el => {
+    const tr = DATA.track[t]; if (!lv || !tr || !tr.tgt_avg || el.dataset.done) return;
+    const x = tr.tgt_avg / lv.c;
+    el.insertAdjacentHTML('beforeend', ` <b class="num ${x >= 1 ? 'up' : 'down'}">${x >= 1.995 ? x.toFixed(1) + '×' : pct((x - 1) * 100, 0)}</b>`); el.dataset.done = '1';
+  });
+  document.querySelectorAll('.tgt[data-t="' + CSS.escape(t) + '"]').forEach(el => {
+    const tr = DATA.track[t]; if (!lv || !tr || !tr.tgt_avg) return;
+    const x = tr.tgt_avg / lv.c;
+    if (!el.dataset.done) { el.insertAdjacentHTML('beforeend', ` <span class="num ${x >= 1 ? 'up' : 'down'}">${x >= 1.995 ? x.toFixed(1) + '× today' : pct((x - 1) * 100, 0) + ' vs today'}</span>`); el.dataset.done = '1'; }
+  });
+  if (STAND_REDRAW && Object.values(STAND_T).includes(t)) STAND_REDRAW();
+}
+
+/* ---------- 09 chapters, header, footer ---------- */
+function renderChrome() {
+  $('fullLink').href = REPORT;
+  $('heroLead').textContent = DATA.report.lead;
+  $('stamp').innerHTML = 'Report numbers: <b>close of ' + esc(fmtD(DATA.report.as_of)) + '</b> · report rebuilt ' + esc(DATA.report.built.replace('T', ' ')) + ' ET · Scintilla figures read ' + esc(fmtD(DATA.track_read_at.slice(0, 10))) + ' · prices live';
+  $('chapterList').innerHTML = DATA.chapters.map(c => `<a href="${REPORT}#${esc(c.id)}" target="_blank" rel="noopener"><b>${esc(c.title)}</b><span>${esc(c.lead.length > 190 ? c.lead.slice(0, 187).replace(/\s+\S*$/, '') + '…' : c.lead)}</span></a>`).join('');
+  $('foot').innerHTML = 'SCINTILLA · REPORTS · THE AI CHAIN IN PICTURES<br>Built ' + esc(DATA.built) + ' from the report\'s own data (the markets session\'s story.json, ' + esc(DATA.report.updated) + ') and the Scintilla database. Forward dates and path odds are the report\'s estimates.';
+}
+
+/* ---------- tooltip ---------- */
+(function () {
+  const t = $('tip'); let cur = null;
+  const show = (el, x, y) => { t.textContent = el.getAttribute('data-tip'); t.classList.add('on'); place(x, y); cur = el; };
+  const place = (x, y) => { const r = t.getBoundingClientRect(); let X = x + 14, Y = y + 14; if (X + r.width > innerWidth - 8) X = x - r.width - 14; if (Y + r.height > innerHeight - 8) Y = y - r.height - 14; t.style.left = Math.max(8, X) + 'px'; t.style.top = Math.max(8, Y) + 'px'; };
+  document.addEventListener('mousemove', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) { if (el !== cur) show(el, e.clientX, e.clientY); else place(e.clientX, e.clientY); } else if (cur) { t.classList.remove('on'); cur = null; } });
+  document.addEventListener('click', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el && matchMedia('(hover: none)').matches) show(el, e.clientX, e.clientY); else if (!el) { t.classList.remove('on'); cur = null; } });
+  document.addEventListener('scroll', () => { if (cur) { t.classList.remove('on'); cur = null; } }, {passive: true});
+})();
+
+/* ---------- go ---------- */
+renderChrome(); renderPaths(); renderStand(); renderNext(); renderTimeline(); renderMargins(); renderBuyers(); renderRenters(); renderCards();
+loadLive(Object.entries(DATA.track).filter(([t, v]) => v.active).map(([t]) => t));
+</script>
+</body>
+</html>
