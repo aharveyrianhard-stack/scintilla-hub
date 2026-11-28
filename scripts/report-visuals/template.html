@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark only">
+<meta name="theme-color" content="#0A0A0F">
+<title>AI Chain in Pictures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Scintilla dark only (the Hub and the report are dark-only). Chart colours were validated with the dataviz
+   validator against the panel surface #0D1118: paths and event palettes both pass every check. */
+:root{color-scheme:dark;
+ --bg:#0A0A0F;--panel:#0D1118;--panel2:#0F151E;--tile:#0B0F16;--line:#1A2230;--line2:#252538;
+ --ink:#E8F0FB;--ink2:#A8B5C8;--ink3:#7A7A95;--dim:#4A4A6A;--crk:#00D4FF;
+ --red:#D30046;--orange:#DB7504;--amber:#BA7904;--purple:#743ED8;--green:#02AD6D;--blue:#207FE8;
+ --up:#00C27A;--down:#FF4D6D;
+ --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
+ --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:0 16px}
+a{color:var(--crk);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1480px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.wordmark{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.28em;color:var(--ink);text-shadow:0 0 6px rgba(0,212,255,.32)}
+.htitle{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2)}
+.hlinks{margin-left:auto;display:flex;gap:14px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.hero{padding:22px 0 8px}
+.hero h1{font-family:var(--mono);font-size:24px;letter-spacing:.06em;margin:0 0 8px;text-transform:uppercase;text-wrap:balance}
+.hero p{margin:0;color:var(--ink2);max-width:980px;font-size:16px}
+.stamp{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin-top:10px}
+.stamp b{color:var(--ink2);font-weight:600}
+nav.chips{position:sticky;top:0;z-index:20;background:rgba(10,10,15,.94);backdrop-filter:blur(6px);display:flex;gap:6px;overflow-x:auto;padding:10px 0;margin:8px 0 4px;border-bottom:1px solid var(--line);scrollbar-width:none}
+nav.chips::-webkit-scrollbar{display:none}
+nav.chips a{flex:none;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);padding:6px 10px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--line2)}
+nav.chips a:hover{color:var(--ink);box-shadow:inset 0 0 0 1px rgba(0,212,255,.45);text-decoration:none}
+section.panel{background:var(--panel);border-radius:6px;padding:18px 18px 16px;margin:16px 0;box-shadow:inset 0 0 0 1px var(--line);scroll-margin-top:56px}
+.sec-k{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.3em;color:var(--crk);text-transform:uppercase}
+h2{font-family:var(--sans);font-size:19px;line-height:1.3;margin:4px 0 6px;font-weight:650;text-wrap:balance}
+.desc{color:var(--ink2);margin:0 0 12px;max-width:1000px}
+.src{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink3);margin-top:10px}
+.src a{color:var(--ink3);text-decoration:underline}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-family:var(--mono);font-size:11px;color:var(--ink2);margin:2px 0 10px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.scrollx{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+svg text{font-family:var(--mono);paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#tip{position:fixed;z-index:50;pointer-events:none;max-width:320px;background:#121A26;color:var(--ink);font-family:var(--mono);font-size:11.5px;line-height:1.45;padding:8px 10px;border-radius:4px;box-shadow:0 0 0 1px rgba(0,212,255,.35),0 8px 24px rgba(0,0,0,.5);white-space:pre-line;opacity:0;transition:opacity .08s}
+#tip.on{opacity:1}
+[data-tip]{cursor:default}
+
+/* paths */
+.paths{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.prow{display:grid;grid-template-columns:minmax(150px,230px) minmax(0,1fr);gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.pname{display:flex;align-items:baseline;gap:8px;font-weight:650}
+.pname i{flex:none;width:10px;height:10px;border-radius:2px;display:inline-block;transform:translateY(1px)}
+.podds{font-family:var(--mono);font-size:22px;font-weight:700}
+.ptext{color:var(--ink2);font-size:13.5px;line-height:1.45}
+/* next tests */
+.agenda{display:grid;gap:6px}
+.arow{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 10px;border-radius:4px;background:var(--tile)}
+.adate{font-family:var(--mono);text-align:center;line-height:1.1}
+.adate b{display:block;font-size:20px}
+.adate span{font-size:10px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+.awho{font-weight:650}
+.awhy{color:var(--ink2);font-size:13px}
+.ain{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right;white-space:nowrap}
+.flag{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;padding:2px 6px;border-radius:3px;margin-left:6px;white-space:nowrap}
+.flag.warn{color:#F2C14E;box-shadow:inset 0 0 0 1px rgba(242,193,78,.5)}
+.flag.ok{color:var(--up);box-shadow:inset 0 0 0 1px rgba(0,194,122,.45)}
+.flag.est{color:var(--ink3);box-shadow:inset 0 0 0 1px var(--line2)}
+/* cards */
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.filters button{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);background:none;border:0;padding:7px 11px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--line2);cursor:pointer}
+.filters button.on{color:var(--ink);box-shadow:inset 0 0 0 1px rgba(0,212,255,.6);background:rgba(0,212,255,.06)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.card{background:var(--tile);border-radius:6px;padding:12px 12px 10px;box-shadow:inset 0 0 0 1px var(--line);min-width:0}
+.card.flash{box-shadow:inset 0 0 0 1px var(--crk),0 0 0 2px rgba(0,212,255,.25)}
+.chead{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.cname{font-weight:700;font-size:16px}
+.ctk{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.badge{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.badge.hub{color:var(--crk);box-shadow:inset 0 0 0 1px rgba(0,212,255,.45)}
+.badge.off{color:var(--ink3);box-shadow:inset 0 0 0 1px var(--line2)}
+.cprice{font-family:var(--mono);font-size:13px;color:var(--ink2);margin:6px 0 8px;min-height:19px}
+.cprice b{color:var(--ink);font-size:15px}
+.up{color:var(--up)} .down{color:var(--down)}
+.blk{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.blk-k{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.22em;color:var(--ink3);text-transform:uppercase;margin-bottom:6px}
+.kv{display:grid;grid-template-columns:118px minmax(0,1fr);gap:4px 10px;font-size:13px;align-items:center}
+.kv dt{color:var(--ink3);font-family:var(--mono);font-size:11px}
+.kv dd{margin:0;min-width:0}
+.board{min-width:1200px}
+.brow{display:grid;grid-template-columns:190px 150px 150px 104px 128px 150px minmax(250px,1fr) 170px;gap:0 14px;align-items:center;padding:7px 8px;border-top:1px solid var(--line);cursor:pointer;font-size:13px}
+.brow:hover,.brow.open{background:rgba(0,212,255,.05)}
+.brow.bhead{cursor:default;background:none;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase;border-top:0;padding-bottom:4px;align-items:end}
+.bhead .half{color:var(--crk);letter-spacing:.2em;font-weight:700}
+.bgroup{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.2em;color:var(--ink3);text-transform:uppercase;padding:14px 8px 5px}
+.bco{display:flex;align-items:baseline;gap:7px;min-width:0}
+.bco b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bco .ctk{font-size:10.5px}
+.bdot{flex:none;width:7px;height:7px;border-radius:50%;display:inline-block;transform:translateY(-1px)}
+.bcell{min-width:0;font-size:12.5px;line-height:1.35}
+.bcell small{display:block;color:var(--ink3);font-size:10.5px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bsplit{border-left:1px solid var(--line2);padding-left:14px}
+.bdetail{padding:6px 8px 16px;border-top:1px solid var(--line)}
+.bdetail .card{max-width:720px}
+.tobtn{margin-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--crk);background:none;border:0;padding:4px 0;cursor:pointer}
+.chapters{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.chapters a{display:block;background:var(--tile);border-radius:5px;padding:10px 12px;box-shadow:inset 0 0 0 1px var(--line);color:var(--ink)}
+.chapters a b{display:block;font-size:14px;margin-bottom:3px}
+.chapters a span{display:block;color:var(--ink2);font-size:12.5px;line-height:1.4}
+.chapters a:hover{box-shadow:inset 0 0 0 1px rgba(0,212,255,.45);text-decoration:none}
+footer{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--dim);padding:18px 0 40px;line-height:1.7}
+@media (max-width:1100px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+ .paths{grid-template-columns:minmax(0,1fr)} .prow{grid-template-columns:minmax(0,1fr)}
+ .hero h1{font-size:19px} h2{font-size:17px} .hlinks{margin-left:0}
+ .arow{grid-template-columns:54px minmax(0,1fr)} .ain{grid-column:2;text-align:left}
+ .cards{grid-template-columns:minmax(0,1fr)} section.panel{padding:14px 12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <span class="wordmark">SCINTILLA</span>
+  <span class="htitle">Reports · the AI chain in pictures</span>
+  <span class="hlinks"><a id="fullLink" href="#" target="_blank" rel="noopener">Full report ↗</a><a href="https://scintillahub.ai/">Hub ↗</a></span>
+</header>
+<div class="hero">
+  <h1>The AI chain, in pictures</h1>
+  <p id="heroLead"></p>
+  <div class="stamp" id="stamp"></div>
+</div>
+<nav class="chips" aria-label="Sections">
+  <a href="#paths">Four paths</a><a href="#stand">Where we stand</a><a href="#next">Next tests</a>
+  <a href="#timeline">When bad news lands</a><a href="#margins">Margins</a><a href="#buyers">Big buyers</a>
+  <a href="#renters">GPU renters</a><a href="#companies">Company by company</a><a href="#chapters">Read more</a>
+</nav>
+
+<section class="panel" id="paths">
+  <div class="sec-k">01 · The four paths</div>
+  <h2>Our odds on where the Nasdaq-100 goes from here</h2>
+  <p class="desc">The pie is the odds the report gives each path. Next to it, each path's range for the Nasdaq-100 at its low and in December 2028, against Friday's close and the record.</p>
+  <div class="paths"><div id="donut"></div><div id="pathRows"></div></div>
+  <div class="src" id="srcPaths"></div>
+</section>
+
+<div class="grid2">
+<section class="panel" id="stand" style="margin:0">
+  <div class="sec-k">02 · Where we stand</div>
+  <h2 id="standH">How far each one is below its record</h2>
+  <p class="desc">Each bar is the fall from its highest close. The line under the bar is the distance from its 200-day average, the long-term trend line. For US stocks, <b>now</b> is today's live price.</p>
+  <div id="standChart"></div>
+  <div class="src" id="srcStand"></div>
+</section>
+<section class="panel" id="next" style="margin:0">
+  <div class="sec-k">03 · Next tests</div>
+  <h2 id="nextH">The reports and numbers that decide the next move</h2>
+  <p class="desc">In date order. An outlined row is the report's estimate; a filled row is a confirmed date. Where we follow the company, the report's date is checked against Scintilla's own earnings calendar.</p>
+  <div id="nextRuler" class="scrollx"></div>
+  <div class="agenda" id="agenda"></div>
+  <div class="src" id="srcNext"></div>
+</section>
+</div>
+
+<section class="panel" id="timeline">
+  <div class="sec-k">04 · Company by company</div>
+  <h2>When the bad news lands, and when it turns</h2>
+  <p class="desc">Each mark sits on the day the news becomes public. <b>Red</b> is bad news, <b>amber</b> is the margin low, <b>purple</b> is a peak, <b>green</b> is a turn up. A hollow mark is the tougher path, where it differs. The strip on top counts the marks each month: red bad, green good.</p>
+  <div class="legend" id="tlLegend"></div>
+  <div class="scrollx" id="tlWrap"><div id="tlChart"></div></div>
+  <div class="src" id="srcTimeline"></div>
+</section>
+
+<section class="panel" id="margins">
+  <div class="sec-k">05 · Gross margin</div>
+  <h2 id="marginH"></h2>
+  <p class="desc">Gross margin is the share of each sales dollar left after the cost of making the product. The tick is the company's high since 2019, the dot is the latest report and the ring is its next guide. A red line means the latest is below the high.</p>
+  <div class="paths" style="grid-template-columns:230px minmax(0,1fr)"><div id="marginDonut"></div><div class="scrollx"><div id="marginChart"></div></div></div>
+  <div class="src" id="srcMargins"></div>
+</section>
+
+<section class="panel" id="buyers">
+  <div class="sec-k">06 · The big buyers</div>
+  <h2>The five big buyers keep growing on analysts' numbers</h2>
+  <p class="desc">Sales growth against a year earlier, each quarter: solid bars are reported, outlined bars are analysts' average. Under each: 2027 sales growth on three paths, and how much of the added sales came from the cloud business.</p>
+  <div class="legend" id="buyLegend"></div>
+  <div id="buyGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px"></div>
+  <div class="src" id="srcBuyers"></div>
+</section>
+
+<section class="panel" id="renters">
+  <div class="sec-k">07 · GPU renters</div>
+  <h2 id="rentH"></h2>
+  <p class="desc">Each bar is the report's odds that the company restructures its debt by the end of 2028. The ring is the same odds on the Fed-hike path. The four lights say whether its stated plans are funded on each path.</p>
+  <div class="legend" id="rentLegend"></div>
+  <div class="scrollx"><div id="rentChart"></div></div>
+  <div class="src" id="srcRenters"></div>
+</section>
+
+<section class="panel" id="companies">
+  <div class="sec-k">08 · The report against what we track</div>
+  <h2>Every company in the report, beside what Scintilla tracks</h2>
+  <p class="desc">One row per company. The left half is what <b>Scintilla tracks</b>: the Geiger (−1 to +1), how far the live price is below its 1-year high, analysts' average target against today's price, and the last four quarters of sales growth. The right half is what <b>the report says</b>: the margin, its next dated mark, the turn, and the next report date checked against our calendar. Click a row for the full detail.</p>
+  <div class="filters" id="filters"></div>
+  <div class="scrollx"><div class="board" id="board"></div></div>
+  <div class="src" id="srcCards"></div>
+</section>
+
+<section class="panel" id="chapters">
+  <div class="sec-k">09 · Read more</div>
+  <h2>The full report, chapter by chapter</h2>
+  <p class="desc">Each chapter opens in the full report, with every table behind the pictures above.</p>
+  <div class="chapters" id="chapterList"></div>
+</section>
+
+<footer id="foot"></footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const C = {red:'#D30046',orange:'#DB7504',amber:'#BA7904',purple:'#743ED8',green:'#02AD6D',blue:'#207FE8',
+  ink:'#E8F0FB',ink2:'#A8B5C8',ink3:'#7A7A95',dim:'#4A4A6A',line:'#1A2230',line2:'#252538',panel:'#0D1118',tile:'#0B0F16',crk:'#00D4FF',up:'#00C27A',down:'#FF4D6D'};
+const PATHC = {'Measured slowdown':C.orange,'Fed-hike path':C.red,'Base case':C.green,'AI upside':C.blue};
+const KINDS = {
+  first_bad:{label:'First bad outlook',c:C.red,shape:'down'},
+  lowest_sales:{label:'Lowest sales reported',c:C.red,shape:'circle'},
+  worst_cash:{label:'Worst cash reported',c:C.red,shape:'square'},
+  lowest_margin:{label:'Lowest margin reported',c:C.amber,shape:'circle'},
+  sales_peak:{label:'Sales peak',c:C.purple,shape:'up'},
+  turns_up:{label:'Outlook turns up',c:C.green,shape:'up'},
+  sales_rise:{label:'Sales rise again',c:C.green,shape:'circle'},
+  cash_pos:{label:'12-month cash positive again',c:C.green,shape:'square'}};
+const BAD = new Set(['first_bad','lowest_sales','worst_cash']), GOOD = new Set(['turns_up','sales_rise','cash_pos']);
+const LAYER_NAME = Object.fromEntries(DATA.layers);
+const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TODAY = new Date(); TODAY.setHours(12,0,0,0);
+const REPORT = DATA.report.url;
+
+/* ---------- helpers ---------- */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+const $ = id => document.getElementById(id);
+const iso2d = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d, 12); };
+const fmtD = (s, est) => { if (!s) return ''; const d = iso2d(s); return (est ? '~' : '') + d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear(); };
+const fmtDs = (s, est) => { if (!s) return ''; const d = iso2d(s); return (est ? '~' : '') + d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2); };
+const pct = (v, dp=1, plus=true) => v == null || isNaN(v) ? '—' : (v > 0 && plus ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(dp) + '%';
+const money = v => v == null ? '—' : '$' + (v >= 1000 ? v.toLocaleString('en-US', {maximumFractionDigits:0}) : v.toFixed(2));
+const daysTo = s => Math.round((iso2d(s) - TODAY) / 864e5);
+const tip = (text) => ' data-tip="' + esc(text) + '"';
+function W(el, fallback) { const w = el.clientWidth; return w > 40 ? w : fallback; }
+
+function mark(shape, x, y, col, size, hollow, extra='') {
+  const s = size || 9, h = s / 2, f = hollow ? 'none' : col, st = hollow ? col : C.panel, sw = hollow ? 1.6 : 2;
+  if (shape === 'circle') return `<circle cx="${x}" cy="${y}" r="${h}" fill="${f}" stroke="${st}" stroke-width="${sw}"${extra}/>`;
+  if (shape === 'square') return `<rect x="${x-h+0.5}" y="${y-h+0.5}" width="${s-1}" height="${s-1}" rx="1.5" fill="${f}" stroke="${st}" stroke-width="${sw}"${extra}/>`;
+  const t = s * 0.62;
+  const pts = shape === 'up' ? `${x},${y-t} ${x+t},${y+t*0.8} ${x-t},${y+t*0.8}` : `${x},${y+t} ${x+t},${y-t*0.8} ${x-t},${y-t*0.8}`;
+  return `<polygon points="${pts}" fill="${f}" stroke="${st}" stroke-width="${sw}" stroke-linejoin="round"${extra}/>`;
+}
+const legendItem = (shape, col, label, hollow) => `<span><svg width="14" height="14" aria-hidden="true">${mark(shape, 7, 7, col, 10, hollow)}</svg>${esc(label)}</span>`;
+
+/* ---------- live prices (chart service; completed daily bars) ---------- */
+const CHART_API = 'https://scintilla-massive-chart-api.fly.dev';
+const LIVE = {};
+async function liveFor(t) {
+  const r = await fetch(CHART_API + '/candles?symbol=' + encodeURIComponent(t) + '&tf=D&limit=260');
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json(); const s = (j && j.series) || [];
+  if (s.length < 30) throw new Error('short');
+  const closes = s.map(b => b.c), last = s[s.length-1], prev = s[s.length-2];
+  const hi = Math.max(...closes.slice(-252)), n200 = closes.slice(-200);
+  const avg200 = n200.reduce((a,b) => a+b, 0) / n200.length;
+  return {c: last.c, day: (last.c/prev.c - 1) * 100, fromHigh: (last.c/hi - 1) * 100, vs200: (last.c/avg200 - 1) * 100,
+          hi, at: new Date(last.t), closes: closes.slice(-60)};
+}
+async function loadLive(tickers) {
+  const q = [...tickers]; const out = [];
+  async function worker() { while (q.length) { const t = q.shift(); try { LIVE[t] = await liveFor(t); } catch (e) { LIVE[t] = null; } paintLive(t); } }
+  for (let i = 0; i < 6; i++) out.push(worker());
+  await Promise.all(out);
+}
+
+/* ---------- 01 paths ---------- */
+function donut(slices, size, center1, center2) {
+  const r = size/2 - 8, ri = r - 30, cx = size/2, cy = size/2, tot = slices.reduce((a,s) => a+s.v, 0);
+  let a0 = -Math.PI/2, out = '';
+  const gap = 0.012;
+  for (const s of slices) {
+    const a1 = a0 + s.v/tot * Math.PI*2, A = a0 + gap, B = a1 - gap, large = (B - A) > Math.PI ? 1 : 0;
+    const p = (rad, a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)];
+    const [x1,y1] = p(r,A), [x2,y2] = p(r,B), [x3,y3] = p(ri,B), [x4,y4] = p(ri,A);
+    out += `<path d="M${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${ri},${ri} 0 ${large} 0 ${x4},${y4} Z" fill="${s.c}"${tip(s.tip)}/>`;
+    const am = (A+B)/2, [lx,ly] = p((r+ri)/2, am);
+    if (s.v/tot > 0.07) out += `<text x="${lx}" y="${ly+4}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" pointer-events="none">${esc(s.label)}</text>`;
+    a0 = a1;
+  }
+  out += `<text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="13" font-weight="700" fill="${C.ink}">${esc(center1)}</text>`;
+  out += `<text x="${cx}" y="${cy+13}" text-anchor="middle" font-size="10" letter-spacing="1.5" fill="${C.ink3}">${esc(center2)}</text>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(slices.map(s => s.name + ' ' + s.v + '%').join(', '))}">${out}</svg>`;
+}
+function renderPaths() {
+  const odds = DATA.odds.map(o => ({name: o.k, v: parseFloat(o.v), c: PATHC[o.k] || C.ink3, s: o.s, label: o.v, tip: o.k + ': ' + o.v + '\n' + o.s}));
+  $('donut').innerHTML = donut(odds, 240, 'FOUR PATHS', 'OUR ODDS');
+  const ndx = DATA.market.find(m => /Nasdaq/.test(m.k));
+  const close = ndx ? parseFloat(ndx.v.replace(/,/g, '')) : null;
+  const st = DATA.stand.find(s => /Nasdaq/.test(s.name));
+  const rec = st ? parseFloat((st.high.match(/[\d,]+/) || ['0'])[0].replace(/,/g, '')) : null;
+  const R = DATA.ranges;
+  const lo = 18000, hi = 44000;
+  const rows = odds.map(o => {
+    const mine = R.filter(r => r.label.startsWith(o.name));
+    const low = mine.filter(r => r.lo && !/December 2028/.test(r.label)), dec = mine.find(r => /December 2028/.test(r.label) && r.lo);
+    const text = mine.find(r => !r.lo);
+    return {o, low, dec, text};
+  });
+  const host = $('pathRows');
+  const draw = () => {
+    const w = Math.max(300, W(host, 700) - 0), narrow = w < 560, lab = narrow ? 0 : Math.min(250, Math.max(160, w * 0.28)), pw = w - lab - 10;
+    const X = v => lab + (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * pw;
+    let html = '';
+    rows.forEach((row, i) => {
+      const o = row.o, nb = row.low.length + (row.dec ? 1 : 0) + (row.text ? 1 : 0), h = Math.max(56, 12 + nb * 16 + 10);
+      let g = '';
+      // grid
+      for (let t = 20000; t <= 40000; t += 5000) g += `<line x1="${X(t)}" x2="${X(t)}" y1="4" y2="${h-14}" stroke="${C.line}" stroke-width="1"/>`;
+      const bar = (r, y, kind) => {
+        const x1 = X(r.lo), x2 = X(r.hi), ww = Math.max(3, x2 - x1);
+        const fill = kind === 'dec' ? 'none' : o.c, sw = kind === 'dec' ? 1.8 : 0;
+        const what = kind === 'dec' ? 'Dec 2028' : /second/.test(r.label) ? 'second low' : /main low/.test(r.label) ? 'main low' : 'low';
+        const lbl = esc(what + ' ' + r.text), lw = lbl.length * 6.4, right = x2 + 6 + lw < w;
+        return `<rect x="${x1}" y="${y}" width="${ww}" height="11" rx="4" fill="${fill}" stroke="${o.c}" stroke-width="${sw}"${tip(o.name + ' · ' + r.label + '\nNasdaq-100 ' + r.text + '\nS&P 500 ' + r.spx)}/>`
+          + `<text x="${right ? x2 + 6 : x1 - 6}" y="${y + 9.5}" text-anchor="${right ? 'start' : 'end'}" font-size="10.5" fill="${C.ink2}">${lbl}</text>`;
+      };
+      let y = 8;
+      if (row.low.length) { row.low.forEach(r => { g += bar(r, y, 'low'); y += 16; }); }
+      if (row.dec) { g += bar(row.dec, y, 'dec'); y += 16; }
+      if (row.text) g += `<text x="${lab}" y="${y + 9}" font-size="11" fill="${C.ink2}">${esc(row.text.text)} · S&P 500: ${esc(row.text.spx)}</text>`;
+      if (close) g += `<line x1="${X(close)}" x2="${X(close)}" y1="2" y2="${h-12}" stroke="${C.ink}" stroke-width="1.5"${tip('Friday\'s close ' + close.toLocaleString('en-US'))}/>`;
+      if (rec) g += `<line x1="${X(rec)}" x2="${X(rec)}" y1="2" y2="${h-12}" stroke="${C.ink3}" stroke-width="1.2" stroke-dasharray="3 3"${tip('Record close ' + rec.toLocaleString('en-US'))}/>`;
+      const label = narrow ? '' : `<foreignObject x="0" y="0" width="${lab - 8}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="font:650 14px var(--sans);color:${C.ink};display:flex;gap:8px;align-items:baseline;line-height:1.25"><i style="flex:none;width:10px;height:10px;border-radius:2px;background:${o.c};display:inline-block"></i><span>${esc(o.name)}<br><span style="font:700 20px var(--mono)">${esc(o.label)}</span></span></div></foreignObject>`;
+      const top = narrow ? `<div class="pname" style="margin:4px 0 2px"><i style="background:${o.c}"></i>${esc(o.name)} <span class="podds" style="font-size:17px">${esc(o.label)}</span></div>` : '';
+      html += `<div style="border-top:${i ? '1px solid ' + C.line : '0'};padding:6px 0">${top}<svg width="${w}" height="${h}" role="img" aria-label="${esc(o.name)} ranges">${label}${g}</svg><div class="ptext" style="margin:2px 0 0 18px">${esc(o.s)}</div></div>`;
+    });
+    // axis
+    let ax = '';
+    for (let t = 20000; t <= 40000; t += 5000) ax += `<text x="${X(t)}" y="12" text-anchor="middle" font-size="10" fill="${C.ink3}">${(t/1000)}k</text>`;
+    if (close) ax += `<text x="${X(close)}" y="26" text-anchor="middle" font-size="10" fill="${C.ink}">close ${close.toLocaleString('en-US')}</text>`;
+    if (rec) ax += `<text x="${X(rec)}" y="38" text-anchor="middle" font-size="10" fill="${C.ink3}">record ${rec.toLocaleString('en-US')}</text>`;
+    html += `<svg width="${w}" height="42" aria-hidden="true">${ax}</svg>`;
+    host.innerHTML = html;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcPaths').innerHTML = 'Source: the report\'s opening cards and the table "' + esc(findHead('ranges')) + '". Solid bar: the low; outlined bar: December 2028. <a href="' + REPORT + '#story" target="_blank" rel="noopener">Open in the report ↗</a>';
+}
+function findHead(k) { return k === 'ranges' ? 'S&P 500 at 8,000 is an AI upside number near term and a 2028 number…' : ''; }
+function debounce(f, ms) { let t; return () => { clearTimeout(t); t = setTimeout(f, ms); }; }
+
+/* ---------- 02 where we stand ---------- */
+const STAND_T = {'Micron':'MU','SanDisk':'SNDK','Nvidia':'NVDA','AMD':'AMD','Broadcom':'AVGO','Intel':'INTC'};
+function renderStand() {
+  const rows = [...DATA.stand].filter(s => s.from_high != null).sort((a,b) => a.from_high - b.from_high);
+  const host = $('standChart');
+  const draw = () => {
+    const w = Math.max(300, W(host, 640)), lab = 128, right = 92, pw = w - lab - right, rh = 30;
+    const X = v => lab + Math.min(1, Math.abs(v) / 80) * pw;
+    let g = '';
+    [0, 20, 40, 60, 80].forEach(t => { g += `<line x1="${X(-t)}" x2="${X(-t)}" y1="16" y2="${16 + rows.length*rh}" stroke="${C.line}"/><text x="${X(-t)}" y="11" text-anchor="middle" font-size="10" fill="${C.ink3}">${t ? '−' + t + '%' : '0'}</text>`; });
+    rows.forEach((s, i) => {
+      const y = 20 + i*rh, t = STAND_T[s.name], lv = t && LIVE[t];
+      g += `<text x="${lab - 8}" y="${y + 10}" text-anchor="end" font-size="11.5" fill="${C.ink}">${esc(s.name.replace(' (SOX)', ''))}</text>`;
+      g += `<rect x="${lab}" y="${y}" width="${Math.max(3, X(s.from_high) - lab)}" height="12" rx="4" fill="${C.red}"${tip(s.name + '\nClose 27 Nov: ' + s.close + '\nFrom its high: ' + pct(s.from_high) + ' (high ' + s.high + ')\n200-day average: ' + s.text200)}/>`;
+      if (s.vs200 != null) {
+        const x2 = lab + Math.min(1, Math.abs(Math.min(0, s.vs200)) / 80) * pw;
+        g += `<line x1="${lab}" x2="${Math.max(lab + 2, x2)}" y1="${y + 17}" y2="${y + 17}" stroke="${s.vs200 < 0 ? C.down : C.up}" stroke-width="2" stroke-linecap="round" opacity=".75"${tip(s.name + ': ' + s.text200)}/>`;
+      }
+      g += `<text x="${w - right + 6}" y="${y + 10}" font-size="11.5" fill="${C.ink}" class="num">${pct(s.from_high)}</text>`;
+      if (lv && Math.abs(lv.fromHigh - s.from_high) >= 0.1) g += `<text x="${w - right + 6}" y="${y + 23}" font-size="10" fill="${lv.fromHigh < s.from_high ? C.down : C.up}"${tip(s.name + ' now, live: ' + pct(lv.fromHigh) + ' from its highest close in a year')}>now ${pct(lv.fromHigh)}</text>`;
+    });
+    host.innerHTML = `<svg width="${w}" height="${26 + rows.length*rh}" role="img" aria-label="Fall from record">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150)); STAND_REDRAW = draw;
+  $('srcStand').innerHTML = 'Source: the report\'s table "Where we stand: close of ' + esc(fmtD(DATA.report.as_of)) + '". Red line: below the 200-day average. <a href="' + REPORT + '#today" target="_blank" rel="noopener">Open ↗</a>';
+}
+let STAND_REDRAW = null;
+
+/* ---------- 03 next tests ---------- */
+function renderNext() {
+  const items = DATA.next;
+  const ag = $('agenda');
+  ag.innerHTML = items.map(n => {
+    const d = iso2d(n.d), dd = daysTo(n.d), tr = n.t && DATA.track[n.t];
+    let cmp = '';
+    if (n.t && tr && tr.active) {
+      if (tr.next_date === n.d) cmp = '<span class="flag ok">✓ same as our calendar</span>';
+      else if (tr.next_date) cmp = '<span class="flag warn">our calendar: ' + esc(fmtDs(tr.next_date)) + '</span>';
+    } else if (n.t && tr && tr.active === false) cmp = '<span class="flag est">not on the Hub</span>';
+    return `<div class="arow"${n.est ? ' style="box-shadow:inset 0 0 0 1px ' + C.line2 + ';background:none"' : ''}>
+      <div class="adate"><b>${d.getDate()}</b><span>${MONS[d.getMonth()]}</span></div>
+      <div><div class="awho">${esc(n.who)}${n.est ? '<span class="flag est">estimate</span>' : ''}${cmp}</div><div class="awhy">${esc(n.why)}</div></div>
+      <div class="ain">${dd > 1 ? 'in ' + dd + ' days' : dd === 1 ? 'tomorrow' : dd === 0 ? 'today' : Math.abs(dd) + ' days ago'}</div></div>`;
+  }).join('');
+  // ruler
+  const host = $('nextRuler');
+  const draw = () => {
+    const w = Math.max(320, W(host, 600)), pad = 14;
+    const t0 = TODAY.getTime(), t1 = Math.max(...items.map(n => iso2d(n.d).getTime())) + 6*864e5;
+    const X = t => pad + (t - t0) / (t1 - t0) * (w - 2*pad);
+    let g = `<line x1="${pad}" x2="${w-pad}" y1="22" y2="22" stroke="${C.line2}" stroke-width="2"/>`;
+    const m = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 1, 12);
+    for (let d = m; d.getTime() < t1; d = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) {
+      g += `<line x1="${X(d.getTime())}" x2="${X(d.getTime())}" y1="14" y2="30" stroke="${C.line2}"/><text x="${X(d.getTime()) + 4}" y="40" font-size="10" fill="${C.ink3}">${MONS[d.getMonth()]}</text>`;
+    }
+    g += `<text x="${pad}" y="10" font-size="10" fill="${C.ink}">today</text>`;
+    items.forEach((n, i) => {
+      const x = X(iso2d(n.d).getTime());
+      const col = n.t ? C.crk : C.amber;
+      g += `<circle cx="${x}" cy="22" r="5" fill="${n.est ? 'none' : col}" stroke="${n.est ? col : C.panel}" stroke-width="${n.est ? 1.6 : 2}"${tip(fmtD(n.d, n.est) + ' · ' + n.who + '\n' + n.why)}/>`;
+    });
+    host.innerHTML = `<svg width="${w}" height="46" role="img" aria-label="Next tests on a time line">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcNext').innerHTML = 'Source: the report\'s table "' + esc(DATA.next_head) + '". Cyan: a company report, amber: an economic number; hollow: estimate. <a href="' + REPORT + '#story" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 04 timeline ---------- */
+const T_START = iso2d('2026-08-01'), T_END = iso2d('2029-01-01');
+function tlRows(filterNames) {
+  const order = DATA.layers.map(l => l[0]);
+  const comps = DATA.companies.filter(c => c.events && c.events.length && (!filterNames || filterNames.has(c.name)));
+  const rows = [];
+  order.forEach(L => {
+    const cs = comps.filter(c => c.layer === L);
+    if (!cs.length) return;
+    rows.push({group: LAYER_NAME[L]});
+    cs.forEach(c => rows.push({c}));
+  });
+  return rows;
+}
+function timelineSVG(rows, w, opts={}) {
+  const lab = opts.lab != null ? opts.lab : 150, gl = opts.gutter != null ? opts.gutter : 58, gr = gl, rh = opts.rh || 26, gh = opts.gh || 26, top = opts.top != null ? opts.top : 90;
+  const pw = w - lab - gl - gr;
+  const X = d => {
+    if (d < T_START) return lab + gl * 0.5;
+    if (d >= T_END) return lab + gl + pw + gr * 0.5;
+    return lab + gl + (d - T_START) / (T_END - T_START) * pw;
+  };
+  let y = top, g = '', H = top;
+  rows.forEach(r => { H += r.group ? gh : rh; });
+  H += opts.mini ? 14 : 8;
+  // background: gutters, quarter lines, years
+  g += `<rect x="${lab}" y="${top - 6}" width="${gl}" height="${H - top}" fill="${C.tile}"/><rect x="${lab + gl + pw}" y="${top - 6}" width="${gr}" height="${H - top}" fill="${C.tile}"/>`;
+  if (!opts.mini) {
+    g += `<text x="${lab + gl/2}" y="${top - 12}" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="${C.ink3}">EARLIER</text><text x="${lab + gl + pw + gr/2}" y="${top - 12}" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="${C.ink3}">LATER</text>`;
+  }
+  for (let yy = 2026; yy <= 2028; yy++) for (let q = 0; q < 12; q += 3) {
+    const d = new Date(yy, q, 1, 12); if (d < T_START || d >= T_END) continue;
+    const x = X(d);
+    g += `<line x1="${x}" x2="${x}" y1="${top - 6}" y2="${opts.mini ? H - 12 : H}" stroke="${q === 0 ? C.line2 : C.line}" stroke-width="${q === 0 ? 1.4 : 1}"/>`;
+    if (!opts.mini) g += `<text x="${x + 3}" y="${top - 12}" font-size="10" fill="${q === 0 ? C.ink2 : C.ink3}">${q === 0 ? yy : MONS[q]}</text>`;
+    else if (q === 0) g += `<text x="${x + 2}" y="${H - 2}" font-size="9" fill="${C.ink3}">${yy}</text>`;
+  }
+  // month density strip (bad above, good below)
+  if (!opts.mini) {
+    const bad = {}, good = {};
+    rows.forEach(r => (r.c ? r.c.events : []).forEach(e => { if (!e.d) return; const d = iso2d(e.d); if (d < T_START || d >= T_END) return; const k = d.getFullYear() + '-' + d.getMonth(); if (BAD.has(e.k)) bad[k] = (bad[k] || 0) + 1; if (GOOD.has(e.k)) good[k] = (good[k] || 0) + 1; }));
+    const mx = Math.max(1, ...Object.values(bad), ...Object.values(good)), sh = 17, base = top - 52;
+    g += `<text x="${lab + gl - 6}" y="${base - 4}" text-anchor="end" font-size="9.5" fill="${C.red}">bad news</text><text x="${lab + gl - 6}" y="${base + 12}" text-anchor="end" font-size="9.5" fill="${C.green}">good news</text>`;
+    g += `<line x1="${lab + gl}" x2="${lab + gl + pw}" y1="${base + 0.5}" y2="${base + 0.5}" stroke="${C.line2}"/>`;
+    for (let d = new Date(T_START); d < T_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) {
+      const k = d.getFullYear() + '-' + d.getMonth(), x1 = X(d) + 1, x2 = X(new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) - 1, bw = Math.max(2, x2 - x1);
+      const b = bad[k] || 0, gd = good[k] || 0, label = MONS[d.getMonth()] + ' ' + d.getFullYear() + ': ' + b + ' bad, ' + gd + ' good';
+      if (b) g += `<rect x="${x1}" y="${base - b/mx*sh}" width="${bw}" height="${b/mx*sh}" rx="2" fill="${C.red}"${tip(label)}/>`;
+      if (gd) g += `<rect x="${x1}" y="${base + 1}" width="${bw}" height="${gd/mx*sh}" rx="2" fill="${C.green}"${tip(label)}/>`;
+    }
+  }
+  // today
+  const tx = X(TODAY);
+  g += `<line x1="${tx}" x2="${tx}" y1="${top - 6}" y2="${opts.mini ? H - 12 : H}" stroke="${C.crk}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+  if (!opts.mini) g += `<text x="${tx + 4}" y="${H - 2}" font-size="9.5" fill="${C.crk}">today</text>`;
+  rows.forEach(r => {
+    if (r.group) {
+      if (!opts.mini) g += `<text x="0" y="${y + 17}" font-size="10" font-weight="700" letter-spacing="1.6" fill="${C.ink3}">${esc(r.group.toUpperCase())}</text>`;
+      y += gh; return;
+    }
+    const c = r.c, cy = y + rh/2;
+    g += `<g class="tlrow" data-name="${esc(c.name)}"><rect x="0" y="${y}" width="${w}" height="${rh}" fill="transparent"/>`;
+    if (!opts.mini) g += `<text x="0" y="${cy + 4}" font-size="11.5" fill="${C.ink}">${esc(c.name)}<tspan fill="${C.ink3}" font-size="10">  ${esc(c.t ? c.t.replace(/\..*$/, '') : (c.private ? 'private' : ''))}</tspan></text>`;
+    g += `<line x1="${lab + gl}" x2="${lab + gl + pw}" y1="${cy}" y2="${cy}" stroke="${C.line}" stroke-width="1"/>`;
+    // place marks with simple collision stacking
+    const placed = [];
+    const put = (x) => { let k = 0; while (placed.some(p => Math.abs(p.x - x) < 9 && p.k === k)) k++; placed.push({x, k}); return [0, -7, 7, -14, 14][k % 5]; };
+    const evs = [...c.events].sort((a,b) => (a.d || '').localeCompare(b.d || ''));
+    evs.forEach(e => {
+      const K = KINDS[e.k]; if (!K) return;
+      if (e.tough && e.tough.d) {
+        const xt = X(iso2d(e.tough.d)), dy = put(xt);
+        g += `<g${tip(c.name + ' · ' + K.label + '\nTougher path: ' + fmtD(e.tough.d, e.tough.est) + (e.tough.note ? ' (' + e.tough.note + ')' : '') + (e.d ? '\nBase case: ' + fmtD(e.d, e.est) : '\nBase case: none in the window'))}><circle cx="${xt}" cy="${cy + dy}" r="9" fill="transparent"/>${mark(K.shape, xt, cy + dy, K.c, 9, true)}</g>`;
+      }
+      if (e.never) { g += `<text x="${lab + gl + pw - 4}" y="${cy + 4}" text-anchor="end" font-size="10" fill="${C.green}"${tip(c.name + ' · ' + K.label + ': ' + e.text)}>${esc(e.text)}</text>`; return; }
+      if (!e.d) return;
+      const d = iso2d(e.d), x = X(d);
+      if (e.end) {
+        const x2 = X(iso2d(e.end));
+        g += `<rect x="${x}" y="${cy - 3.5}" width="${Math.max(4, x2 - x)}" height="7" rx="3.5" fill="${K.c}"${tip(c.name + ' · ' + K.label + '\n' + fmtD(e.d, e.est) + ' to ' + fmtD(e.end, e.est) + (e.note ? '\n' + e.note : ''))}/>`;
+        return;
+      }
+      const dy = put(x);
+      const when = d < T_START ? ' (before the chart starts)' : d >= T_END ? ' (after 2028)' : '';
+      g += `<g${tip(c.name + ' · ' + K.label + '\n' + fmtD(e.d, e.est) + (e.est ? ' (estimate)' : ' (public)') + when + (e.note ? '\n' + e.note : '') + (e.tough && e.tough.d ? '\nTougher path: ' + fmtD(e.tough.d, e.tough.est) : ''))}><circle cx="${x}" cy="${cy + dy}" r="9" fill="transparent"/>${mark(K.shape, x, cy + dy, K.c, opts.mini ? 8 : 9.5, false)}</g>`;
+    });
+    g += `</g>`;
+    y += rh;
+  });
+  return {svg: `<svg width="${w}" height="${H}" role="img" aria-label="When the bad news lands, company by company">${g}</svg>`, H};
+}
+function renderTimeline() {
+  $('tlLegend').innerHTML = Object.entries(KINDS).map(([k, K]) => legendItem(K.shape, K.c, K.label)).join('')
+    + legendItem('circle', C.ink2, 'tougher path', true) + `<span><svg width="18" height="14" aria-hidden="true"><line x1="9" x2="9" y1="0" y2="14" stroke="${C.crk}" stroke-dasharray="3 2"/></svg>today</span>`;
+  const host = $('tlChart'), wrap = $('tlWrap');
+  const draw = () => {
+    const w = Math.max(980, W(wrap, 1200));
+    host.innerHTML = timelineSVG(tlRows(), w).svg;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcTimeline').innerHTML = 'Source: the report\'s tables "' + esc(DATA.sources.calendar[0]) + '" and "' + esc(DATA.sources.calendar[1]) + '". The tougher path is the report\'s stress test (2028 spending about +3%). <a href="' + REPORT + '#calendar" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 05 margins ---------- */
+function marginStatus(m) {
+  const p = (m.past || '').toLowerCase();
+  if (p.startsWith('yes')) return {k: 'past', label: 'Past its high', c: C.red};
+  if (p.startsWith('not clear')) return {k: 'unclear', label: 'Not clear', c: C.amber};
+  if (p.startsWith('no cycle')) return {k: 'nocycle', label: 'No cycle', c: C.ink3};
+  if (p.startsWith('no')) return {k: 'at', label: 'At its high', c: C.green};
+  if (p.startsWith('too early')) return {k: 'early', label: 'Too early to say', c: C.purple};
+  return {k: 'unclear', label: 'Not clear', c: C.amber};
+}
+function renderMargins() {
+  $('marginH').textContent = DATA.margin_head;
+  const ms = DATA.margins;
+  const counts = {};
+  ms.forEach(m => { const s = marginStatus(m); counts[s.k] = counts[s.k] || {v: 0, ...s}; counts[s.k].v++; });
+  const order = ['past', 'at', 'unclear', 'nocycle', 'early'];
+  const slices = order.filter(k => counts[k]).map(k => ({name: counts[k].label, v: counts[k].v, c: counts[k].c, label: String(counts[k].v), tip: counts[k].label + ': ' + counts[k].v + ' companies\n' + ms.filter(m => marginStatus(m).k === k).map(m => m.name).join(', ')}));
+  const legend = slices.map(s => `<div style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-top:4px"><i style="width:10px;height:10px;border-radius:2px;background:${s.c};display:inline-block"></i><span>${esc(s.name)}</span><span class="num" style="margin-left:auto;color:${C.ink2}">${s.v}</span></div>`).join('');
+  $('marginDonut').innerHTML = donut(slices, 210, ms.length + ' COMPANIES', 'GROSS MARGIN') + `<div style="max-width:210px">${legend}</div>`;
+  const host = $('marginChart');
+  const draw = () => {
+    const w = Math.max(640, W(host.parentElement, 900)), lab = 140, right = 250, pw = w - lab - right, rh = 20, gh = 24;
+    const X = v => lab + Math.max(0, Math.min(100, v)) / 100 * pw;
+    let y = 22, g = '';
+    [0, 25, 50, 75, 100].forEach(t => g += `<text x="${X(t)}" y="12" text-anchor="middle" font-size="10" fill="${C.ink3}">${t}%</text>`);
+    const H0 = 22;
+    let rows = [];
+    DATA.layers.forEach(([L, name]) => { const xs = ms.filter(m => m.layer === L); if (xs.length) { rows.push({group: name}); xs.forEach(m => rows.push({m})); } });
+    const H = H0 + rows.reduce((a, r) => a + (r.group ? gh : rh), 0) + 6;
+    [0, 25, 50, 75, 100].forEach(t => g += `<line x1="${X(t)}" x2="${X(t)}" y1="16" y2="${H}" stroke="${C.line}"/>`);
+    rows.forEach(r => {
+      if (r.group) { g += `<text x="0" y="${y + 16}" font-size="10" font-weight="700" letter-spacing="1.6" fill="${C.ink3}">${esc(r.group.toUpperCase())}</text>`; y += gh; return; }
+      const m = r.m, s = marginStatus(m), cy = y + rh/2, hx = X(m.high.v), lx = X(m.latest.v);
+      const tipT = m.name + ' · gross margin\nHigh since 2019: ' + m.high.v + '%' + (m.high.adj ? ' adjusted' : '') + ' (' + fmtD(m.high.d) + ')\nLatest: ' + m.latest.v + '% (' + fmtD(m.latest.d) + ')' + (m.next ? '\nNext guide: ' + m.next.text : '') + '\nThe report: ' + m.past;
+      g += `<g${tip(tipT)}><rect x="0" y="${y}" width="${w}" height="${rh}" fill="transparent"/>`;
+      g += `<text x="0" y="${cy + 4}" font-size="11.5" fill="${C.ink}">${esc(m.name)}</text>`;
+      if (lx < hx - 1) g += `<line x1="${lx}" x2="${hx}" y1="${cy}" y2="${cy}" stroke="${C.red}" stroke-width="2.4" stroke-linecap="round"/>`;
+      g += `<line x1="${hx}" x2="${hx}" y1="${cy - 7}" y2="${cy + 7}" stroke="${C.ink}" stroke-width="2"/>`;
+      if (m.next && m.next.lo != null) { const nx = X((m.next.lo + m.next.hi) / 2); g += `<circle cx="${nx}" cy="${cy}" r="5.5" fill="none" stroke="${s.c}" stroke-width="1.6"/>`; }
+      if (m.latest.v < 0) g += mark('down', X(0) - 1, cy, s.c, 9, false).replace('<polygon', `<polygon transform="rotate(90 ${X(0) - 1} ${cy})"`);
+      else g += `<circle cx="${lx}" cy="${cy}" r="4.8" fill="${s.c}" stroke="${C.panel}" stroke-width="2"/>`;
+      const gap = m.latest.v - m.high.v;
+      g += `<text x="${w - right + 10}" y="${cy + 4}" font-size="11" fill="${C.ink2}" class="num">${m.latest.v.toFixed(1)}%  <tspan fill="${gap < -0.05 ? C.down : C.ink3}">${gap < -0.05 ? gap.toFixed(1) + ' pts' : 'at high'}</tspan>${m.next && m.next.lo != null ? `<tspan fill="${C.ink3}">  next ${m.next.lo === m.next.hi ? m.next.lo : m.next.lo + '–' + m.next.hi}%</tspan>` : ''}</text></g>`;
+      y += rh;
+    });
+    host.innerHTML = `<svg width="${w}" height="${H}" role="img" aria-label="Gross margin against its high">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcMargins').innerHTML = 'Source: the report\'s table "' + esc(DATA.margin_head) + '". Adjusted margins where the company reports them. <a href="' + REPORT + '#aichips" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 06 big buyers ---------- */
+const BUY_T = {Microsoft:'MSFT', Alphabet:'GOOGL', Amazon:'AMZN', Meta:'META', Oracle:'ORCL'};
+const CLOUDC = '#05A4C6';   /* one series of its own, kept apart from the AI-upside blue in the same panel */
+function renderBuyers() {
+  $('buyLegend').innerHTML = `<span><svg width="14" height="12"><rect x="1" y="1" width="12" height="10" rx="2" fill="${C.green}"/></svg>reported</span><span><svg width="14" height="12"><rect x="1.5" y="1.5" width="11" height="9" rx="2" fill="none" stroke="${C.green}" stroke-width="1.5"/></svg>analysts' average</span>`
+    + `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${C.red}"/></svg>Fed-hike path</span><span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${C.green}"/></svg>analysts (Base case)</span><span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${C.blue}"/></svg>AI upside</span>`
+    + `<span><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="${CLOUDC}"/></svg>cloud share of the added sales</span>`;
+  const names = Object.keys(DATA.buy_q);
+  const maxY = Math.max(40, ...names.flatMap(n => DATA.buy_q[n].map(q => q.yoy || 0)));
+  const yTop = Math.ceil(maxY / 10) * 10;
+  $('buyGrid').innerHTML = names.map(n => {
+    const qs = DATA.buy_q[n], w = 250, h = 130, l = 26, b = 18, pw = w - l - 6, bw = pw / qs.length;
+    const Y = v => 8 + (1 - Math.max(0, v) / yTop) * (h - 8 - b);
+    let g = '';
+    [0, yTop/2, yTop].forEach(t => g += `<line x1="${l}" x2="${w - 4}" y1="${Y(t)}" y2="${Y(t)}" stroke="${C.line}"/><text x="${l - 4}" y="${Y(t) + 3}" text-anchor="end" font-size="9.5" fill="${C.ink3}">${t}%</text>`);
+    qs.forEach((q, i) => {
+      if (q.yoy == null) return;
+      const x = l + i*bw + 2, y = Y(q.yoy), hh = Y(0) - y, col = q.yoy >= 0 ? C.green : C.red;
+      const t = n + ' · ' + q.q + '\nSales $' + q.sales + 'bn, ' + pct(q.yoy) + ' on a year earlier\n' + (q.reported ? 'Reported ' + fmtD(q.d) : 'Analysts\' average; report ~' + fmtD(q.d));
+      g += q.reported ? `<rect x="${x}" y="${y}" width="${bw - 4}" height="${Math.max(1, hh)}" rx="3" fill="${col}"${tip(t)}/>`
+                      : `<rect x="${x + 0.75}" y="${y + 0.75}" width="${bw - 5.5}" height="${Math.max(1, hh - 1.5)}" rx="3" fill="rgba(2,173,109,.12)" stroke="${col}" stroke-width="1.5"${tip(t)}/>`;
+    });
+    const lastR = [...qs].reverse().find(q => q.reported), lastA = qs[qs.length - 1];
+    g += `<text x="${l}" y="${h - 4}" font-size="9.5" fill="${C.ink3}">${esc(qs[0].q)}</text><text x="${w - 4}" y="${h - 4}" text-anchor="end" font-size="9.5" fill="${C.ink3}">${esc(lastA.q)}</text>`;
+    // paths strip
+    const P = DATA.buy_path[n];
+    let strip = '';
+    if (P) {
+      const sw = 250, sl = 8, sp = sw - 16, SX = v => sl + Math.max(0, Math.min(60, v)) / 60 * sp;
+      strip += `<line x1="${sl}" x2="${sl + sp}" y1="16" y2="16" stroke="${C.line2}" stroke-width="2"/>`;
+      [0, 20, 40, 60].forEach(t => strip += `<text x="${SX(t)}" y="34" text-anchor="middle" font-size="9" fill="${C.ink3}">${t}%</text>`);
+      [['fed', C.red, 'Fed-hike path'], ['base', C.green, 'Analysts (Base case)'], ['up', C.blue, 'AI upside']].forEach(([k, col, lb]) => {
+        const v = P[k][0]; strip += `<circle cx="${SX(v)}" cy="16" r="6" fill="${col}" stroke="${C.panel}" stroke-width="2"${tip(n + ' · 2027 sales growth\n' + lb + ': ' + pct(v) + '\n2028: ' + pct(P[k][1]))}/>`;
+      });
+      strip = `<div class="blk-k" style="margin:8px 0 2px">2027 sales growth by path</div><svg width="250" height="38" role="img" aria-label="2027 growth by path">${strip}</svg>`;
+    }
+    // cloud pie
+    const CL = DATA.cloud[n];
+    let pie = '<div style="font-size:12.5px;color:' + C.ink3 + '">No cloud business</div>';
+    if (CL && CL.share_added != null) {
+      const v = Math.min(100, CL.share_added), r = 22, cx = 26, cy = 26, a = v / 100 * Math.PI * 2 - Math.PI/2;
+      const large = v > 50 ? 1 : 0, x2 = cx + r*Math.cos(a), y2 = cy + r*Math.sin(a);
+      const seg = v >= 99.9 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${CLOUDC}"/>` : `<path d="M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${CLOUDC}"/>`;
+      pie = `<div style="display:flex;gap:10px;align-items:center"${tip(n + ' · ' + CL.segment + '\nCloud is ' + CL.share_sales + '% of sales and brought ' + CL.share_added + '% of the added sales dollars\nTotal growth if cloud had not grown: ' + CL.if_cloud_flat)}><svg width="52" height="52" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${C.line2}"/>${seg}<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.panel}" stroke-width="1"/></svg><div style="font-size:12.5px;line-height:1.35"><b class="num">${CL.share_added}%</b> of the added sales came from the cloud${CL.share_added > 100 ? ': the rest shrank' : ''}<br><span style="color:${C.ink3}">${esc(CL.segment)}</span></div></div>`;
+    }
+    const t = BUY_T[n];
+    return `<div class="card" style="padding:12px"><div class="chead"><span class="cname">${esc(n)}</span><span class="ctk">${t}</span><span class="badge off" style="margin-left:auto">${lastR ? pct(lastR.yoy) + ' latest' : ''}</span></div>
+      <svg width="${w}" height="${h}" role="img" aria-label="${esc(n)} quarterly growth">${g}</svg>${strip}<div class="blk-k" style="margin:8px 0 4px">Cloud</div>${pie}</div>`;
+  }).join('');
+  $('srcBuyers').innerHTML = 'Source: the report\'s tables "' + esc(DATA.buy_head.quarters) + '", "' + esc(DATA.buy_head.paths) + '" and "' + esc(DATA.buy_head.cloud) + '". <a href="' + REPORT + '#calendar" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 07 renters ---------- */
+const FUNDC = {ok: C.green, tight: C.amber, short: C.red, unknown: C.ink3};
+const FUNDL = {ok: 'can do', tight: 'tight', short: 'falls short', unknown: '—'};
+function renderRenters() {
+  $('rentH').textContent = DATA.rent_head.odds;
+  $('rentLegend').innerHTML = `<span><svg width="14" height="12"><rect x="1" y="2" width="12" height="8" rx="3" fill="${C.red}"/></svg>restructuring by end-2028</span><span><svg width="12" height="12"><circle cx="6" cy="6" r="4.2" fill="none" stroke="${C.red}" stroke-width="1.6"/></svg>on the Fed-hike path</span>`
+    + ['ok', 'tight', 'short'].map(k => `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="${FUNDC[k]}"/></svg>${FUNDL[k]}</span>`).join('')
+    + `<span style="color:${C.ink3}">lights: Base · Measured · Fed-hike · AI upside</span>`;
+  const rows = [...DATA.renters].sort((a, b) => (b.restructure || 0) - (a.restructure || 0));
+  const host = $('rentChart');
+  const draw = () => {
+    const w = Math.max(640, W(host.parentElement, 900)), lab = 150, lights = 96, right = 70, pw = w - lab - lights - right, rh = 24;
+    const X = v => lab + Math.min(60, v) / 60 * pw;
+    let g = '';
+    [0, 10, 20, 30, 40, 50, 60].forEach(t => g += `<line x1="${X(t)}" x2="${X(t)}" y1="16" y2="${20 + rows.length * rh}" stroke="${C.line}"/><text x="${X(t)}" y="11" text-anchor="middle" font-size="10" fill="${C.ink3}">${t}%</text>`);
+    g += `<text x="${w - lights - right + 64}" y="11" text-anchor="middle" font-size="9.5" fill="${C.ink3}" letter-spacing="1">FUNDED?</text>`;
+    rows.forEach((r, i) => {
+      const y = 20 + i * rh, cy = y + rh / 2;
+      g += `<text x="0" y="${cy + 4}" font-size="11.5" fill="${C.ink}">${esc(r.name)}<tspan fill="${C.ink3}" font-size="10">  ${esc(r.t || 'private')}</tspan></text>`;
+      const t = r.name + '\nRestructuring by end-2028: ' + r.restructure + '%\nOn the Fed-hike path: ' + r.restructure_fed + '%\nCapital fully dries up: ' + r.dries + '% · delays but survives: ' + r.delays + '%';
+      g += `<rect x="${lab}" y="${cy - 5}" width="${Math.max(3, X(r.restructure) - lab)}" height="10" rx="4" fill="${C.red}"${tip(t)}/>`;
+      const xb = X(r.restructure), xf = X(r.restructure_fed), apart = xf - xb > 44;
+      if (apart) {
+        g += `<text x="${xb + 6}" y="${cy + 4}" font-size="11" font-weight="700" fill="${C.ink}" class="num">${r.restructure}%</text>`;
+        g += `<line x1="${xb + 36}" x2="${xf - 6}" y1="${cy}" y2="${cy}" stroke="${C.red}" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>`;
+      }
+      g += `<circle cx="${xf}" cy="${cy}" r="5" fill="none" stroke="${C.red}" stroke-width="1.6"${tip(t)}/>`;
+      const flab = (apart ? '' : r.restructure + '% · ') + r.restructure_fed + '% Fed-hike', fits = xf + 9 + flab.length * 6.2 < w - lights - right;
+      g += `<text x="${fits ? xf + 9 : xf - 9}" text-anchor="${fits ? 'start' : 'end'}" y="${cy + (fits ? 4 : -7)}" font-size="10" fill="${C.ink3}" class="num">${apart ? '' : '<tspan font-size="11" font-weight="700" fill="' + C.ink + '">' + r.restructure + '%</tspan> · '}${r.restructure_fed}% Fed-hike</text>`;
+      const F = DATA.funding[r.name];
+      if (F) ['base', 'measured', 'fed', 'up'].forEach((p, j) => {
+        const [st, txt] = F[p], x = w - lights - right + 14 + j * 18;
+        g += `<circle cx="${x}" cy="${cy}" r="5.5" fill="${FUNDC[st]}" stroke="${C.panel}" stroke-width="2"${tip(r.name + ' · ' + ({base: 'Base case', measured: 'Measured slowdown', fed: 'Fed-hike path', up: 'AI upside'})[p] + '\n' + txt)}/>`;
+      });
+    });
+    host.innerHTML = `<svg width="${w}" height="${24 + rows.length * rh}" role="img" aria-label="GPU renters restructuring odds">${g}</svg>`;
+  };
+  draw(); window.addEventListener('resize', debounce(draw, 150));
+  $('srcRenters').innerHTML = 'Source: the report\'s tables "' + esc(DATA.rent_head.odds) + '" and "' + esc(DATA.rent_head.funding) + '". <a href="' + REPORT + '#renters" target="_blank" rel="noopener">Open ↗</a>';
+}
+
+/* ---------- 08 company cards ---------- */
+const COHORT = s => (s || '').replace(/_/g, ' ');
+function geigerBar(v, w = 120) {
+  if (v == null) return '—';
+  const mid = w / 2, x = mid + v * (mid - 2), col = v >= 0 ? C.up : C.down;
+  return `<span style="display:inline-flex;align-items:center;gap:8px"${tip('Geiger ' + (v > 0 ? '+' : '') + v.toFixed(2) + ' on a scale of −1 to +1\nScintilla\'s live read of trend and momentum across time frames')}><svg width="${w}" height="12" aria-hidden="true"><rect x="0" y="5" width="${w}" height="2" rx="1" fill="${C.line2}"/><line x1="${mid}" x2="${mid}" y1="1" y2="11" stroke="${C.ink3}"/><rect x="${Math.min(mid, x)}" y="3" width="${Math.max(2, Math.abs(x - mid))}" height="6" rx="3" fill="${col}"/></svg><b class="num" style="color:${col}">${(v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)}</b></span>`;
+}
+function growthBars(tr, bare) {
+  if (!tr || !tr.rev_yoy) return '—';
+  const vals = tr.rev_yoy.map(v => v == null ? null : v * 100), w = 70, h = 18;
+  const sq = v => Math.sqrt(Math.min(100, Math.abs(v)) / 100);
+  let g = `<line x1="0" x2="${w}" y1="${h/2}" y2="${h/2}" stroke="${C.line2}"/>`;
+  vals.forEach((v, i) => { if (v == null) return; const bh = Math.max(1.5, sq(v) * (h/2 - 1)), x = i * 17 + 2; g += v >= 0 ? `<rect x="${x}" y="${h/2 - bh}" width="13" height="${bh}" rx="2" fill="${C.green}"/>` : `<rect x="${x}" y="${h/2}" width="13" height="${bh}" rx="2" fill="${C.red}"/>`; });
+  const q = tr.q_end || [], lbl = q.map((d, i) => MONS[iso2d(d).getMonth()] + ' ' + String(iso2d(d).getFullYear()).slice(2) + ': ' + pct(vals[i], 0)).join('\n');
+  const last = vals[vals.length - 1];
+  return `<span style="display:inline-flex;align-items:center;gap:8px"${tip('Sales growth against a year earlier, last four quarters\n' + lbl)}><svg width="${w}" height="${h}" aria-hidden="true">${g}</svg><b class="num ${last >= 0 ? 'up' : 'down'}">${pct(last, 0)}</b>${bare ? '' : '<span style="color:' + C.ink3 + ';font-size:11px">last quarter</span>'}</span>`;
+}
+function evFind(c, k) { return (c.events || []).find(e => e.k === k); }
+function evText(e) {
+  if (!e) return null;
+  if (e.never) return e.text;
+  if (e.d) return fmtDs(e.d, e.est) + (e.end ? ' – ' + fmtDs(e.end, e.est) : '') + (e.tough && e.tough.d ? ' <span style="color:' + C.ink3 + '">(tougher ' + fmtDs(e.tough.d, e.tough.est) + ')</span>' : '');
+  if (e.tough && e.tough.d) return '<span style="color:' + C.ink3 + '">none · tougher path ' + fmtDs(e.tough.d, e.tough.est) + '</span>';
+  return null;
+}
+function card(c) {
+  const t = c.t, tr = t ? DATA.track[t] : null, onHub = tr && tr.active;
+  const m = DATA.margins.find(x => x.name === c.name), nx = DATA.next.find(n => n.who === c.name);
+  const badge = c.private ? '<span class="badge off">private</span>' : onHub ? `<span class="badge hub">on the Hub · ${esc(COHORT(tr.cohort))}</span>` : '<span class="badge off">not on the Hub</span>';
+  let we = '';
+  if (onHub) {
+    const lastB = tr.last_date ? (tr.last_beat === 'true' || tr.last_beat === 'beat' ? '<span class="up">beat</span>' : '<span class="down">missed</span>') + ' on ' + fmtDs(tr.last_date) + ' <span style="color:' + C.ink3 + '">(EPS ' + pct(tr.last_eps_surprise, 1) + ' vs analysts)</span>' : '—';
+    we = `<div class="blk"><div class="blk-k">We track</div><dl class="kv">
+      <dt>Geiger</dt><dd>${geigerBar(tr.geiger)}</dd>
+      <dt>Analysts' target</dt><dd class="tgt" data-t="${esc(t)}">${tr.tgt_avg ? money(tr.tgt_avg) + ' <span style="color:' + C.ink3 + ';font-size:11px">avg · range ' + money(tr.tgt_lo) + '–' + money(tr.tgt_hi) + '</span>' : '—'}</dd>
+      <dt>Sales growth</dt><dd>${growthBars(tr)}</dd>
+      <dt>Last report</dt><dd>${lastB}</dd>
+      <dt>Next report</dt><dd>${tr.next_date ? fmtD(tr.next_date) + (tr.next_time ? ' ' + tr.next_time : '') + ' <span style="color:' + C.ink3 + '">our calendar</span>' : '—'}</dd></dl></div>`;
+  } else {
+    we = `<div class="blk"><div class="blk-k">We track</div><div style="font-size:13px;color:${C.ink3}">${c.private ? 'Private company: no listed shares to track.' : 'Not on the Hub, so no Geiger or estimates. ' + esc(t || '')}</div></div>`;
+  }
+  // the report
+  const lines = [];
+  [['first_bad', 'First bad outlook'], ['lowest_sales', 'Lowest sales'], ['lowest_margin', 'Lowest margin'], ['turns_up', 'Outlook turns up'], ['sales_rise', 'Sales rise again'], ['worst_cash', 'Worst cash'], ['cash_pos', 'Cash positive again'], ['sales_peak', 'Sales peak']].forEach(([k, lb]) => {
+    const tx = evText(evFind(c, k)); if (tx) lines.push(`<dt>${lb}</dt><dd>${tx}</dd>`);
+  });
+  if (m) {
+    const s = marginStatus(m), gap = m.latest.v - m.high.v;
+    lines.push(`<dt>Gross margin</dt><dd><span style="color:${s.c}">●</span> ${m.latest.v.toFixed(1)}% · ${gap < -0.05 ? '<span class="down">' + gap.toFixed(1) + ' pts</span> from its high' : 'at its high'}${m.next && m.next.lo != null ? ' · next ' + (m.next.lo === m.next.hi ? m.next.lo : m.next.lo + '–' + m.next.hi) + '%' : ''}</dd>`);
+  }
+  const P = DATA.buy_path[c.name];
+  if (P) lines.push(`<dt>2027 sales growth</dt><dd>analysts <b class="num">${pct(P.base[0])}</b> · Fed-hike <b class="num">${pct(P.fed[0])}</b> · AI upside <b class="num">${pct(P.up[0])}</b></dd>`);
+  const R = DATA.renters.find(r => r.name === c.name);
+  if (R) lines.push(`<dt>Restructuring odds</dt><dd><b class="num">${R.restructure}%</b> by end-2028 · ${R.restructure_fed}% on the Fed-hike path</dd>`);
+  if (nx) {
+    let cmp = '';
+    if (onHub && tr.next_date && tr.next_date !== nx.d) cmp = ' <span class="flag warn">ours: ' + fmtDs(tr.next_date) + '</span>';
+    else if (onHub && tr.next_date === nx.d) cmp = ' <span class="flag ok">✓ matches</span>';
+    lines.push(`<dt>Next test</dt><dd>${fmtD(nx.d, nx.est)}${cmp}</dd>`);
+  }
+  const hasTl = c.events && c.events.length;
+  let mini = '';
+  if (hasTl) mini = '<div style="margin:2px 0 6px">' + timelineSVG([{c}], 306, {lab: 0, gutter: 14, rh: 22, top: 4, mini: true}).svg + '</div>';
+  const rep = `<div class="blk"><div class="blk-k">The report says</div>${mini}${lines.length ? '<dl class="kv">' + lines.join('') + '</dl>' : '<div style="font-size:13px;color:' + C.ink3 + '">Named in the report; no dated marks for it.</div>'}${hasTl ? '<button class="tobtn" data-goto="' + esc(c.name) + '">Show on the big timeline ↑</button>' : ''}</div>`;
+  return `<div class="card" data-layer="${c.layer}" data-name="${esc(c.name)}" id="card-${esc((t || c.name).replace(/[^A-Za-z0-9]/g, ''))}">
+    <div class="chead"><span class="cname">${esc(c.name)}</span><span class="ctk">${esc(t ? t : '')}</span>${badge}</div>
+    <div class="cprice" data-price="${esc(onHub ? t : '')}">${onHub ? '<span style="color:' + C.ink3 + '">reading the live price…</span>' : ''}</div>${we}${rep}</div>`;
+}
+function nextMark(c) {
+  const today = TODAY.toISOString().slice(0, 10);
+  const PRI = ['first_bad', 'lowest_sales', 'worst_cash', 'lowest_margin', 'sales_peak', 'turns_up', 'sales_rise', 'cash_pos'];
+  const evs = (c.events || []).filter(e => e.d && !e.end).sort((x, y) => x.d.localeCompare(y.d) || PRI.indexOf(x.k) - PRI.indexOf(y.k));
+  const ahead = evs.filter(e => e.d >= today), past = evs.filter(e => e.d < today);
+  const turn = evs.find(e => GOOD.has(e.k) && e.d >= today) || (c.events || []).find(e => e.never);
+  const range = (c.events || []).find(e => e.end && e.end >= today);
+  return {next: ahead[0] || null, last: past[past.length - 1] || null, turn, range};
+}
+function markHTML(e, prefix) {
+  const K = KINDS[e.k]; if (!K) return '';
+  return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><svg width="12" height="12" aria-hidden="true">${mark(K.shape, 6, 6, K.c, 9, false)}</svg>${esc(prefix || K.label)} <b class="num">${esc(fmtDs(e.d, e.est))}</b></span>`;
+}
+function boardRow(c) {
+  const t = c.t, tr = t ? DATA.track[t] : null, onHub = tr && tr.active;
+  const m = DATA.margins.find(x => x.name === c.name), nx = DATA.next.find(n => n.who === c.name), nm = nextMark(c);
+  const dot = c.private ? `<span class="bdot" style="box-shadow:inset 0 0 0 1.5px ${C.ink3}"${tip('Private company')}></span>` : onHub ? `<span class="bdot" style="background:${C.crk}"${tip('On the Hub · ' + COHORT(tr.cohort))}></span>` : `<span class="bdot" style="box-shadow:inset 0 0 0 1.5px ${C.ink3}"${tip('Not on the Hub')}></span>`;
+  const co = `<div class="bco">${dot}<b>${esc(c.name)}</b><span class="ctk">${esc(t ? t.replace(/\..*$/, '') : (c.private ? 'private' : ''))}</span></div>`;
+  const none = `<span style="color:${C.dim}">—</span>`;
+  const gg = onHub ? geigerBar(tr.geiger, 74) : none;
+  const hiCell = onHub ? `<span data-bhigh="${esc(t)}" style="color:${C.ink3}">…</span>` : none;
+  const tgCell = onHub && tr.tgt_avg ? `<span data-btgt="${esc(t)}"${tip('Analysts\' average target ' + money(tr.tgt_avg) + '\nRange ' + money(tr.tgt_lo) + ' to ' + money(tr.tgt_hi) + '\nFMP consensus, read ' + fmtD(tr.tgt_at))}>${money(tr.tgt_avg)}</span>` : none;
+  const grCell = onHub ? growthBars(tr, true) : none;
+  let mg = none;
+  if (m) { const s = marginStatus(m), gap = m.latest.v - m.high.v; mg = `<span${tip(m.name + ' · gross margin\nLatest ' + m.latest.v + '% · high ' + m.high.v + '%' + (m.next ? '\nNext guide: ' + m.next.text : '') + '\nThe report: ' + m.past)}><span style="color:${s.c}">●</span> <b class="num">${m.latest.v.toFixed(1)}%</b> <small style="display:inline;color:${gap < -0.05 ? C.down : C.ink3}">${gap < -0.05 ? gap.toFixed(1) + ' pts' : esc(s.label.toLowerCase())}</small></span>`; }
+  let rep = none;
+  if (nm.next || nm.last || nm.range) {
+    const a = nm.next ? markHTML(nm.next) : nm.range ? `<span style="white-space:nowrap"><svg width="12" height="12" aria-hidden="true">${mark(KINDS[nm.range.k].shape, 6, 6, KINDS[nm.range.k].c, 9, false)}</svg> ${esc(KINDS[nm.range.k].label)} <b class="num">${esc(fmtDs(nm.range.d, nm.range.est))}–${esc(fmtDs(nm.range.end, nm.range.est))}</b></span>` : markHTML(nm.last) + ` <small style="display:inline">already out</small>`;
+    const b = nm.turn ? (nm.turn.never ? `<small style="color:${C.green}">cash: ${esc(nm.turn.text)}</small>` : `<small>turn: ${esc(KINDS[nm.turn.k].label.toLowerCase())} ${esc(fmtDs(nm.turn.d, nm.turn.est))}</small>`) : `<small>no turn in the window</small>`;
+    rep = a + b;
+  } else if (DATA.renters.find(r => r.name === c.name)) {
+    const R = DATA.renters.find(r => r.name === c.name);
+    rep = `<span>restructuring odds <b class="num">${R.restructure}%</b></span><small>${R.restructure_fed}% on the Fed-hike path</small>`;
+  }
+  let nxt = none;
+  if (nx) {
+    const same = onHub && tr.next_date === nx.d, diff = onHub && tr.next_date && tr.next_date !== nx.d;
+    nxt = `<span class="num">${esc(fmtDs(nx.d, nx.est))}</span> <small style="display:inline">report</small>${diff ? `<small style="color:#F2C14E"${tip('The report has ' + fmtD(nx.d, nx.est) + (nx.est ? ' (its estimate)' : '') + '\nScintilla\'s earnings calendar has ' + fmtD(tr.next_date))}>≠ ours ${esc(fmtDs(tr.next_date))}</small>` : same ? `<small style="color:${C.up}">✓ same as ours</small>` : ''}`;
+  } else if (onHub && tr.next_date) nxt = `<span class="num">${esc(fmtDs(tr.next_date))}</span> <small style="display:inline">our calendar</small>`;
+  return `<div class="brow" data-layer="${c.layer}" data-name="${esc(c.name)}" tabindex="0">${co}<div class="bcell">${gg}</div><div class="bcell">${hiCell}</div><div class="bcell">${tgCell}</div><div class="bcell">${grCell}</div><div class="bcell bsplit">${mg}</div><div class="bcell">${rep}</div><div class="bcell">${nxt}</div></div>`;
+}
+let BOARD_FILTER = 'ALL';
+function renderBoard() {
+  const head = `<div class="brow bhead"><div><span class="half">Company</span></div><div><span class="half">We track</span><br>Geiger</div><div>below 1-yr high (live)</div><div>analysts' target</div><div>sales growth, 4 qtrs</div><div class="bsplit"><span class="half">The report says</span><br>gross margin</div><div>next mark · the turn</div><div>next report</div></div>`;
+  let html = head;
+  DATA.layers.forEach(([L, name]) => {
+    if (BOARD_FILTER !== 'ALL' && BOARD_FILTER !== L) return;
+    const cs = DATA.companies.filter(c => c.layer === L); if (!cs.length) return;
+    html += `<div class="bgroup">${esc(name)}</div>` + cs.map(boardRow).join('');
+  });
+  $('board').innerHTML = html;
+  Object.keys(LIVE).forEach(paintLive);
+}
+function renderCards() {
+  const comps = DATA.companies;
+  const f = [['ALL', 'All ' + comps.length]].concat(DATA.layers.map(([L, n]) => [L, n + ' ' + comps.filter(c => c.layer === L).length]));
+  $('filters').innerHTML = f.map(([k, lb], i) => `<button data-f="${k}" class="${i ? '' : 'on'}">${esc(lb)}</button>`).join('');
+  $('filters').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...$('filters').children].forEach(x => x.classList.toggle('on', x === b));
+    BOARD_FILTER = b.dataset.f; renderBoard();
+  });
+  renderBoard();
+  const toggle = row => {
+    const nxt = row.nextElementSibling;
+    if (nxt && nxt.classList.contains('bdetail')) { nxt.remove(); row.classList.remove('open'); return; }
+    const c = DATA.companies.find(x => x.name === row.dataset.name); if (!c) return;
+    row.insertAdjacentHTML('afterend', `<div class="bdetail">${card(c)}</div>`); row.classList.add('open');
+    if (c.t && LIVE[c.t] !== undefined) paintLive(c.t);
+  };
+  $('board').addEventListener('click', e => {
+    const go = e.target.closest('[data-goto]');
+    if (go) { const r = document.querySelector('#tlChart .tlrow[data-name="' + CSS.escape(go.dataset.goto) + '"]'); if (r) { r.scrollIntoView({behavior: 'smooth', block: 'center'}); flashRow(r); } return; }
+    const row = e.target.closest('.brow'); if (row && !row.classList.contains('bhead')) toggle(row);
+  });
+  $('board').addEventListener('keydown', e => { if (e.key === 'Enter') { const row = e.target.closest('.brow'); if (row) toggle(row); } });
+  const onHub = comps.filter(c => c.t && DATA.track[c.t] && DATA.track[c.t].active).length;
+  $('srcCards').innerHTML = esc(comps.length) + ' companies in the report; ' + onHub + ' are on the Hub (cyan dot). Scintilla figures read ' + esc(fmtD(DATA.track_read_at.slice(0, 10))) + ' (Geiger, targets, growth, calendar); prices live from the chart service. Report marks from the company calendar tables. <a href="' + REPORT + '#calendar" target="_blank" rel="noopener">Open ↗</a>';
+}
+function flashRow(row) {
+  const r = row.querySelector('rect'); if (!r) return;
+  r.setAttribute('fill', 'rgba(0,212,255,.10)'); setTimeout(() => r.setAttribute('fill', 'transparent'), 1800);
+}
+function paintLive(t) {
+  const lv = LIVE[t];
+  document.querySelectorAll('[data-price="' + CSS.escape(t) + '"]').forEach(el => {
+    if (!lv) { el.innerHTML = '<span style="color:' + C.ink3 + '">live price unavailable</span>'; return; }
+    const day = lv.day, fh = lv.fromHigh;
+    el.innerHTML = `<b class="num">${money(lv.c)}</b> <span class="num ${day >= 0 ? 'up' : 'down'}">${pct(day, 1)}</span> <span style="color:${C.ink3}">on the day</span> · <span class="num ${fh >= -0.05 ? 'up' : 'down'}">${pct(fh, 0)}</span> <span style="color:${C.ink3}">from its 1-year high close · ${lv.vs200 >= 0 ? 'above' : 'below'} its 200-day</span>`;
+  });
+  document.querySelectorAll('[data-bhigh="' + CSS.escape(t) + '"]').forEach(el => {
+    if (!lv) { el.textContent = '—'; return; }
+    const fh = lv.fromHigh, wv = Math.min(1, Math.abs(Math.min(0, fh)) / 80) * 70;
+    el.innerHTML = fh > -0.5 ? `<b class="num up">at its high</b>` : `<span style="display:inline-flex;align-items:center;gap:7px"><svg width="72" height="10" aria-hidden="true"><rect x="0" y="4" width="70" height="2" rx="1" fill="${C.line2}"/><rect x="0" y="2" width="${Math.max(2, wv)}" height="6" rx="3" fill="${C.down}"/></svg><b class="num down">${pct(fh, 0)}</b></span>`;
+    el.style.color = '';
+    el.setAttribute('data-tip', t + ' live ' + money(lv.c) + ' (' + pct(lv.day, 1) + ' on the day)\n' + pct(fh, 1) + ' below its highest close in a year (' + money(lv.hi) + ')\n' + pct(lv.vs200, 1) + ' against its 200-day average');
+  });
+  document.querySelectorAll('[data-btgt="' + CSS.escape(t) + '"]').forEach(el => {
+    const tr = DATA.track[t]; if (!lv || !tr || !tr.tgt_avg || el.dataset.done) return;
+    const x = tr.tgt_avg / lv.c;
+    el.insertAdjacentHTML('beforeend', ` <b class="num ${x >= 1 ? 'up' : 'down'}">${x >= 1.995 ? x.toFixed(1) + '×' : pct((x - 1) * 100, 0)}</b>`); el.dataset.done = '1';
+  });
+  document.querySelectorAll('.tgt[data-t="' + CSS.escape(t) + '"]').forEach(el => {
+    const tr = DATA.track[t]; if (!lv || !tr || !tr.tgt_avg) return;
+    const x = tr.tgt_avg / lv.c;
+    if (!el.dataset.done) { el.insertAdjacentHTML('beforeend', ` <span class="num ${x >= 1 ? 'up' : 'down'}">${x >= 1.995 ? x.toFixed(1) + '× today' : pct((x - 1) * 100, 0) + ' vs today'}</span>`); el.dataset.done = '1'; }
+  });
+  if (STAND_REDRAW && Object.values(STAND_T).includes(t)) STAND_REDRAW();
+}
+
+/* ---------- 09 chapters, header, footer ---------- */
+function renderChrome() {
+  $('fullLink').href = REPORT;
+  $('heroLead').textContent = DATA.report.lead;
+  $('stamp').innerHTML = 'Report numbers: <b>close of ' + esc(fmtD(DATA.report.as_of)) + '</b> · report rebuilt ' + esc(DATA.report.built.replace('T', ' ')) + ' ET · Scintilla figures read ' + esc(fmtD(DATA.track_read_at.slice(0, 10))) + ' · prices live';
+  $('chapterList').innerHTML = DATA.chapters.map(c => `<a href="${REPORT}#${esc(c.id)}" target="_blank" rel="noopener"><b>${esc(c.title)}</b><span>${esc(c.lead.length > 190 ? c.lead.slice(0, 187).replace(/\s+\S*$/, '') + '…' : c.lead)}</span></a>`).join('');
+  $('foot').innerHTML = 'SCINTILLA · REPORTS · THE AI CHAIN IN PICTURES<br>Built ' + esc(DATA.built) + ' from the report\'s own data (the markets session\'s story.json, ' + esc(DATA.report.updated) + ') and the Scintilla database. Forward dates and path odds are the report\'s estimates.';
+}
+
+/* ---------- tooltip ---------- */
+(function () {
+  const t = $('tip'); let cur = null;
+  const show = (el, x, y) => { t.textContent = el.getAttribute('data-tip'); t.classList.add('on'); place(x, y); cur = el; };
+  const place = (x, y) => { const r = t.getBoundingClientRect(); let X = x + 14, Y = y + 14; if (X + r.width > innerWidth - 8) X = x - r.width - 14; if (Y + r.height > innerHeight - 8) Y = y - r.height - 14; t.style.left = Math.max(8, X) + 'px'; t.style.top = Math.max(8, Y) + 'px'; };
+  document.addEventListener('mousemove', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) { if (el !== cur) show(el, e.clientX, e.clientY); else place(e.clientX, e.clientY); } else if (cur) { t.classList.remove('on'); cur = null; } });
+  document.addEventListener('click', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el && matchMedia('(hover: none)').matches) show(el, e.clientX, e.clientY); else if (!el) { t.classList.remove('on'); cur = null; } });
+  document.addEventListener('scroll', () => { if (cur) { t.classList.remove('on'); cur = null; } }, {passive: true});
+})();
+
+/* ---------- go ---------- */
+renderChrome(); renderPaths(); renderStand(); renderNext(); renderTimeline(); renderMargins(); renderBuyers(); renderRenters(); renderCards();
+loadLive(Object.entries(DATA.track).filter(([t, v]) => v.active).map(([t]) => t));
+</script>
+</body>
+</html>
