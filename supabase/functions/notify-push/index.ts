@@ -10,6 +10,8 @@
 //                                      MAX_PER_RUN singly and the rest as one line; what waited overnight arrives as one line in the morning. Goes to every device that allowed Web Push (logo)
 //                                      and, while the iPhone has not, to the ntfy app it already has (NTFY_TOPIC in this function's secrets, never printed).
 //   POST ?mode=stream&dry=1          → v13: the routing plan for the waiting cards (which device and box each would go to); sends nothing, marks nothing.
+//   POST ?mode=lines&id=N            → v15: what the phone says for card N ({ title, body }); sends nothing, marks nothing.
+//   v15, 28 Nov 2026 — COMPLETE SUMMARIES: the phone's body is the headline + the first paragraph, cut at a whole sentence (summary.mjs).
 //   v13, 19 Nov 2026 — THE PHONE'S BOXES: a card goes to the Home Screen app of its box (push_subscriptions.box); the all-in-one app keeps every card
 //                                      whose box that same device has not added. ?mode=test takes { device, box } to reach one test device only.
 //
@@ -25,6 +27,7 @@
 // WIRED 22 Oct 2026: pg_cron 'notify-push-events' calls ?mode=events every minute on weekdays with the Vault bearer
 // (checked through public.push_cron_key_ok); the events follow Alan's lists (public.push_followed()).
 import { sendPush } from "./webpush.mjs";
+import { phoneBody } from "./summary.mjs";
 
 const SB = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -69,7 +72,9 @@ const pctText = (v: number | null) => v == null ? "" : (v >= 0 ? "+" : "") + Num
 function phoneLines(r: Row) {
   const isVolume = r.source === "Volume Pulse" || /^(scintilla\s*·\s*)?volume\b/i.test(r.title);
   const who = r.kind === "urth" ? "URTH" : r.kind === "system" ? "THIS MAC" : isVolume ? "VOLUME" : r.ticker || (r.level >= 3 ? "SCINTILLA" : "MARKET");
-  return { title: [who, pctText(r.pct)].filter(Boolean).join(" ") + (r.source ? " · " + r.source : ""), body: r.title + (r.body ? "\n" + r.body : "") };
+  /* v15, 28 Nov (Alan: "that summary should be complete in the space that the notification center allows. I click in and then I can see more
+     detail."): the headline, then the body's first paragraph in whole sentences within 300 characters; the tap shows the whole card. */
+  return { title: [who, pctText(r.pct)].filter(Boolean).join(" ") + (r.source ? " · " + r.source : ""), body: phoneBody(r.title, r.body) };
 }
 type Sub = { endpoint: string; p256dh: string; auth: string; device: string | null; ua: string | null; box: string | null; url?: string };
 /* 19 Nov (coordinator). THE PHONE'S BOXES. Alan, 12:33 ET (relayed): "what are we gonna do about the notification center on the phone, buddy?" The Macs file
@@ -187,6 +192,14 @@ Deno.serve(async (req) => {
   if (!SB || !SERVICE) return J({ error: "function environment incomplete" }, 500);
   try {
     if (mode === "stream") return J(await phoneFanOut(u.searchParams.get("dry") === "1"));
+    if (mode === "lines") {
+      /* v15: the phone text of one card, to check what a device got (read-only) */
+      const id = Number(u.searchParams.get("id"));
+      if (!Number.isInteger(id) || id <= 0) return J({ error: "?mode=lines needs &id=<card id>" }, 400);
+      const rows: Row[] = (await pg("notify_stream?select=id,level,kind,ticker,title,body,source,url,pct,key&id=eq." + id)) || [];
+      if (!rows.length) return J({ id, error: "no such card" }, 404);
+      return J({ id, ...phoneLines(rows[0]) });
+    }
     if (mode === "events") {
       /* 1 Nov: earnings prints and transcripts enter the switchboard, which carries them to every device */
       const pending = await rpc("push_events_pending");
